@@ -27,10 +27,15 @@ return {
         allow_filetypes = {}, -- empty = all filetypes
         ignore_filetypes = {},
       },
+      -- Servers that may NOT format, because none-ls already runs the same tool
+      -- and two formatters on one buffer is how you get a fight on every save.
       disabled = {
-        -- lua_ls can format, but stylua (via none-ls) matches `.stylua.toml`,
-        -- which is what this config is actually written to.
+        -- stylua, via none-ls, and it reads `.stylua.toml`.
         "lua_ls",
+        -- clang-format, via none-ls. clangd embeds clang-format and would
+        -- happily do it too -- same tool, same `.clang-format` file, so the
+        -- result is identical and the second pass is pure waste.
+        "clangd",
       },
       timeout_ms = 1000,
     },
@@ -43,18 +48,14 @@ return {
 
     handlers = {},
 
-    autocmds = {
-      lsp_codelens_refresh = {
-        cond = "textDocument/codeLens",
-        {
-          event = { "InsertLeave", "BufEnter" },
-          desc = "Refresh codelens (buffer)",
-          callback = function(args)
-            if require("astrolsp").config.features.codelens then vim.lsp.codelens.refresh { bufnr = args.buf } end
-          end,
-        },
-      },
-    },
+    -- NOTE: the AstroNvim template ships an `lsp_codelens_refresh` autocmd here
+    -- that re-runs codelens on InsertLeave/BufEnter. It is gone on purpose:
+    -- `features.codelens` above already refreshes on attach, and on Neovim 0.12
+    -- codelens is managed by the `vim.lsp._capability` framework, which handles
+    -- its own refreshing. The autocmd was both redundant and a second call site
+    -- for `vim.lsp.codelens.refresh()`, which is deprecated in favour of
+    -- `vim.lsp.codelens.enable()` and warns on startup.
+    autocmds = {},
 
     mappings = {
       n = {

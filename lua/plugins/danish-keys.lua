@@ -24,9 +24,11 @@
 ---@type LazySpec
 return {
   "AstroNvim/astrocore",
-  ---@type AstroCoreOpts
+  ---@param opts AstroCoreOpts
   opts = function(_, opts)
-    local maps = opts.mappings
+    -- Guaranteed by `astrocore.lua`, which sets `mappings` in its static opts;
+    -- `assert` says so to the type checker instead of nil-checking every line.
+    local maps = assert(opts.mappings)
 
     -- Motion keys, applied in normal + visual + operator-pending so they work
     -- standalone (`åx`), after an operator (`då`) and inside a selection.

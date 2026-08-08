@@ -35,9 +35,10 @@ return {
   dependencies = {
     {
       "AstroNvim/astrocore",
-      ---@type AstroCoreOpts
+      ---@param opts AstroCoreOpts
       opts = function(_, opts)
-        local maps = opts.mappings
+        -- Guaranteed by `astrocore.lua`, which sets `mappings` in its static opts.
+        local maps = assert(opts.mappings)
         local icon = require("astroui").get_icon("Overseer", 1, true)
 
         -- Retire the astrocommunity default prefix so there is one way to do
@@ -62,7 +63,11 @@ return {
           function()
             local tasks = require("overseer").list_tasks { recent_first = true }
             if vim.tbl_isempty(tasks) then
-              vim.notify("No task has been run yet -- <Leader>rr to start one", vim.log.levels.INFO, { title = "Overseer" })
+              vim.notify(
+                "No task has been run yet -- <Leader>rr to start one",
+                vim.log.levels.INFO,
+                { title = "Overseer" }
+              )
               return
             end
             require("overseer").run_action(tasks[1], "restart")

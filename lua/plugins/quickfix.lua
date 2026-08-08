@@ -23,9 +23,11 @@
 ---@type LazySpec
 return {
   "AstroNvim/astrocore",
-  ---@type AstroCoreOpts
+  ---@param opts AstroCoreOpts
   opts = function(_, opts)
-    local maps = opts.mappings
+    -- Guaranteed by `astrocore.lua`, which sets `mappings` in its static opts;
+    -- `assert` says so to the type checker instead of nil-checking every line.
+    local maps = assert(opts.mappings)
 
     --- Fill a list from diagnostics and say so when there is nothing to fill it
     --- with -- the silence is what made this look broken in the first place.

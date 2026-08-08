@@ -12,9 +12,11 @@
 ---@type LazySpec
 return {
   "AstroNvim/astrocore",
-  ---@type AstroCoreOpts
+  ---@param opts AstroCoreOpts
   opts = function(_, opts)
-    local maps = opts.mappings
+    -- Guaranteed by `astrocore.lua`, which sets `mappings` in its static opts;
+    -- `assert` says so to the type checker instead of nil-checking every line.
+    local maps = assert(opts.mappings)
     local icon = "󱚝 "
 
     maps.n["<Leader>a"] = { desc = icon .. "AI" }

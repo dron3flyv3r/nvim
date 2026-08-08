@@ -70,9 +70,7 @@ return {
               -- Scheduled so the rest of startup finishes first; resession's
               -- own reset then closes whatever is on screen before it rebuilds
               -- the layout.
-              vim.schedule(
-                function() require("resession").load(dir, { dir = "dirsession", silence_errors = true }) end
-              )
+              vim.schedule(function() require("resession").load(dir, { dir = "dirsession", silence_errors = true }) end)
             end,
           },
         },

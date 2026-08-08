@@ -11,9 +11,11 @@
 ---@type LazySpec
 return {
   "AstroNvim/astrocore",
-  ---@type AstroCoreOpts
+  ---@param opts AstroCoreOpts
   opts = function(_, opts)
-    local maps = opts.mappings
+    -- Guaranteed by `astrocore.lua`, which sets `mappings` in its static opts;
+    -- `assert` says so to the type checker instead of nil-checking every line.
+    local maps = assert(opts.mappings)
     local buffer = function(fn, ...)
       local args = { ... }
       return function() require("astrocore.buffer")[fn](unpack(args)) end
@@ -50,7 +52,9 @@ return {
     -- Only the vertical pair: <A-l> in insert mode is already copilot's
     -- `accept_line` (see copilot.lua), and insert mode has had native
     -- indent/dedent since forever -- <C-t> and <C-d>. Nothing to add.
-    local move = function(direction) return function() require("mini.move").move_line(direction) end end
+    local move = function(direction)
+      return function() require("mini.move").move_line(direction) end
+    end
     maps.i["<A-j>"] = { move "down", desc = "Move line down" }
     maps.i["<A-k>"] = { move "up", desc = "Move line up" }
 

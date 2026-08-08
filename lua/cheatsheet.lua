@@ -174,8 +174,8 @@ local SECTIONS = {
   {
     "EDITING",
     {
-      { "ci( ci\" ci{", "change INSIDE brackets / quotes / braces" },
-      { "da( da\" ci[", "delete AROUND (includes the delimiters)" },
+      { 'ci( ci" ci{', "change INSIDE brackets / quotes / braces" },
+      { 'da( da" ci[', "delete AROUND (includes the delimiters)" },
       { "cif / vaf", "change inside / select a whole function" },
       { "<Leader>/", "toggle comment (works in visual too)" },
       { "gcc / gc<motion>", "comment line / comment over a motion" },

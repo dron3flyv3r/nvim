@@ -42,7 +42,7 @@ return {
   },
   {
     "AstroNvim/astrocore",
-    ---@type AstroCoreOpts
+    ---@param opts AstroCoreOpts
     opts = function(_, opts)
       -- Leaving VM restores 'cmdheight' from under nvim's feet, which lands you
       -- in a hit-enter prompt. Put it back on the next tick.
@@ -64,7 +64,8 @@ return {
       -- still resize horizontally, and `<Leader>sr` resize mode (see
       -- navigation.lua) is the better tool for real resizing anyway -- but
       -- keep a vertical pair that VM cannot take.
-      local maps = opts.mappings
+      -- Guaranteed by `astrocore.lua`, which sets `mappings` in its static opts.
+      local maps = assert(opts.mappings)
       maps.n["<Leader>sk"] = { function() require("smart-splits").resize_up() end, desc = "Resize split up" }
       maps.n["<Leader>sj"] = { function() require("smart-splits").resize_down() end, desc = "Resize split down" }
     end,
