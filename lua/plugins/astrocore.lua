@@ -1,71 +1,73 @@
--- if true then return {} end -- WARN: REMOVE THIS LINE TO ACTIVATE THIS FILE
-
--- AstroCore provides a central place to modify mappings, vim options, autocommands, and more!
--- Configuration documentation can be found with `:h astrocore`
--- NOTE: We highly recommend setting up the Lua Language Server (`:LspInstall lua_ls`)
---       as this provides autocomplete and documentation while editing
-
+-- AstroCore: vim options, diagnostics, and the base mapping table.
+-- Configuration documentation: `:h astrocore`
+--
+-- Most mappings live in the focused files next to this one (`danish-keys.lua`,
+-- `navigation.lua`, `quickfix.lua`, `tasks.lua`, `ai.lua`), which all extend the
+-- same `opts.mappings` table. This file holds only what has no better home.
 ---@type LazySpec
 return {
   "AstroNvim/astrocore",
   ---@type AstroCoreOpts
   opts = {
-    -- Configure core features of AstroNvim
     features = {
-      large_buf = { size = 1024 * 256, lines = 10000 }, -- set global limits for large files for disabling features like treesitter
-      autopairs = true, -- enable autopairs at start
-      cmp = true, -- enable completion at start
-      diagnostics = { virtual_text = true, virtual_lines = false }, -- diagnostic settings on startup
-      highlighturl = true, -- highlight URLs at start
-      notifications = true, -- enable notifications at start
+      large_buf = { size = 1024 * 256, lines = 10000 }, -- disable treesitter etc. above this
+      autopairs = true,
+      cmp = true,
+      diagnostics = { virtual_text = true, virtual_lines = false }, -- startup state; `<Leader>ud` cycles it
+      highlighturl = true,
+      notifications = true,
     },
-    -- Diagnostics configuration (for vim.diagnostics.config({...})) when diagnostics are on
+
+    -- Diagnostics. THIS IS THE ONLY PLACE THEY ARE CONFIGURED -- AstroCore feeds
+    -- this table to `vim.diagnostic.config()`, so calling that function directly
+    -- somewhere else (polish.lua used to) just makes two owners fighting.
     diagnostics = {
-      virtual_text = true,
+      -- Re-lint while you are still typing, rather than waiting for <Esc>.
+      -- This is the "errors appear as I type" behaviour from VS Code.
+      update_in_insert = true,
+
+      -- Compact `● message` at the end of the offending line, for every line.
+      virtual_text = {
+        spacing = 2,
+        prefix = "●",
+        source = "if_many", -- name the server only when several are attached
+      },
+
+      -- ...and the full message rendered *underneath* the cursor's line only.
+      -- Virtual text gets truncated at the window edge; long type errors from
+      -- basedpyright and clangd are exactly the ones that need the room. This
+      -- gives the detail where you're looking without a wall of text elsewhere.
+      -- (Neovim 0.11+ feature.)
+      virtual_lines = { current_line = true },
+
       underline = true,
+      severity_sort = true, -- when a line has several, show the worst one
+      float = { border = "rounded", source = true },
     },
-    -- passed to `vim.filetype.add`
-    filetypes = {
-      -- see `:h vim.filetype.add` for usage
-      extension = {
-        foo = "fooscript",
-      },
-      filename = {
-        [".foorc"] = "fooscript",
-      },
-      pattern = {
-        [".*/etc/foo/.*"] = "fooscript",
-      },
-    },
-    -- vim options can be configured here
+
+    -- vim options
     options = {
       opt = { -- vim.opt.<key>
-        relativenumber = true, -- sets vim.opt.relativenumber
-        number = true, -- sets vim.opt.number
-        spell = false, -- sets vim.opt.spell
-        signcolumn = "yes", -- sets vim.opt.signcolumn to yes
-        wrap = false, -- sets vim.opt.wrap
+        relativenumber = true,
+        number = true,
+        spell = false,
+        signcolumn = "yes",
+        wrap = false,
         scrolloff = 8, -- keep 8 lines visible above/below the cursor
         sidescrolloff = 8, -- keep 8 columns visible left/right of the cursor
       },
       g = { -- vim.g.<key>
-        -- configure global vim variables (vim.g)
-        -- NOTE: `mapleader` and `maplocalleader` must be set in the AstroNvim opts or before `lazy.setup`
-        -- This can be found in the `lua/lazy_setup.lua` file
+        -- NOTE: `mapleader` / `maplocalleader` must be set before lazy loads;
+        -- they live in `lua/lazy_setup.lua`.
       },
     },
-    -- Mappings can be configured through AstroCore as well.
-    -- NOTE: keycodes follow the casing in the vimdocs. For example, `<Leader>` must be capitalized
-    mappings = {
-      -- first key is the mode
-      n = {
-        -- second key is the lefthand side of the map
 
-        -- navigate buffer tabs
+    mappings = {
+      n = {
+        -- Buffer navigation by pair-jump. `æb` / `øb` on a Danish layout.
         ["]b"] = { function() require("astrocore.buffer").nav(vim.v.count1) end, desc = "Next buffer" },
         ["[b"] = { function() require("astrocore.buffer").nav(-vim.v.count1) end, desc = "Previous buffer" },
 
-        -- mappings seen under group name "Buffer"
         ["<Leader>bd"] = {
           function()
             require("astroui.status.heirline").buffer_picker(
@@ -74,13 +76,6 @@ return {
           end,
           desc = "Close buffer from tabline",
         },
-
-        -- tables with just a `desc` key will be registered with which-key if it's installed
-        -- this is useful for naming menus
-        -- ["<Leader>b"] = { desc = "Buffers" },
-
-        -- setting a mapping to false will disable it
-        -- ["<C-S>"] = false,
       },
     },
   },

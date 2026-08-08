@@ -1,4 +1,4 @@
--- Python: one type checker + one linter, with the overlap removed.
+-- Python: one type checker + one linter/formatter, with the overlap removed.
 --
 -- THE PROBLEM: three servers were fighting over every Python buffer.
 -- `pyright` and `basedpyright` are the *same* type checker (basedpyright is a
@@ -12,19 +12,19 @@
 --
 --   * basedpyright -- types. "Argument of type X cannot be assigned to
 --                     parameter of type Y". Nothing else can do this.
---                     Chosen over pyright because it is what
---                     `astrocommunity.pack.python` already configures, and it
---                     adds inlay hints and a permissive licence.
---   * ruff         -- lint and import hygiene. F401 unused import, I001
---                     unsorted imports, UP035 deprecated typing import.
+--   * ruff         -- lint, import hygiene and formatting. F401 unused import,
+--                     I001 unsorted imports, UP035 deprecated typing import.
+--
+-- Ruff also owns *formatting*: `community.lua` deliberately does not import
+-- `astrocommunity.pack.python`'s black and isort modules, because with them the
+-- save hook ran black, isort and ruff-format over the same buffer.
+--
+-- Ruff's hover is switched off so `K` always comes from the type checker -- but
+-- that is done by `astrocommunity.pack.python.ruff`, not here.
 --
 -- The unused-symbol rules below are switched off on the checker because Ruff
 -- reports the same facts *better*: with a rule code you can look up and a code
 -- action that fixes them. The checker only ever greyed them out.
---
--- Ruff also answers `textDocument/hover`, which competed with the checker for
--- `K`. Ruff's hover only ever returns the docs for a lint rule, so it is
--- switched off and hover always comes from the type checker.
 --
 -- NOTE: basedpyright needs a project root to do full type analysis -- a
 -- `pyproject.toml`, `setup.py`, `.git` or similar. In a loose directory with no
@@ -42,40 +42,22 @@ local unused_off = {
 
 ---@type LazySpec
 return {
-  {
-    "AstroNvim/astrolsp",
-    ---@type AstroLSPOpts
-    opts = {
-      -- `false` stops a server being set up at all. pyright and basedpyright
-      -- are the same tool; running both doubles every type error.
-      handlers = { pyright = false },
-      ---@diagnostic disable: missing-fields
-      config = {
-        basedpyright = {
-          settings = {
-            -- basedpyright reads its own section; `python.analysis` is the
-            -- pyright-compatible alias. Set both so neither fork surprises us.
-            basedpyright = { analysis = { diagnosticSeverityOverrides = unused_off } },
-            python = { analysis = { diagnosticSeverityOverrides = unused_off } },
-          },
-        },
-      },
-    },
-  },
-  {
-    "AstroNvim/astrocore",
-    ---@type AstroCoreOpts
-    opts = {
-      autocmds = {
-        ruff_defer_hover = {
-          {
-            event = "LspAttach",
-            desc = "Let the type checker own hover; Ruff's only returns lint-rule docs",
-            callback = function(args)
-              local client = vim.lsp.get_client_by_id(args.data.client_id)
-              if client and client.name == "ruff" then client.server_capabilities.hoverProvider = false end
-            end,
-          },
+  "AstroNvim/astrolsp",
+  ---@type AstroLSPOpts
+  opts = {
+    -- `false` stops a server being set up at all. pyright and basedpyright are
+    -- the same tool; running both doubles every type error. mason-lspconfig
+    -- enables whatever is installed, so this is what keeps pyright out even if
+    -- it is still sitting in the Mason directory.
+    handlers = { pyright = false },
+    ---@diagnostic disable: missing-fields
+    config = {
+      basedpyright = {
+        settings = {
+          -- basedpyright reads its own section; `python.analysis` is the
+          -- pyright-compatible alias. Set both so neither fork surprises us.
+          basedpyright = { analysis = { diagnosticSeverityOverrides = unused_off } },
+          python = { analysis = { diagnosticSeverityOverrides = unused_off } },
         },
       },
     },
