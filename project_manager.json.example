@@ -1,0 +1,23 @@
+{
+  "/absolute/path/to/spring-boot-gradle": {
+    "name": "Spring Boot (Gradle)",
+    "description": "Run Spring Boot app via bootRun",
+    "command": "./gradlew bootRun --args='--server.port=8080'"
+  },
+  "/absolute/path/to/gradle-app": {
+    "name": "Gradle Application",
+    "description": "Gradle app plugin with mainClass configured",
+    "command": "./gradlew run --args='arg1 arg2'"
+  },
+  "/absolute/path/to/maven-app": {
+    "name": "Maven Exec",
+    "description": "Run FQN main class using exec:java",
+    "command": "mvn -q -DskipTests exec:java -Dexec.mainClass=com.example.Main -Dexec.args='arg1 arg2'"
+  },
+  "/absolute/path/to/plain-java": {
+    "name": "Plain Java (src/)",
+    "description": "Compile src to out and run FQN",
+    "command": "mkdir -p out && find src -name '*.java' -print0 | xargs -0 javac -d out && java -cp out com.example.Main"
+  }
+}
+

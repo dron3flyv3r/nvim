@@ -1,0 +1,10 @@
+# Scratch files that end up in the config dir while testing
+test.*
+scratch.*
+
+# Editor state that is not configuration
+.vscode/
+*.log
+
+# NOTE: lazy-lock.json is deliberately NOT ignored -- it is the plugin version
+# pin, and committing it is what makes a broken update revertable.

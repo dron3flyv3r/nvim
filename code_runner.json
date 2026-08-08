@@ -1,0 +1,16 @@
+{
+  "sh": "bash $file",
+  "bash": "bash $file",
+  "zsh": "zsh $file",
+  "python": "python3 -u $file",
+  "javascript": "node $file",
+  "typescript": "ts-node $file",
+  "lua": "lua $file",
+  "go": "go run $file",
+  "rust": "cd $dir && cargo run",
+  "c": "cd $dir && gcc $fileName -o $fileNameWithoutExt && $dir/$fileNameWithoutExt",
+  "cpp": "cd $dir && g++ $fileName -o $fileNameWithoutExt && $dir/$fileNameWithoutExt",
+  "java": "cd $dir && mkdir -p out && javac -d out $fileName && java -cp out $fileNameWithoutExt",
+  "php": "php $file",
+  "r": "Rscript $file"
+}

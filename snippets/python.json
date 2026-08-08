@@ -1,0 +1,723 @@
+{
+  "PyTorch imports": {
+    "prefix": "pytorch:imports",
+    "body": [
+      "import torch",
+      "import torch.nn as nn",
+      "from torch import Tensor",
+      "from torch.utils.data import DataLoader, Dataset"
+    ],
+    "description": "Import common PyTorch modules"
+  },
+
+  "PyTorch device": {
+    "prefix": "pytorch:device",
+    "body": [
+      "device = torch.device(",
+      "    \"cuda\" if torch.cuda.is_available() else",
+      "    \"mps\" if torch.backends.mps.is_available() else",
+      "    \"cpu\"",
+      ")"
+    ],
+    "description": "Select CUDA, MPS, or CPU"
+  },
+
+  "PyTorch seed": {
+    "prefix": "pytorch:seed",
+    "body": [
+      "def set_seed(seed: int = ${1:42}) -> None:",
+      "    torch.manual_seed(seed)",
+      "    torch.cuda.manual_seed_all(seed)",
+      "",
+      "",
+      "set_seed()"
+    ],
+    "description": "Set the PyTorch random seed"
+  },
+
+  "PyTorch deterministic settings": {
+    "prefix": "pytorch:deterministic",
+    "body": [
+      "torch.use_deterministic_algorithms(${1:True})",
+      "torch.backends.cudnn.benchmark = ${2:False}"
+    ],
+    "description": "Configure deterministic PyTorch execution"
+  },
+
+  "PyTorch compile model": {
+    "prefix": "pytorch:compile",
+    "body": [
+      "model = torch.compile(model, mode=\"${1:default}\")"
+    ],
+    "description": "Compile a PyTorch model"
+  },
+
+  "PyTorch basic module": {
+    "prefix": "pytorch:module",
+    "body": [
+      "class ${1:Model}(nn.Module):",
+      "    def __init__(self, ${2:input_size}: int, ${3:hidden_size}: int, ${4:output_size}: int) -> None:",
+      "        super().__init__()",
+      "",
+      "        self.network = nn.Sequential(",
+      "            nn.Linear(${2:input_size}, ${3:hidden_size}),",
+      "            nn.ReLU(),",
+      "            nn.Linear(${3:hidden_size}, ${4:output_size}),",
+      "        )",
+      "",
+      "    def forward(self, x: Tensor) -> Tensor:",
+      "        return self.network(x)"
+    ],
+    "description": "Create a basic PyTorch module"
+  },
+
+  "PyTorch MLP module": {
+    "prefix": "pytorch:module:mlp",
+    "body": [
+      "class ${1:MLP}(nn.Module):",
+      "    def __init__(",
+      "        self,",
+      "        input_size: int,",
+      "        hidden_size: int,",
+      "        output_size: int,",
+      "        dropout: float = ${2:0.1},",
+      "    ) -> None:",
+      "        super().__init__()",
+      "",
+      "        self.network = nn.Sequential(",
+      "            nn.Linear(input_size, hidden_size),",
+      "            nn.BatchNorm1d(hidden_size),",
+      "            nn.ReLU(),",
+      "            nn.Dropout(dropout),",
+      "            nn.Linear(hidden_size, hidden_size),",
+      "            nn.ReLU(),",
+      "            nn.Dropout(dropout),",
+      "            nn.Linear(hidden_size, output_size),",
+      "        )",
+      "",
+      "    def forward(self, x: Tensor) -> Tensor:",
+      "        return self.network(x)"
+    ],
+    "description": "Create a multilayer perceptron"
+  },
+
+  "PyTorch CNN module": {
+    "prefix": "pytorch:module:cnn",
+    "body": [
+      "class ${1:CNN}(nn.Module):",
+      "    def __init__(self, num_classes: int = ${2:10}) -> None:",
+      "        super().__init__()",
+      "",
+      "        self.features = nn.Sequential(",
+      "            nn.Conv2d(${3:3}, 32, kernel_size=3, padding=1),",
+      "            nn.BatchNorm2d(32),",
+      "            nn.ReLU(),",
+      "            nn.MaxPool2d(kernel_size=2),",
+      "            nn.Conv2d(32, 64, kernel_size=3, padding=1),",
+      "            nn.BatchNorm2d(64),",
+      "            nn.ReLU(),",
+      "            nn.AdaptiveAvgPool2d((1, 1)),",
+      "        )",
+      "",
+      "        self.classifier = nn.Linear(64, num_classes)",
+      "",
+      "    def forward(self, x: Tensor) -> Tensor:",
+      "        x = self.features(x)",
+      "        x = torch.flatten(x, start_dim=1)",
+      "        return self.classifier(x)"
+    ],
+    "description": "Create a basic convolutional neural network"
+  },
+
+  "PyTorch residual block": {
+    "prefix": "pytorch:module:residual",
+    "body": [
+      "class ${1:ResidualBlock}(nn.Module):",
+      "    def __init__(self, channels: int) -> None:",
+      "        super().__init__()",
+      "",
+      "        self.block = nn.Sequential(",
+      "            nn.Conv2d(channels, channels, kernel_size=3, padding=1, bias=False),",
+      "            nn.BatchNorm2d(channels),",
+      "            nn.ReLU(),",
+      "            nn.Conv2d(channels, channels, kernel_size=3, padding=1, bias=False),",
+      "            nn.BatchNorm2d(channels),",
+      "        )",
+      "",
+      "        self.activation = nn.ReLU()",
+      "",
+      "    def forward(self, x: Tensor) -> Tensor:",
+      "        return self.activation(x + self.block(x))"
+    ],
+    "description": "Create a residual CNN block"
+  },
+
+  "PyTorch custom dataset": {
+    "prefix": "pytorch:dataset",
+    "body": [
+      "class ${1:CustomDataset}(Dataset):",
+      "    def __init__(self, ${2:data}: Tensor, ${3:targets}: Tensor) -> None:",
+      "        self.${2:data} = ${2:data}",
+      "        self.${3:targets} = ${3:targets}",
+      "",
+      "    def __len__(self) -> int:",
+      "        return len(self.${2:data})",
+      "",
+      "    def __getitem__(self, index: int) -> tuple[Tensor, Tensor]:",
+      "        return self.${2:data}[index], self.${3:targets}[index]"
+    ],
+    "description": "Create a custom PyTorch dataset"
+  },
+
+  "PyTorch DataLoader": {
+    "prefix": "pytorch:dataloader",
+    "body": [
+      "${1:train_loader} = DataLoader(",
+      "    ${2:train_dataset},",
+      "    batch_size=${3:64},",
+      "    shuffle=${4:True},",
+      "    num_workers=${5:4},",
+      "    pin_memory=torch.cuda.is_available(),",
+      "    persistent_workers=${6:True},",
+      ")"
+    ],
+    "description": "Create a PyTorch DataLoader"
+  },
+
+  "PyTorch train and validation DataLoaders": {
+    "prefix": "pytorch:dataloader:split",
+    "body": [
+      "train_loader = DataLoader(",
+      "    train_dataset,",
+      "    batch_size=${1:64},",
+      "    shuffle=True,",
+      "    num_workers=${2:4},",
+      "    pin_memory=torch.cuda.is_available(),",
+      ")",
+      "",
+      "validation_loader = DataLoader(",
+      "    validation_dataset,",
+      "    batch_size=${1:64},",
+      "    shuffle=False,",
+      "    num_workers=${2:4},",
+      "    pin_memory=torch.cuda.is_available(),",
+      ")"
+    ],
+    "description": "Create training and validation DataLoaders"
+  },
+
+  "PyTorch multiclass loss": {
+  "prefix": "pytorch:loss:class",
+  "body": [
+    "criterion = nn.${1|CrossEntropyLoss,NLLLoss|}(${2})"
+  ],
+  "description": "Choose a multiclass classification loss"
+},
+
+"PyTorch binary loss": {
+  "prefix": "pytorch:loss:binary",
+  "body": [
+    "criterion = nn.${1|BCEWithLogitsLoss,BCELoss|}(${2})"
+  ],
+  "description": "Choose a binary classification loss"
+},
+
+"PyTorch regression loss": {
+  "prefix": "pytorch:loss:regression",
+  "body": [
+    "criterion = nn.${1|MSELoss,L1Loss,SmoothL1Loss,HuberLoss|}(${2})"
+  ],
+  "description": "Choose a regression loss"
+},
+
+  "PyTorch NLL loss": {
+    "prefix": "pytorch:loss:nll",
+    "body": [
+      "criterion = nn.NLLLoss(${1})"
+    ],
+    "description": "Negative log-likelihood loss"
+  },
+
+  "PyTorch AdamW optimizer": {
+    "prefix": "pytorch:optimizer:adamw",
+    "body": [
+      "optimizer = torch.optim.AdamW(",
+      "    model.parameters(),",
+      "    lr=${1:1e-3},",
+      "    weight_decay=${2:1e-4},",
+      ")"
+    ],
+    "description": "Create an AdamW optimizer"
+  },
+
+  "PyTorch Adam optimizer": {
+    "prefix": "pytorch:optimizer:adam",
+    "body": [
+      "optimizer = torch.optim.Adam(",
+      "    model.parameters(),",
+      "    lr=${1:1e-3},",
+      ")"
+    ],
+    "description": "Create an Adam optimizer"
+  },
+
+  "PyTorch SGD optimizer": {
+    "prefix": "pytorch:optimizer:sgd",
+    "body": [
+      "optimizer = torch.optim.SGD(",
+      "    model.parameters(),",
+      "    lr=${1:1e-2},",
+      "    momentum=${2:0.9},",
+      "    weight_decay=${3:1e-4},",
+      ")"
+    ],
+    "description": "Create an SGD optimizer"
+  },
+
+  "PyTorch cosine scheduler": {
+    "prefix": "pytorch:scheduler:cosine",
+    "body": [
+      "scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(",
+      "    optimizer,",
+      "    T_max=${1:num_epochs},",
+      "    eta_min=${2:1e-6},",
+      ")"
+    ],
+    "description": "Create a cosine annealing scheduler"
+  },
+
+  "PyTorch step scheduler": {
+    "prefix": "pytorch:scheduler:step",
+    "body": [
+      "scheduler = torch.optim.lr_scheduler.StepLR(",
+      "    optimizer,",
+      "    step_size=${1:10},",
+      "    gamma=${2:0.1},",
+      ")"
+    ],
+    "description": "Create a step learning-rate scheduler"
+  },
+
+  "PyTorch plateau scheduler": {
+    "prefix": "pytorch:scheduler:plateau",
+    "body": [
+      "scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(",
+      "    optimizer,",
+      "    mode=\"${1|min,max|}\",",
+      "    factor=${2:0.1},",
+      "    patience=${3:5},",
+      ")"
+    ],
+    "description": "Reduce learning rate when a metric plateaus"
+  },
+
+  "PyTorch basic training loop": {
+    "prefix": "pytorch:train",
+    "body": [
+      "model.train()",
+      "",
+      "for epoch in range(${1:num_epochs}):",
+      "    running_loss = 0.0",
+      "",
+      "    for inputs, targets in ${2:train_loader}:",
+      "        inputs = inputs.to(device, non_blocking=True)",
+      "        targets = targets.to(device, non_blocking=True)",
+      "",
+      "        optimizer.zero_grad(set_to_none=True)",
+      "",
+      "        outputs = model(inputs)",
+      "        loss = criterion(outputs, targets)",
+      "",
+      "        loss.backward()",
+      "        optimizer.step()",
+      "",
+      "        running_loss += loss.item()",
+      "",
+      "    average_loss = running_loss / len(${2:train_loader})",
+      "    print(f\"Epoch {epoch + 1:03d} | Loss: {average_loss:.4f}\")"
+    ],
+    "description": "Standard PyTorch training loop"
+  },
+
+  "PyTorch training function": {
+    "prefix": "pytorch:train:function",
+    "body": [
+      "def train_one_epoch(",
+      "    model: nn.Module,",
+      "    loader: DataLoader,",
+      "    criterion: nn.Module,",
+      "    optimizer: torch.optim.Optimizer,",
+      "    device: torch.device,",
+      ") -> float:",
+      "    model.train()",
+      "    total_loss = 0.0",
+      "",
+      "    for inputs, targets in loader:",
+      "        inputs = inputs.to(device, non_blocking=True)",
+      "        targets = targets.to(device, non_blocking=True)",
+      "",
+      "        optimizer.zero_grad(set_to_none=True)",
+      "",
+      "        outputs = model(inputs)",
+      "        loss = criterion(outputs, targets)",
+      "",
+      "        loss.backward()",
+      "        optimizer.step()",
+      "",
+      "        total_loss += loss.item()",
+      "",
+      "    return total_loss / len(loader)"
+    ],
+    "description": "Create a reusable training function"
+  },
+
+  "PyTorch AMP training loop": {
+    "prefix": "pytorch:train:amp",
+    "body": [
+      "scaler = torch.amp.GradScaler(\"cuda\", enabled=device.type == \"cuda\")",
+      "",
+      "for epoch in range(${1:num_epochs}):",
+      "    model.train()",
+      "    running_loss = 0.0",
+      "",
+      "    for inputs, targets in ${2:train_loader}:",
+      "        inputs = inputs.to(device, non_blocking=True)",
+      "        targets = targets.to(device, non_blocking=True)",
+      "",
+      "        optimizer.zero_grad(set_to_none=True)",
+      "",
+      "        with torch.amp.autocast(",
+      "            device_type=device.type,",
+      "            enabled=device.type == \"cuda\",",
+      "        ):",
+      "            outputs = model(inputs)",
+      "            loss = criterion(outputs, targets)",
+      "",
+      "        scaler.scale(loss).backward()",
+      "        scaler.step(optimizer)",
+      "        scaler.update()",
+      "",
+      "        running_loss += loss.item()",
+      "",
+      "    average_loss = running_loss / len(${2:train_loader})",
+      "    print(f\"Epoch {epoch + 1:03d} | Loss: {average_loss:.4f}\")"
+    ],
+    "description": "Training loop with automatic mixed precision"
+  },
+
+  "PyTorch gradient clipping": {
+    "prefix": "pytorch:train:clip",
+    "body": [
+      "torch.nn.utils.clip_grad_norm_(",
+      "    model.parameters(),",
+      "    max_norm=${1:1.0},",
+      ")"
+    ],
+    "description": "Clip model gradients"
+  },
+
+  "PyTorch gradient accumulation": {
+    "prefix": "pytorch:train:accumulate",
+    "body": [
+      "accumulation_steps = ${1:4}",
+      "",
+      "optimizer.zero_grad(set_to_none=True)",
+      "",
+      "for batch_index, (inputs, targets) in enumerate(${2:train_loader}, start=1):",
+      "    inputs = inputs.to(device, non_blocking=True)",
+      "    targets = targets.to(device, non_blocking=True)",
+      "",
+      "    outputs = model(inputs)",
+      "    loss = criterion(outputs, targets) / accumulation_steps",
+      "    loss.backward()",
+      "",
+      "    if batch_index % accumulation_steps == 0:",
+      "        optimizer.step()",
+      "        optimizer.zero_grad(set_to_none=True)"
+    ],
+    "description": "Train using gradient accumulation"
+  },
+
+  "PyTorch classification evaluation": {
+    "prefix": "pytorch:eval:class",
+    "body": [
+      "model.eval()",
+      "",
+      "total_loss = 0.0",
+      "correct = 0",
+      "total = 0",
+      "",
+      "with torch.inference_mode():",
+      "    for inputs, targets in ${1:validation_loader}:",
+      "        inputs = inputs.to(device, non_blocking=True)",
+      "        targets = targets.to(device, non_blocking=True)",
+      "",
+      "        outputs = model(inputs)",
+      "        loss = criterion(outputs, targets)",
+      "",
+      "        predictions = outputs.argmax(dim=1)",
+      "",
+      "        total_loss += loss.item()",
+      "        correct += predictions.eq(targets).sum().item()",
+      "        total += targets.size(0)",
+      "",
+      "average_loss = total_loss / len(${1:validation_loader})",
+      "accuracy = correct / total",
+      "",
+      "print(f\"Validation loss: {average_loss:.4f}\")",
+      "print(f\"Validation accuracy: {accuracy:.2%}\")"
+    ],
+    "description": "Evaluate a multiclass classification model"
+  },
+
+  "PyTorch evaluation function": {
+    "prefix": "pytorch:eval:function",
+    "body": [
+      "def evaluate(",
+      "    model: nn.Module,",
+      "    loader: DataLoader,",
+      "    criterion: nn.Module,",
+      "    device: torch.device,",
+      ") -> tuple[float, float]:",
+      "    model.eval()",
+      "",
+      "    total_loss = 0.0",
+      "    correct = 0",
+      "    total = 0",
+      "",
+      "    with torch.inference_mode():",
+      "        for inputs, targets in loader:",
+      "            inputs = inputs.to(device, non_blocking=True)",
+      "            targets = targets.to(device, non_blocking=True)",
+      "",
+      "            outputs = model(inputs)",
+      "            loss = criterion(outputs, targets)",
+      "",
+      "            total_loss += loss.item()",
+      "            correct += outputs.argmax(dim=1).eq(targets).sum().item()",
+      "            total += targets.size(0)",
+      "",
+      "    average_loss = total_loss / len(loader)",
+      "    accuracy = correct / total",
+      "",
+      "    return average_loss, accuracy"
+    ],
+    "description": "Create a reusable classification evaluation function"
+  },
+
+  "PyTorch binary predictions": {
+    "prefix": "pytorch:predict:binary",
+    "body": [
+      "probabilities = torch.sigmoid(logits)",
+      "predictions = (probabilities >= ${1:0.5}).to(torch.int64)"
+    ],
+    "description": "Convert binary logits to predictions"
+  },
+
+  "PyTorch multiclass predictions": {
+    "prefix": "pytorch:predict:class",
+    "body": [
+      "probabilities = torch.softmax(logits, dim=${1:1})",
+      "predictions = probabilities.argmax(dim=${1:1})"
+    ],
+    "description": "Convert multiclass logits to predictions"
+  },
+
+  "PyTorch model summary": {
+    "prefix": "pytorch:summary",
+    "body": [
+      "from torchinfo import summary",
+      "",
+      "summary(",
+      "    model,",
+      "    input_size=(${1:1}, ${2:3}, ${3:224}, ${4:224}),",
+      "    device=device,",
+      ")"
+    ],
+    "description": "Display a model summary using torchinfo"
+  },
+
+  "PyTorch count parameters": {
+    "prefix": "pytorch:parameters",
+    "body": [
+      "trainable_parameters = sum(",
+      "    parameter.numel()",
+      "    for parameter in model.parameters()",
+      "    if parameter.requires_grad",
+      ")",
+      "",
+      "print(f\"Trainable parameters: {trainable_parameters:,}\")"
+    ],
+    "description": "Count trainable model parameters"
+  },
+
+  "PyTorch freeze model": {
+    "prefix": "pytorch:freeze",
+    "body": [
+      "for parameter in ${1:model}.parameters():",
+      "    parameter.requires_grad = False"
+    ],
+    "description": "Freeze model parameters"
+  },
+
+  "PyTorch unfreeze model": {
+    "prefix": "pytorch:unfreeze",
+    "body": [
+      "for parameter in ${1:model}.parameters():",
+      "    parameter.requires_grad = True"
+    ],
+    "description": "Unfreeze model parameters"
+  },
+
+  "PyTorch save weights": {
+    "prefix": "pytorch:save:weights",
+    "body": [
+      "torch.save(model.state_dict(), \"${1:model.pt}\")"
+    ],
+    "description": "Save model weights"
+  },
+
+  "PyTorch load weights": {
+    "prefix": "pytorch:load:weights",
+    "body": [
+      "state_dict = torch.load(",
+      "    \"${1:model.pt}\",",
+      "    map_location=device,",
+      "    weights_only=True,",
+      ")",
+      "",
+      "model.load_state_dict(state_dict)"
+    ],
+    "description": "Load model weights"
+  },
+
+  "PyTorch save checkpoint": {
+    "prefix": "pytorch:save",
+    "body": [
+      "torch.save(",
+      "    {",
+      "        \"epoch\": ${1:epoch},",
+      "        \"model_state_dict\": model.state_dict(),",
+      "        \"optimizer_state_dict\": optimizer.state_dict(),",
+      "        \"loss\": ${2:loss},",
+      "    },",
+      "    \"${3:checkpoint.pt}\",",
+      ")"
+    ],
+    "description": "Save a training checkpoint"
+  },
+
+  "PyTorch load checkpoint": {
+    "prefix": "pytorch:load",
+    "body": [
+      "checkpoint = torch.load(",
+      "    \"${1:checkpoint.pt}\",",
+      "    map_location=device,",
+      "    weights_only=True,",
+      ")",
+      "",
+      "model.load_state_dict(checkpoint[\"model_state_dict\"])",
+      "optimizer.load_state_dict(checkpoint[\"optimizer_state_dict\"])",
+      "start_epoch = checkpoint[\"epoch\"] + 1"
+    ],
+    "description": "Load a training checkpoint"
+  },
+
+  "PyTorch save best model": {
+    "prefix": "pytorch:save:best",
+    "body": [
+      "best_loss = float(\"inf\")",
+      "",
+      "if ${1:validation_loss} < best_loss:",
+      "    best_loss = ${1:validation_loss}",
+      "    torch.save(model.state_dict(), \"${2:best_model.pt}\")"
+    ],
+    "description": "Save the model when validation loss improves"
+  },
+
+  "PyTorch tensor shape debug": {
+    "prefix": "pytorch:debug:shape",
+    "body": [
+      "print(\"${1:tensor}:\", ${1:tensor}.shape, ${1:tensor}.dtype, ${1:tensor}.device)"
+    ],
+    "description": "Print tensor shape, dtype, and device"
+  },
+
+  "PyTorch anomaly detection": {
+    "prefix": "pytorch:debug:anomaly",
+    "body": [
+      "with torch.autograd.detect_anomaly():",
+      "    ${1:loss}.backward()"
+    ],
+    "description": "Enable autograd anomaly detection"
+  },
+
+  "PyTorch check NaN": {
+    "prefix": "pytorch:debug:nan",
+    "body": [
+      "if torch.isnan(${1:tensor}).any():",
+      "    raise ValueError(\"NaN detected in ${1:tensor}\")"
+    ],
+    "description": "Check a tensor for NaN values"
+  },
+
+  "PyTorch tensor creation": {
+    "prefix": "pytorch:tensor",
+    "body": [
+      "${1:x} = torch.tensor(${2:data}, dtype=torch.${3:float32}, device=device)"
+    ],
+    "description": "Create a PyTorch tensor"
+  },
+
+  "PyTorch zeros tensor": {
+    "prefix": "pytorch:tensor:zeros",
+    "body": [
+      "${1:x} = torch.zeros((${2:rows}, ${3:columns}), device=device)"
+    ],
+    "description": "Create a tensor filled with zeros"
+  },
+
+  "PyTorch random tensor": {
+    "prefix": "pytorch:tensor:random",
+    "body": [
+      "${1:x} = torch.randn((${2:batch_size}, ${3:features}), device=device)"
+    ],
+    "description": "Create a normally distributed random tensor"
+  },
+
+  "PyTorch reshape tensor": {
+    "prefix": "pytorch:tensor:reshape",
+    "body": [
+      "${1:x} = ${1:x}.reshape(${2:shape})"
+    ],
+    "description": "Reshape a tensor"
+  },
+
+  "PyTorch move tensor to device": {
+    "prefix": "pytorch:tensor:device",
+    "body": [
+      "${1:x} = ${1:x}.to(device, non_blocking=True)"
+    ],
+    "description": "Move a tensor to the selected device"
+  },
+
+  "PyTorch no gradient": {
+    "prefix": "pytorch:no-grad",
+    "body": [
+      "with torch.no_grad():",
+      "    ${1:output = model(inputs)}"
+    ],
+    "description": "Disable gradient tracking"
+  },
+
+  "PyTorch inference mode": {
+    "prefix": "pytorch:inference",
+    "body": [
+      "model.eval()",
+      "",
+      "with torch.inference_mode():",
+      "    ${1:outputs = model(inputs)}"
+    ],
+    "description": "Run model inference"
+  }
+}
