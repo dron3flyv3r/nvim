@@ -112,7 +112,43 @@ return {
       desc = "Resize mode (hjkl, <Esc> to exit)",
     }
     maps.n["<Leader>s="] = { "<C-w>=", desc = "Equalize split sizes" }
-    maps.n["<Leader>sm"] = { "<Cmd>resize | vertical resize<CR>", desc = "Maximise split" }
+
+    -- Zoom: make the current split fill the screen, press again to put the
+    -- layout back exactly as it was. This is VS Code's Ctrl+K Z.
+    --
+    -- The restore is the whole point. `:resize | vertical resize` maximises
+    -- fine, but there is no inverse -- `<C-w>=` only makes everything *equal*,
+    -- which is not what you had if you'd deliberately made one pane wider.
+    -- `winrestcmd()` returns a literal command string that recreates the
+    -- current sizes, so we stash it and run it on the way back out.
+    --
+    -- Tab-local (`vim.t`), because a layout belongs to its tab page.
+    maps.n["<Leader>sm"] = {
+      function()
+        if vim.t.zoom_restore then
+          vim.cmd(vim.t.zoom_restore)
+          vim.t.zoom_restore = nil
+          return
+        end
+        -- One window is already "zoomed"; nothing to do and nothing to restore.
+        if vim.fn.winnr "$" == 1 then return end
+        vim.t.zoom_restore = vim.fn.winrestcmd()
+        vim.cmd "resize | vertical resize"
+      end,
+      desc = "Zoom split (toggles)",
+    }
+
+    -- On a wide screen you end up with three or four columns, and counting
+    -- `<C-h>`s to reach the far one is worse than just pointing at it. This
+    -- paints a letter on each window and jumps to the one you press.
+    -- (window-picker is already installed as a neo-tree dependency.)
+    maps.n["<Leader>sw"] = {
+      function()
+        local win = require("window-picker").pick_window()
+        if win then vim.api.nvim_set_current_win(win) end
+      end,
+      desc = "Pick a window",
+    }
 
     -- Swap the current split with a neighbour, for when the layout is right
     -- but the contents are in the wrong panes.
