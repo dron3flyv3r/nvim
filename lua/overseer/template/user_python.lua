@@ -46,12 +46,18 @@ local PYTHON_EFM = table.concat({
   "%-G%.%#",
 }, ",")
 
---- Task components shared by both entries. `on_output_quickfix` is the one that
---- earns its keep: with the format above, every real traceback frame becomes a
---- quickfix entry you can jump to.
+--- Task components shared by both entries. `"default"` is the alias defined in
+--- `lua/plugins/tasks.lua`, which is what makes the live output pane open when
+--- the task starts.
+---
+--- `open_on_match = false` on purpose. Popping the quickfix window open would
+--- land it at the bottom of the screen -- exactly where the output pane you are
+--- reading the traceback in already is. The entries are still filled, so `æq` /
+--- `øq` walk the stack without any window, and `<Leader>xq` opens the list if
+--- you want to see it whole.
 local COMPONENTS = {
   "default",
-  { "on_output_quickfix", errorformat = PYTHON_EFM, open_on_match = true, items_only = true },
+  { "on_output_quickfix", errorformat = PYTHON_EFM, open_on_match = false, items_only = true },
 }
 
 -- A KNOWN LIMIT OF THE QUICKFIX PARSING ABOVE, so it does not surprise you:
