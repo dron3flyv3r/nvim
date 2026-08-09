@@ -74,6 +74,34 @@ return {
           end,
           desc = "Re-run last task",
         }
+        -- Run THIS file, no picker. `<Leader>rl` re-runs whatever ran last,
+        -- which is what you want while iterating on one thing -- but the moment
+        -- you move from lec5 to lec6 it is still pointing at lec5. This is the
+        -- "run what I'm looking at" key that switches the target.
+        --
+        -- Python only for now: it is the language here where the *right*
+        -- command (`python -m lec6.main`, from the project root) is not the
+        -- obvious one. C/C++ is driven by the justfile, which overseer already
+        -- reads, so `<Leader>rr` covers it.
+        maps.n["<Leader>rf"] = {
+          function()
+            local target = require("user.python_target").resolve()
+            if not target then
+              vim.notify("Not a Python file -- use <Leader>rr", vim.log.levels.WARN, { title = "Run" })
+              return
+            end
+            if not target.module then
+              vim.notify("File is outside the project root", vim.log.levels.WARN, { title = "Run" })
+              return
+            end
+            require("overseer").run_task {
+              name = require("user.python_target").module_template_name(target),
+              first = true,
+            }
+          end,
+          desc = "Run this file (python -m ...)",
+        }
+
         maps.n["<Leader>rt"] = { "<Cmd>OverseerToggle<CR>", desc = "Toggle task list" }
         maps.n["<Leader>rc"] = { "<Cmd>OverseerShell<CR>", desc = "Run shell command" }
         maps.n["<Leader>ra"] = { "<Cmd>OverseerTaskAction<CR>", desc = "Task action (stop, restart, ...)" }

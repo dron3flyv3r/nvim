@@ -230,7 +230,9 @@ local SECTIONS = {
     "RUNNING & BUILDING   (overseer — reads the project, not the filetype)",
     {
       { "<Leader>rr", "run a task — lists your justfile / Makefile targets", "new" },
+      { "<Leader>rf", "python: run THIS file as `python -m pkg.mod`", "new" },
       { "<Leader>rl", "re-run the last task ← the one you'll wear out", "new" },
+      { "(note)", "rf switches target when you move to lec6; rl repeats" },
       { "<Leader>rt", "toggle the task list", "new" },
       { "<Leader>rq", "open the last task's output", "new" },
       { "<Leader>rc", "run an arbitrary shell command", "new" },
