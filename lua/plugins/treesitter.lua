@@ -5,8 +5,9 @@
 ---@type LazySpec
 return {
   "nvim-treesitter/nvim-treesitter",
-  branch = "master",
+  branch = "main",
   opts = {
+    lazy = false,
     ensure_installed = {
       "lua",
       "vim",
