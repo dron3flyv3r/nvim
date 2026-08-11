@@ -46,16 +46,8 @@ local function running_tasks()
   }
 end
 
---- The window in this tab already showing `bufnr`, if any.
----@param bufnr integer
----@return integer|nil
-local function window_showing(bufnr)
-  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-    if vim.api.nvim_win_get_buf(win) == bufnr then return win end
-  end
-end
-
---- Put the cursor in the most recent task's output, opening it if needed.
+--- Put the cursor in the most recent task's output, opening the bottom strip if
+--- it is closed and pointing it at that task if it is showing another.
 ---
 --- The output pane is a terminal buffer, so with the cursor in it and insert
 --- mode on, keys go to the process's stdin -- an `input()` prompt, a `[y/N]`, a
@@ -68,42 +60,30 @@ local function focus_output(insert)
     return
   end
 
-  -- nil while the task is still PENDING: no process, so no terminal.
-  local bufnr = task:get_bufnr()
-  if not bufnr then
+  if not require("user.task_output").open(task, { enter = true, insert = insert }) then
     vim.notify("Task has not started yet", vim.log.levels.INFO, { title = "Overseer" })
-    return
   end
-
-  local win = window_showing(bufnr)
-  if not win then
-    -- Either the strip is closed, or it is open on a different task.
-    -- `focus_task_id` covers both: it opens if needed, and points the output
-    -- pane at this task.
-    require("overseer.window").open { direction = "bottom", enter = false, focus_task_id = task.id }
-    win = window_showing(bufnr)
-  end
-  -- Last resort if the dock refuses to show it -- a plain split of the terminal
-  -- buffer is just as readable.
-  if not win then
-    task:open_output "horizontal"
-    win = vim.api.nvim_get_current_win()
-  end
-
-  vim.api.nvim_set_current_win(win)
-  if insert and vim.bo[bufnr].buftype == "terminal" then vim.cmd.startinsert() end
 end
 
 ---@type LazySpec
 return {
   "stevearc/overseer.nvim",
+  -- Runs at startup, before overseer loads: it only registers autocmds, and
+  -- they no-op until a task has actually run.
+  init = function() require("user.task_pty").setup() end,
   opts = {
     task_list = {
-      -- Bottom of the screen, full width. The default is a right-hand sidebar,
-      -- which on a widescreen steals a column you would rather have as code --
-      -- and task output is wide, wrapped text that reads better long than tall.
-      direction = "bottom",
-      min_height = 12,
+      -- A right-hand sidebar, opened on demand with `<Leader>rt` and closed
+      -- again with `q`. It used to be `"bottom"`, which is the setting that
+      -- produces the dock -- list and output sharing the bottom strip. The list
+      -- floors itself at 40-odd columns there and spends them on one line per
+      -- task, which is width the output wanted more (see `user.task_output`).
+      --
+      -- `"bottom"` is specifically the direction that builds a dock: overseer
+      -- only creates the second, output half of the strip when the list opens
+      -- downwards. Any side direction gives a plain list, which is all this is
+      -- for now -- what is queued, what is still running.
+      direction = "right",
     },
 
     output = {
@@ -112,6 +92,12 @@ return {
       -- printing one line per update, colours survive, and -- because it is a
       -- terminal -- typing in the window goes to the process's stdin, so an
       -- `input()` prompt or a `y/n` confirmation is answerable.
+      --
+      -- The in-place redraw needs one more thing that overseer does not do:
+      -- the pty has to be the size of the window. Overseer sizes it to the
+      -- whole editor instead, so tqdm drew a bar half again as wide as the
+      -- pane, it wrapped, and every update orphaned a row. `user.task_pty`
+      -- (see `init` above) keeps the two in sync.
       use_terminal = true,
     },
 
@@ -126,21 +112,17 @@ return {
 
         -- The reason a task used to run invisibly. Without this, starting a
         -- task only put a line in a task list you had to go open yourself.
-        {
-          "open_output",
-          -- `dock` splits the bottom strip in two: task list on the left,
-          -- the selected task's live output on the right, scrolled to the end
-          -- as it arrives. On a widescreen that is the whole point -- status
-          -- and output side by side without giving up a code column.
-          direction = "dock",
-          -- The default here is "if_no_on_output_quickfix", which would keep
-          -- the Python tasks silent, since those parse tracebacks.
-          on_start = "always",
-          -- Do NOT steal the cursor: the run keeps you in your file, which is
-          -- what you want while a build churns. `<Leader>ri` goes there and
-          -- into insert mode for the times the process wants an answer.
-          focus = false,
-        },
+        --
+        -- Ours, not overseer's `open_output`: the live output goes in a
+        -- full-width strip along the bottom rather than into half of a dock.
+        -- `lua/overseer/component/user_output_pane.lua`, and `user.task_output`
+        -- for the reasoning.
+        --
+        -- `focus` is left at its default of false on purpose: the run does NOT
+        -- steal the cursor, so you keep typing in your file while a build
+        -- churns. `<Leader>ri` goes there, and into insert mode, for the times
+        -- the process wants an answer.
+        "user_output_pane",
       },
     },
   },
