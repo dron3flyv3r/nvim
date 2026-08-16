@@ -58,14 +58,38 @@ end
 ---@type LazySpec
 return {
   "Saghen/blink.cmp",
-  opts = {
-    sources = {
-      providers = {
-        lsp = { transform_items = dedupe_python_lsp },
-      },
-    },
+  -- A function rather than a table because `sources.default` is a list, and a
+  -- list in an `opts` table replaces rather than appends -- writing it plainly
+  -- would drop `lsp`, `path`, `snippets` and `buffer` and leave completion with
+  -- nothing but the C++ source below.
+  ---@param opts blink.cmp.Config
+  opts = function(_, opts)
+    opts.sources = opts.sources or {}
+    opts.sources.providers = opts.sources.providers or {}
+    opts.sources.providers.lsp = vim.tbl_deep_extend(
+      "force",
+      opts.sources.providers.lsp or {},
+      { transform_items = dedupe_python_lsp }
+    )
 
-    signature = {
+    -- Out-of-line definitions from the paired header. See
+    -- `user/cpp_definition_source.lua` -- the short version is that clangd
+    -- completes `Application::ini` to the bare name `init` with no return type
+    -- and no parameters, and this fills in the rest.
+    opts.sources.providers.cpp_definition = {
+      name = "C++ def",
+      module = "user.cpp_definition_source",
+      -- Above `lsp` (the default is 0), so when both answer -- and they both
+      -- will, since clangd offers the bare name for the same prefix -- the
+      -- complete definition is the item under the cursor.
+      score_offset = 10,
+    }
+    opts.sources.default = require("astrocore").list_insert_unique(
+      opts.sources.default or { "lsp", "path", "snippets", "buffer" },
+      { "cpp_definition" }
+    )
+
+    opts.signature = vim.tbl_deep_extend("force", opts.signature or {}, {
       enabled = true,
       trigger = {
         enabled = true,
@@ -74,6 +98,8 @@ return {
       window = {
         show_documentation = false, -- keep it to the signature line, not the full docstring
       },
-    },
-  },
+    })
+
+    return opts
+  end,
 }

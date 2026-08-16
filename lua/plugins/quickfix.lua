@@ -53,7 +53,12 @@ return {
 
     -- `<Leader>la` is the real "Quick Fix". Mirror it here for muscle memory
     -- arriving from VS Code, where it lives on Ctrl+`.`.
-    local code_action = function() vim.lsp.buf.code_action() end
+    --
+    -- Wrapped in `user.quick_fix` rather than calling `vim.lsp.buf.code_action`
+    -- directly, because in a C++ buffer the bare call only answers when the
+    -- cursor is within a few columns of the right token -- see that file for
+    -- the measurement and the fallback it adds.
+    local code_action = require("user.quick_fix").code_action(vim.lsp.buf.code_action)
     maps.n["<Leader>xa"] = { code_action, desc = "Quick Fix (code action)" }
     maps.x["<Leader>xa"] = { code_action, desc = "Quick Fix (code action)" }
   end,
