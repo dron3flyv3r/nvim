@@ -3,6 +3,54 @@
 --
 -- Per-language tuning lives next door -- see `python-lsp.lua`. This file is the
 -- behaviour that should be true of every server.
+-- ── LSP navigation goes through the picker ────────────────────────────────────
+--
+-- Every "where is this used / defined / implemented" key in AstroNvim ends in
+-- the QUICKFIX LIST: `vim.lsp.buf.references()` and friends hand their results
+-- to `vim.fn.setqflist`, which draws a flat strip at the bottom of the screen
+-- with no filtering, no fuzzy matching and no preview. The LSP data is fine --
+-- roslyn knows perfectly well who calls a method -- it is the window that makes
+-- it feel worse than a grep.
+--
+-- snacks.picker has an LSP source for each of these, and it is the same picker
+-- as `<Leader>ff` and `<Leader>fw`: list on the left, live preview of the hit
+-- on the right, fuzzy-filter as you type. Which also means the keys you already
+-- know work inside it -- `<C-v>` / `<C-s>` to open in a split, `<C-q>` to send
+-- the list (as filtered, not as found) to the quickfix list for when you really
+-- do want to walk it with `]q`, and `<Leader>f<CR>` to reopen the last one.
+
+--- Wrap one of snacks' LSP pickers as a mapping.
+---
+--- `hint` marks the keys that answer "find EVERY x" rather than "take me to
+--- the one x". Those are the keys a half-loaded language server actively
+--- misleads: an incomplete reference list is indistinguishable from a complete
+--- one, and on a solution the size of a Unity project roslyn takes a while.
+--- `gd` deliberately does not hint -- a notification on every jump to a
+--- definition is worse than no notification at all.
+---@param source string A `Snacks.picker` source name.
+---@param opts? table Passed to the picker, plus our own `hint`.
+---@return fun()
+local function pick(source, opts)
+  opts = vim.deepcopy(opts or {})
+  local hint = opts.hint
+  opts.hint = nil
+  return function()
+    -- `vim.lsp.status()` is the same progress text the statusline shows, and is
+    -- the empty string when every server is idle.
+    if hint then
+      local progress = vim.lsp.status()
+      if progress ~= "" then
+        vim.notify(
+          "A language server is still working, so this list may be incomplete:\n" .. progress,
+          vim.log.levels.INFO,
+          { title = "LSP" }
+        )
+      end
+    end
+    require("snacks").picker[source](opts)
+  end
+end
+
 ---@type LazySpec
 return {
   "AstroNvim/astrolsp",
@@ -59,10 +107,87 @@ return {
 
     mappings = {
       n = {
+        -- `cond` is a method name: the key only exists on buffers whose
+        -- server can actually answer it, so `<Leader>lk` is absent in a
+        -- filetype without call hierarchy rather than silently doing nothing.
+        --
+        -- Going somewhere: one result jumps straight there (`auto_confirm` is
+        -- on by default in these sources), several open the picker. Both push
+        -- the tagstack, so `<C-t>` and `<BS>` come back.
+        gd = {
+          pick "lsp_definitions",
+          desc = "Definition of current symbol",
+          cond = "textDocument/definition",
+        },
         gD = {
-          function() vim.lsp.buf.declaration() end,
+          pick "lsp_declarations",
           desc = "Declaration of current symbol",
           cond = "textDocument/declaration",
+        },
+        gy = {
+          pick "lsp_type_definitions",
+          desc = "Definition of current type",
+          cond = "textDocument/typeDefinition",
+        },
+        gO = {
+          pick "lsp_symbols",
+          desc = "Symbols in this file",
+          cond = "textDocument/documentSymbol",
+        },
+
+        -- Finding everything: `auto_confirm = false` because you pressed this
+        -- to SEE the list. Left on, a symbol with exactly one reference would
+        -- teleport you to it and never show you that it was the only one --
+        -- which is usually the most interesting thing the answer contains.
+        ["<Leader>lR"] = {
+          pick("lsp_references", { auto_confirm = false, hint = true }),
+          desc = "References of current symbol",
+          cond = "textDocument/references",
+        },
+        grr = {
+          pick("lsp_references", { auto_confirm = false, hint = true }),
+          desc = "References of current symbol",
+          cond = "textDocument/references",
+        },
+        -- Implementations, for an `interface` or an `abstract` method: every
+        -- type that implements it. `gri` is Neovim's own key for this and is
+        -- overridden here per-buffer; `<Leader>li` is the same thing from the
+        -- `<Leader>l` menu.
+        gri = {
+          pick("lsp_implementations", { hint = true }),
+          desc = "Implementations of current symbol",
+          cond = "textDocument/implementation",
+        },
+        ["<Leader>li"] = {
+          pick("lsp_implementations", { hint = true }),
+          desc = "Implementations of current symbol",
+          cond = "textDocument/implementation",
+        },
+
+        -- Call hierarchy, on `j` and `k` because the mnemonic is the direction
+        -- you move through the call tree: `k` goes UP to the callers, `j` goes
+        -- DOWN into the callees. This is the pair a grep answers badly and a
+        -- language server answers exactly -- `Move()` finds every text match
+        -- for the word, `<Leader>lk` finds the code that actually calls THIS
+        -- `Move`.
+        ["<Leader>lk"] = {
+          pick("lsp_incoming_calls", { hint = true }),
+          desc = "Incoming calls (who calls this)",
+          cond = "textDocument/prepareCallHierarchy",
+        },
+        ["<Leader>lj"] = {
+          pick("lsp_outgoing_calls", { hint = true }),
+          desc = "Outgoing calls (what this calls)",
+          cond = "textDocument/prepareCallHierarchy",
+        },
+
+        -- Workspace symbols. The default prompts for a string through
+        -- `vim.ui.input` FIRST and only then queries -- so a typo costs you the
+        -- whole round trip. The picker queries live as you type instead.
+        ["<Leader>lG"] = {
+          pick "lsp_workspace_symbols",
+          desc = "Search workspace symbols",
+          cond = "workspace/symbol",
         },
         ["<Leader>uY"] = {
           function() require("astrolsp.toggles").buffer_semantic_tokens() end,

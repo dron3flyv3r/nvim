@@ -52,7 +52,21 @@ return {
         number = true,
         spell = false,
         signcolumn = "yes",
+
+        -- Wrap is OFF by default -- code is written to a column limit, and a
+        -- wrapped buffer makes `æd`/`ød` land on lines that are not where the
+        -- cursor appears to be. `<Leader>uw` (or `<A-z>`) turns it on for the
+        -- current window; `wrap.lua` explains the rest and holds the toggle.
+        --
+        -- The three settings under it only take effect while wrap is on, which
+        -- is why they can be set unconditionally here: they cost nothing in the
+        -- default state and mean the toggle produces something readable rather
+        -- than something technically wrapped.
         wrap = false,
+        linebreak = true, -- break between words, not through the middle of an identifier
+        breakindent = true, -- continuation keeps the indent of the line it belongs to
+        breakindentopt = "shift:2", -- ...plus two, so a continuation cannot be mistaken for a new statement
+        showbreak = "↳ ",
         scrolloff = 8, -- keep 8 lines visible above/below the cursor
         sidescrolloff = 8, -- keep 8 columns visible left/right of the cursor
       },

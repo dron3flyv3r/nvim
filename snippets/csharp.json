@@ -1,0 +1,243 @@
+{
+  "MonoBehaviour class": {
+    "prefix": "unity:mono",
+    "body": [
+      "using UnityEngine;",
+      "",
+      "public class ${TM_FILENAME_BASE} : MonoBehaviour",
+      "{",
+      "\t$0",
+      "}"
+    ],
+    "description": "MonoBehaviour named after the file (Unity requires the two to match)"
+  },
+
+  "ScriptableObject class": {
+    "prefix": "unity:so",
+    "body": [
+      "using UnityEngine;",
+      "",
+      "[CreateAssetMenu(fileName = \"${TM_FILENAME_BASE}\", menuName = \"${1:Game}/${TM_FILENAME_BASE}\")]",
+      "public class ${TM_FILENAME_BASE} : ScriptableObject",
+      "{",
+      "\t$0",
+      "}"
+    ],
+    "description": "ScriptableObject with a Create Asset menu entry"
+  },
+
+  "Serialized field": {
+    "prefix": "unity:field",
+    "body": ["[SerializeField] private ${1:float} ${2:value}${3: = ${4:0f}};$0"],
+    "description": "Private field that still shows in the Inspector"
+  },
+
+  "Serialized field with range": {
+    "prefix": "unity:range",
+    "body": ["[SerializeField, Range(${1:0f}, ${2:1f})] private float ${3:value} = ${4:0.5f};$0"],
+    "description": "Inspector slider"
+  },
+
+  "Cached component reference": {
+    "prefix": "unity:cache",
+    "body": [
+      "private ${1:Rigidbody} _${2:body};",
+      "",
+      "private void Awake()",
+      "{",
+      "\t_$2 = GetComponent<$1>();",
+      "}$0"
+    ],
+    "description": "GetComponent once in Awake rather than every frame"
+  },
+
+  "Awake": {
+    "prefix": "unity:awake",
+    "body": ["private void Awake()", "{", "\t$0", "}"],
+    "description": "Called once when the object loads, before any Start"
+  },
+
+  "OnEnable": {
+    "prefix": "unity:onenable",
+    "body": ["private void OnEnable()", "{", "\t$0", "}"],
+    "description": "Subscribe to events here; unsubscribe in OnDisable"
+  },
+
+  "OnDisable": {
+    "prefix": "unity:ondisable",
+    "body": ["private void OnDisable()", "{", "\t$0", "}"],
+    "description": "Unsubscribe from what OnEnable subscribed to"
+  },
+
+  "Start": {
+    "prefix": "unity:start",
+    "body": ["private void Start()", "{", "\t$0", "}"],
+    "description": "Called before the first frame, after every Awake"
+  },
+
+  "Update": {
+    "prefix": "unity:update",
+    "body": ["private void Update()", "{", "\t$0", "}"],
+    "description": "Every frame. Use Time.deltaTime for anything rate-based"
+  },
+
+  "FixedUpdate": {
+    "prefix": "unity:fixedupdate",
+    "body": ["private void FixedUpdate()", "{", "\t$0", "}"],
+    "description": "Fixed timestep -- where Rigidbody forces belong"
+  },
+
+  "LateUpdate": {
+    "prefix": "unity:lateupdate",
+    "body": ["private void LateUpdate()", "{", "\t$0", "}"],
+    "description": "After every Update -- cameras following a target"
+  },
+
+  "OnDestroy": {
+    "prefix": "unity:ondestroy",
+    "body": ["private void OnDestroy()", "{", "\t$0", "}"],
+    "description": "Release native handles and unsubscribe"
+  },
+
+  "OnValidate": {
+    "prefix": "unity:onvalidate",
+    "body": ["private void OnValidate()", "{", "\t$0", "}"],
+    "description": "Editor-only: clamp Inspector values as they are typed"
+  },
+
+  "OnTriggerEnter": {
+    "prefix": "unity:triggerenter",
+    "body": ["private void OnTriggerEnter(Collider other)", "{", "\t$0", "}"],
+    "description": "Needs a trigger Collider on this object"
+  },
+
+  "OnTriggerExit": {
+    "prefix": "unity:triggerexit",
+    "body": ["private void OnTriggerExit(Collider other)", "{", "\t$0", "}"],
+    "description": "Trigger stopped overlapping"
+  },
+
+  "OnCollisionEnter": {
+    "prefix": "unity:collisionenter",
+    "body": ["private void OnCollisionEnter(Collision collision)", "{", "\t$0", "}"],
+    "description": "Needs a non-trigger Collider and a Rigidbody"
+  },
+
+  "OnTriggerEnter2D": {
+    "prefix": "unity:triggerenter2d",
+    "body": ["private void OnTriggerEnter2D(Collider2D other)", "{", "\t$0", "}"],
+    "description": "The 2D physics callbacks are separate methods, not overloads"
+  },
+
+  "OnCollisionEnter2D": {
+    "prefix": "unity:collisionenter2d",
+    "body": ["private void OnCollisionEnter2D(Collision2D collision)", "{", "\t$0", "}"],
+    "description": "2D collision"
+  },
+
+  "Coroutine": {
+    "prefix": "unity:coroutine",
+    "body": [
+      "private IEnumerator ${1:Routine}()",
+      "{",
+      "\t${2:yield return new WaitForSeconds(${3:1f});}",
+      "\t$0",
+      "}"
+    ],
+    "description": "Coroutine body -- start it with StartCoroutine"
+  },
+
+  "Require component": {
+    "prefix": "unity:require",
+    "body": ["[RequireComponent(typeof(${1:Rigidbody}))]$0"],
+    "description": "Unity adds the component automatically and refuses to remove it"
+  },
+
+  "Draw gizmos": {
+    "prefix": "unity:gizmos",
+    "body": [
+      "private void OnDrawGizmosSelected()",
+      "{",
+      "\tGizmos.color = ${1:Color.yellow};",
+      "\tGizmos.DrawWireSphere(transform.position, ${2:radius});",
+      "\t$0",
+      "}"
+    ],
+    "description": "Scene-view debug drawing for the selected object"
+  },
+
+  "Custom editor": {
+    "prefix": "unity:editor",
+    "body": [
+      "using UnityEditor;",
+      "using UnityEngine;",
+      "",
+      "[CustomEditor(typeof(${1:TargetType}))]",
+      "public class ${TM_FILENAME_BASE} : Editor",
+      "{",
+      "\tpublic override void OnInspectorGUI()",
+      "\t{",
+      "\t\tDrawDefaultInspector();",
+      "\t\t$0",
+      "\t}",
+      "}"
+    ],
+    "description": "Custom Inspector. Must live under an Editor/ folder"
+  },
+
+  "EditMode test": {
+    "prefix": "unity:test",
+    "body": [
+      "[Test]",
+      "public void ${1:Method}_${2:When}_${3:Then}()",
+      "{",
+      "\t$0",
+      "\tAssert.Pass();",
+      "}"
+    ],
+    "description": "NUnit test -- runs without entering play mode"
+  },
+
+  "PlayMode test": {
+    "prefix": "unity:playtest",
+    "body": [
+      "[UnityTest]",
+      "public IEnumerator ${1:Method}_${2:When}_${3:Then}()",
+      "{",
+      "\tyield return null;",
+      "\t$0",
+      "}"
+    ],
+    "description": "Coroutine test -- can yield across frames"
+  },
+
+  "Test fixture": {
+    "prefix": "unity:fixture",
+    "body": [
+      "using NUnit.Framework;",
+      "using UnityEngine;",
+      "",
+      "public class ${TM_FILENAME_BASE}",
+      "{",
+      "\t[SetUp]",
+      "\tpublic void SetUp()",
+      "\t{",
+      "\t\t$1",
+      "\t}",
+      "",
+      "\t[Test]",
+      "\tpublic void ${2:Name}()",
+      "\t{",
+      "\t\t$0",
+      "\t}",
+      "}"
+    ],
+    "description": "Test class with SetUp"
+  },
+
+  "Log": {
+    "prefix": "unity:log",
+    "body": ["Debug.Log($\"${1:label}: {${2:value}}\", this);$0"],
+    "description": "Debug.Log with a context object -- clicking the console entry selects it"
+  }
+}
