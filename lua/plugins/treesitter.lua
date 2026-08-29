@@ -51,6 +51,30 @@ return {
         "cpp",
         "cmake",
         "make",
+        -- Rust, and `toml` for `Cargo.toml`. Listed here for exactly the reason
+        -- at the top of this file: `astrocommunity.pack.rust` asks for its
+        -- parser by setting `treesitter.ensure_installed` on **astrocore**, the
+        -- key nothing reads any more, and `astrocommunity.pack.toml` (which it
+        -- imports) does the same. Both requests were landing in a dead table.
+        "rust",
+        "toml",
+        -- ── NOT A LANGUAGE YOU EDIT ──────────────────────────────────────────
+        --
+        -- `diff` is here for the code-action preview on `<Leader>la`. That
+        -- window is a scratch buffer full of unified diff, and
+        -- actions-preview's snacks backend colours it with
+        --
+        --     vim.treesitter.start(buf, "diff")
+        --
+        -- which THROWS when the parser is absent -- "Parser could not be
+        -- created for buffer N and language \"diff\"" -- from inside the
+        -- preview callback, after the lines are set but before the buffer is
+        -- finished. The visible result is an uncoloured wall of `+`/`-` and an
+        -- error, which reads as "the preview is broken" rather than as a
+        -- missing parser. It was missing for C++ too; nothing pointed at it
+        -- because the failure is in a callback and names a language nobody
+        -- asked for.
+        "diff",
         -- NOTE: `c_sharp` and `hlsl` are added by `plugins/unity.lua`, which is
         -- also where the `tree-sitter` CLI they need to build comes from.
         -- `opts_extend = { "ensure_installed" }` upstream merges the two lists.

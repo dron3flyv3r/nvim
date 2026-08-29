@@ -34,6 +34,21 @@ return {
   --     CompileFlags:
   --       CompilationDatabase: build/cache
   { import = "astrocommunity.pack.cpp" },
+  -- Rust: rustaceanvim (which owns rust-analyzer outright -- it sets
+  -- `handlers = { rust_analyzer = false }` so AstroLSP does NOT also start one),
+  -- crates.nvim for `Cargo.toml`, and the TOML pack underneath it.
+  --
+  -- rust-analyzer itself is NOT installed by this import, and deliberately not
+  -- by Mason either: it is `extra/rust-analyzer` from pacman, because the
+  -- proc-macro server it ships has to match the rustc that compiled the crate,
+  -- and this machine's toolchain is pacman's (`rust`, plus `rust-src`, which is
+  -- what lets `gd` land inside std). Mason's copy is an upstream release built
+  -- against a different rustc and drifts out of step.
+  --
+  -- Tuning -- the check command, the split target directory, the `<Leader>R`
+  -- keys, and the Overseer bridge for `<Leader>Rr` -- lives in
+  -- `plugins/rust-lsp.lua`.
+  { import = "astrocommunity.pack.rust" },
 
   -- ── Editing ───────────────────────────────────────────────────────────────
   -- <A-hjkl> to move lines and selections around.
