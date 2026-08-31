@@ -328,6 +328,20 @@ return {
       mappings(assert(opts.mappings))
 
       local autocmds = opts.autocmds or {}
+      -- Starting roslyn. mason-lspconfig v1 -- which is what is on disk, see
+      -- `user.unity_lsp.enable` -- has no mapping for `roslyn-language-server`,
+      -- so it never hands the server to AstroLSP and nothing enables it. This
+      -- is the one thing standing between a correctly configured C# server and
+      -- a `.cs` buffer with no client attached.
+      autocmds.unity_roslyn = {
+        {
+          event = "User",
+          pattern = "AstroLspSetup",
+          desc = "Start roslyn (mason-lspconfig v1 has no mapping for it)",
+          once = true,
+          callback = function() require("user.unity_lsp").enable() end,
+        },
+      }
       autocmds.unity_project = {
         {
           event = { "BufReadPost", "BufNewFile" },

@@ -1,31 +1,42 @@
 -- Pointing `roslyn_ls` at the right Unity solution.
 --
--- WHY THIS IS A MODULE AND NOT `astrolsp`'s `config` TABLE. It should have been
--- the latter -- that is what `config` is for, and it is where `python-lsp.lua`
--- puts basedpyright's settings. It does not work in this config, and the reason
--- is worth writing down because it is not visible from any one file:
+-- WHY THIS IS A MODULE AND NOT `astrolsp`'s `config` TABLE. `config` is the
+-- right place for a server's *settings*, and it is where `python-lsp.lua` puts
+-- basedpyright's. It cannot carry the two things below, because both have to be
+-- registered before AstroLSP has been configured at all -- see the timing note
+-- on `M.enable`. So `settings` could live there; `root_dir` and `on_init`
+-- could not, and splitting one server's configuration across two files is
+-- worse than keeping it whole.
 --
---   * AstroNvim v5 bridges AstroLSP to **mason-lspconfig v1**. Its
---     `plugins/lspconfig.lua` pins `version = "^1"` and passes
---     `handlers = { function(server) require("astrolsp").lsp_setup(server) end }`,
---     which is the v1 hook that ran AstroLSP for each installed server.
---   * The plugin actually installed here is **v2** (`mason-org/...`, pulled in
---     by `astrocommunity.pack.lua`). v2 dropped `handlers` entirely in favour
---     of `automatic_enable`, which calls `vim.lsp.enable()` directly.
---   * So `astrolsp.lsp_setup` is never called for a Mason-installed server.
---     `astrolsp.config.servers` is empty, `astrolsp.lsp_config(name)` never
---     runs, and therefore AstroLSP's `config.<server>` table is never handed to
---     `vim.lsp.config`.
+-- ── A CORRECTION, AND WHY IT MATTERS ────────────────────────────────────────
 --
--- The observable version, in a scratch Python buffer:
+-- This header used to claim that mason-lspconfig **v2** was installed, that its
+-- `automatic_enable` had replaced v1's `handlers`, and that therefore
+-- `astrolsp.lsp_setup` was never called for any Mason-installed server. All
+-- three are false, and the belief is what hid the actual C# bug for so long --
+-- if the bridge is broken for everything, a dead C# server looks like a symptom
+-- rather than its own problem. MEASURED:
 --
---     :lua =vim.tbl_map(function(c) return c.name end, vim.lsp.get_clients())
---     { "basedpyright", "pyrefly", "pyright", "ruff" }
+--   * The plugin on disk is **v1.32.0**. AstroNvim's `plugins/lspconfig.lua`
+--     pins `version = "^1"`, and a version pin beats a spec URL: the repository
+--     is `mason-org/...` (from `astrocommunity.pack.lua`) checked out at a v1
+--     tag. `lua/mason-lspconfig/` has no `automatic_enable` in it anywhere.
+--   * v1's `handlers` contract is therefore live, and AstroNvim drives it. In a
+--     Python buffer:
 --
--- ...`pyright` included, despite `handlers = { pyright = false }`. And
--- `astrolsp.attached_clients` is `{}`, which means AstroLSP's `on_attach` never
--- runs either. See the note at the bottom of `plugins/unity.lua` -- fixing that
--- properly is a change to every language in this config, not a Unity one.
+--         :lua =vim.tbl_map(function(c) return c.name end, vim.lsp.get_clients())
+--         { "basedpyright", "ruff", "pyrefly" }
+--         :lua =vim.tbl_keys(require("astrolsp").attached_clients)
+--         { 1 }
+--
+--     ...`pyright` correctly absent, so `handlers = { pyright = false }` is
+--     being honoured, and `attached_clients` non-empty, so `on_attach` runs.
+--
+-- What IS broken is narrower and specific to C#: v1's package-name table has no
+-- entry for `roslyn-language-server`, so this one server is never handed to
+-- AstroLSP by anything. `M.enable` at the bottom is that missing hand-off.
+-- (`user.lsp_bridge` was written against the v2 story above and is a no-op
+-- under v1 -- its own header needs the same correction.)
 --
 -- `vim.lsp.config(name, cfg)` is Neovim's own mechanism and works regardless:
 -- it stores the override, and the server's `lsp/roslyn_ls.lua` from
@@ -137,6 +148,42 @@ function M.setup()
       end,
     },
 
+    -- THE NAME MASON INSTALLS THE BINARY UNDER.
+    --
+    -- `nvim-lspconfig`'s `lsp/roslyn_ls.lua` runs `Microsoft.CodeAnalysis.
+    -- LanguageServer` -- the executable's name *inside* the nuget package,
+    -- which its header tells you to extract and put on `$PATH` by hand. Mason
+    -- installs that exact binary, but links it under the package's own name:
+    --
+    --     mason/bin/roslyn-language-server
+    --       -> .store/.../tools/net10.0/linux-x64/Microsoft.CodeAnalysis.LanguageServer
+    --
+    -- So the server is installed and working, under a name upstream's `cmd`
+    -- does not use, and nothing called `Microsoft.CodeAnalysis.LanguageServer`
+    -- is on `$PATH`. MEASURED -- `vim.lsp.enable "roslyn_ls"` with upstream's
+    -- `cmd` on a `.cs` buffer:
+    --
+    --     :lua =vim.tbl_map(function(c) return c.name end, vim.lsp.get_clients())
+    --     {}
+    --
+    -- ...and nothing in `:messages` or `:LspLog`, because a `cmd` that is not
+    -- executable is not an error Neovim reports at the point you would look.
+    --
+    -- Mason puts its `bin/` on Neovim's `$PATH`, so the bare name resolves.
+    -- Six elements replacing upstream's six, for the reason `on_init` below
+    -- gives: `vim.lsp.config` overwrites list entries by index rather than
+    -- appending, so a shorter list would leave upstream's tail behind.
+    cmd = {
+      "roslyn-language-server",
+      -- Both of these are required by the server -- it exits immediately
+      -- without them, which is the other way this `cmd` goes quiet.
+      "--logLevel",
+      "Information",
+      "--extensionLogDirectory",
+      vim.fs.joinpath(vim.uv.os_tmpdir(), "roslyn_ls/logs"),
+      "--stdio",
+    },
+
     -- STOPPING MSBUILD FROM LEAVING A FLEET BEHIND.
     --
     -- Roslyn runs a design-time MSBuild build to learn what is in each project,
@@ -158,6 +205,43 @@ function M.setup()
     -- slower first design-time build per session, which is invisible next to
     -- the alternative.
     cmd_env = { MSBUILDDISABLENODEREUSE = "1" },
+
+    -- ONE UPSTREAM HANDLER, REPAIRED FOR NEOVIM 0.12.
+    --
+    -- `nvim-lspconfig`'s `roslyn_ls.lua` answers
+    -- `workspace/projectInitializationComplete` -- the notification roslyn
+    -- sends once it has finished loading the solution -- by re-pulling
+    -- diagnostics for every attached buffer, because the ones it published
+    -- while the workspace was still loading are incomplete. It does that
+    -- through `vim.lsp.util._refresh`, which does not exist on 0.12:
+    --
+    --     .../lsp/roslyn_ls.lua:54: attempt to call field '_refresh' (a nil value)
+    --
+    -- Private function, so its removal is not a breaking change and no
+    -- deprecation warned about it -- it moved to `vim.lsp.diagnostic._refresh`,
+    -- which is what `vim/lsp/handlers.lua` itself now calls. The visible cost
+    -- of leaving it: an error traceback on **every** solution load, and the
+    -- stale mid-load diagnostics are never replaced -- so a file reads as
+    -- clean, or as broken, on evidence from before roslyn knew what was in the
+    -- project. On a Unity solution that window is tens of seconds.
+    --
+    -- Only this one key is replaced; `vim.lsp.config` merges per key, so
+    -- upstream's other handlers (the `dotnet restore` prompts, the Razor
+    -- warning) are left alone.
+    handlers = {
+      ["workspace/projectInitializationComplete"] = function(_, _, ctx)
+        vim.notify("Roslyn project initialization complete", vim.log.levels.INFO, { title = "roslyn_ls" })
+
+        -- Guarded because this is a private function too, and the whole point
+        -- of this block is that they move: a future rename should cost the
+        -- diagnostic refresh, not throw from inside a notification handler.
+        local refresh = vim.lsp.diagnostic._refresh
+        if not refresh then return end
+        for _, buf in ipairs(vim.lsp.get_buffers_by_client_id(ctx.client_id)) do
+          pcall(refresh, buf, ctx.client_id)
+        end
+      end,
+    },
 
     settings = {
       -- THE AUTO-IMPORT SETTING. This is what makes `Vector3` complete in a
@@ -198,6 +282,78 @@ function M.setup()
       },
     },
   })
+end
+
+--- Actually start the thing. `M.setup` only *registers* a configuration.
+---
+--- ── WHY THIS IS NEEDED AT ALL ────────────────────────────────────────────────
+---
+--- Every other server in this config is enabled by mason-lspconfig, which walks
+--- Mason's installed packages and hands each one to AstroLSP. It never hands it
+--- `roslyn_ls`, and the reason is a mapping table:
+---
+---   * AstroNvim's `plugins/lspconfig.lua` pins `version = "^1"`, so the plugin
+---     on disk is **v1.32.0** -- despite the spec URL being `mason-org/...` and
+---     despite the note at the top of this file, which had it backwards. v1 is
+---     also the version whose `handlers` contract AstroNvim drives, so this half
+---     of the config works: `basedpyright`, `ruff` and `lua_ls` all attach.
+---   * v1 translates a Mason package name to an lspconfig server name through
+---     `mason-lspconfig/mappings/server.lua`, a hand-written table of 224
+---     entries. For C# it knows `omnisharp`, `omnisharp-mono` and
+---     `csharp-language-server`. `roslyn-language-server` is newer than v1 and
+---     **is not in it** -- so the package is installed, and as far as
+---     mason-lspconfig is concerned it maps to no server at all.
+---
+--- MEASURED, on a `.cs` buffer with a `.csproj` beside it:
+---
+---     :lua =vim.tbl_map(function(c) return c.name end, vim.lsp.get_clients())
+---     {}                                  -- and `{ "basedpyright", ... }` in Python
+---
+--- Nothing errors. `cs` is the right filetype, the parser is built, the server
+--- is installed, its configuration is registered -- and no client starts,
+--- because no code path ever calls `vim.lsp.enable "roslyn_ls"`.
+---
+--- (`user.lsp_bridge` was written to close this gap and cannot: it asks v2 for
+--- the same map, `require "mason-lspconfig.mappings"` does not exist in v1, and
+--- its `pcall` turns that into an empty server list. It is a no-op today, which
+--- is why nothing it says about `handlers` is observable either.)
+---
+--- ── WHY `lsp_setup` AND NOT `vim.lsp.enable` ─────────────────────────────────
+---
+--- `vim.lsp.enable` would start the server and stop there. Going through
+--- AstroLSP is what applies the rest of this config to it: `on_attach`, and
+--- therefore `astrolsp.lua`'s `gd` / `gy` / `<Leader>lk` pickers -- the ones
+--- whose comments are written about roslyn specifically -- plus format-on-save
+--- and `<Leader>uY`. With `native_lsp_config = true` (set in
+--- `plugins/lsp-bridge.lua`) `lsp_setup` enables through `vim.lsp.config` and
+--- `vim.lsp.enable` underneath, so the configuration registered by `M.setup`
+--- still applies, merged under AstroLSP's own.
+---
+--- ── WHY `AstroLspSetup` AND NOT `M.setup` ────────────────────────────────────
+---
+--- `M.setup` runs in a plugin `init`, at startup, which is deliberately early --
+--- a configuration has to be registered before the first `cs` buffer's
+--- `FileType`. AstroLSP is not configured yet at that point, so `lsp_setup`
+--- would read `native_lsp_config` as nil and take the pre-0.11 `lspconfig` path,
+--- which registers nothing and starts nothing, silently. `AstroLspSetup` fires
+--- once the other servers are set up, and is the hook `python-lsp.lua` already
+--- uses to register pyrefly for the same reason.
+function M.enable()
+  -- Installed via Mason (`plugins/unity.lua` asks for it), but this file should
+  -- not start a server that is not there: `vim.lsp.enable` on a `cmd` that does
+  -- not exist warns at every matching `FileType` from then on.
+  if vim.fn.executable "roslyn-language-server" ~= 1 then return end
+
+  local ok, astrolsp = pcall(require, "astrolsp")
+  if not ok then return end
+  astrolsp.lsp_setup "roslyn_ls"
+
+  -- `vim.lsp.enable` only re-runs `FileType` for already-open buffers once
+  -- `VimEnter` has fired. Opening Neovim *on* a `.cs` file can get here first,
+  -- and that buffer would sit with no server until you touched another one.
+  -- Same kick as `python-lsp.lua` and `user.lsp_bridge` use, and a no-op when
+  -- there is nothing to start.
+  vim.schedule(function() pcall(vim.cmd.doautoall, "nvim.lsp.enable FileType") end)
 end
 
 return M

@@ -189,6 +189,38 @@ return {
           desc = "Search workspace symbols",
           cond = "workspace/symbol",
         },
+        -- ── The global autoformat toggle, repaired ───────────────────────
+        --
+        -- `<Leader>uf` turns format-on-save off for THIS buffer and always
+        -- worked. `<Leader>uF` is the global one and, as AstroNvim ships it,
+        -- silently does nothing in the buffers you would press it in.
+        --
+        -- MEASURED, in a Python buffer with ruff attached:
+        --
+        --     vim.b.autoformat after attach: true
+        --     after <Leader>uF -> enabled=false  vim.b.autoformat=true
+        --
+        -- AstroLSP's `on_attach` writes `vim.b.autoformat` eagerly on every
+        -- buffer whose server can format, and the write-time check reads that
+        -- FIRST, falling back to the global only when it is nil
+        -- (`_astrolsp_autocmds.lua`). So flipping the global leaves every
+        -- already-open buffer with its own stale `true` -- the notification
+        -- says "Global autoformatting off" and the next save formats anyway.
+        --
+        -- Clearing the per-buffer values is what makes the global one global
+        -- again: with them nil, every buffer falls through to the flag that
+        -- was just toggled, and buffers that attach later read it in
+        -- `on_attach`. The cost is that a single buffer you had toggled by
+        -- hand rejoins the group, which is what "global" should mean.
+        ["<Leader>uF"] = {
+          function()
+            require("astrolsp.toggles").autoformat()
+            for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+              if vim.api.nvim_buf_is_valid(buf) then vim.b[buf].autoformat = nil end
+            end
+          end,
+          desc = "Toggle autoformatting (global)",
+        },
         ["<Leader>uY"] = {
           function() require("astrolsp.toggles").buffer_semantic_tokens() end,
           desc = "Toggle LSP semantic highlight (buffer)",
