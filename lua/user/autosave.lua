@@ -1,15 +1,9 @@
---- VS Code's `files.autoSave`, for Neovim.
+--- Passive saving at deliberate context boundaries.
 ---
---- WHAT VS CODE ACTUALLY DOES, since "auto-save" is three behaviours wearing one
---- name and this file implements all three:
----
----   * `afterDelay` -- write a dirty editor 1000 ms after the last edit to it.
----   * `onFocusChange` -- write it the moment it stops being the focused editor.
----   * `onWindowChange` -- write everything when the window loses OS focus.
----
---- The Neovim equivalents are a debounce on `TextChanged`/`TextChangedI`, and
---- `BufLeave`/`WinLeave`/`InsertLeave` and `FocusLost` respectively. All four
---- run the same `sweep()`, and the wiring is in `plugins/autosave.lua`.
+--- Editing retains Neovim's normal buffer/file distinction: nothing writes on
+--- a timer or while insert mode is active. `BufLeave` and `FocusLost` ask this
+--- module to save eligible dirty buffers; explicit `:write` remains the normal
+--- save-and-format operation.
 ---
 --- ── WHY A SWEEP AND NOT "WRITE THE CURRENT BUFFER" ──────────────────────────
 ---
@@ -32,19 +26,16 @@
 --- one. `BufModifiedSet` would be the obvious precise hook and it does not work
 --- -- it does not fire when a non-current buffer is modified through the API
 --- (checked on 0.12.2), which is exactly the case that matters here. So the
---- background case is covered twice instead: any keystroke in any buffer
---- sweeps them all a second later, and `CursorHold` catches the case where you
---- ran the code action and then touched nothing.
+--- background case is handled by sweeping all buffers at the next deliberate
+--- leave/focus boundary.
 ---
 --- ── WHY AUTO-SAVES DO NOT FORMAT ────────────────────────────────────────────
 ---
 --- `plugins/astrolsp.lua` has `format_on_save.enabled = true` for every
 --- filetype, so a write is also a `vim.lsp.buf.format`. Left alone, that means
---- ruff/clang-format/stylua reindenting the statement you are halfway through
---- typing, once a second, with the cursor inside it.
+--- ruff/clang-format/stylua running as an unintended side effect of navigating
+--- away from a buffer.
 ---
---- VS Code has the same collision and resolves it the same way: `formatOnSave`
---- does not run for `afterDelay` auto-saves, only for a save you asked for.
 --- `plugins/autosave.lua` installs `M.formatting_allowed` as the
 --- `format_on_save.filter`, so `<Leader>w` and `:w` format exactly as before
 --- and the automatic writes do not. Formatting stays something you decide.
@@ -76,33 +67,25 @@
 ---
 --- A write is a `didSave` to every attached server, and in a Rust project
 --- without bacon-ls that means `checkOnSave` -- a `cargo clippy` shell-out --
---- per save rather than per `:w`. It cannot block your own builds, because
+--- per passive save rather than per `:w`. It cannot block your own builds, because
 --- `plugins/rust-lsp.lua` already gives the server its own target directory,
---- but it is real CPU on every pause in typing. `<Leader>uW` turns autosave off
+--- but it is real CPU whenever a passive boundary saves. `<Leader>uW` turns autosave off
 --- globally, and `:lua vim.b.autosave = false` for one buffer.
 ---
 --- ── WHAT IS DELIBERATELY NOT SAVED ──────────────────────────────────────────
 ---
 --- `.ipynb` -- writing one runs jupytext *and* `MoltenExportOutput!`, a Python
---- remote call costing a few hundred milliseconds. `user/notebook.lua` calls
+--- remote call costing a few hundred milliseconds. The notebook integration calls
 --- that out as the reason this config had no autosave at all; it is excluded
 --- rather than being a reason not to have one. See `skip_reason()` for the rest,
 --- and `:AutosaveStatus` for which of them applies to the buffer you are in.
 
 local M = {}
 
---- VS Code's `files.autoSaveDelay` default, in milliseconds.
-local DELAY = 1000
-
 --- True only while `write()` is inside `:write`. Read by `M.formatting_allowed`
 --- to tell an automatic write from one you asked for -- the two go through the
 --- same `BufWritePre`, so there is nothing else to tell them apart by.
 local writing = false
-
---- The debounce behind `afterDelay`. One timer for all buffers: the sweep is
---- global, so a second pending one would have nothing to add.
----@type uv.uv_timer_t?
-local timer
 
 --- Buffers already warned about a disk conflict, so the warning is one per
 --- episode rather than one per second. Cleared by `stamp()`, i.e. as soon as
@@ -235,7 +218,7 @@ function M.write(buf)
 
   writing = true
   -- `silent` keeps the `"foo.py" 12L, 340B written` line out of the command
-  -- line on every keystroke pause. It is not `silent!`: a write that fails
+  -- line on every passive save. It is not `silent!`: a write that fails
   -- should still say so.
   local ok, err = pcall(vim.api.nvim_buf_call, buf, function() vim.cmd "silent write" end)
   writing = false
@@ -251,12 +234,7 @@ function M.write(buf)
     --     BufWritePost fired: 0
     --     stamp: 1788176960:6   actual on disk: 1788176964:6
     --
-    -- Most sweeps come from an autocmd -- `CursorHold` fires after
-    -- `'updatetime'`, 300 ms here, so it beats the 1000 ms debounce to nearly
-    -- every save -- so the write landed, the stamp stayed at the pre-write
-    -- mtime, and the next trigger read its own write as somebody else's.
-    --
-    -- Those triggers are `nested` now, which fixes it at the source and gets
+    -- The leave/focus triggers are `nested`, which gets
     -- `didSave` and the other `BufWritePost` consumers back. This line makes
     -- the bookkeeping true regardless: `write()` knows it wrote, and should
     -- not need an event to find out.
@@ -271,20 +249,11 @@ function M.write(buf)
   end
 end
 
---- Write every buffer that qualifies. This is what all the triggers call.
+--- Write every buffer that qualifies. This is what both boundary triggers call.
 function M.sweep()
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
     M.write(buf)
   end
-end
-
---- `afterDelay`: sweep once the edits stop, restarting the clock on each one.
-function M.schedule()
-  if not timer then timer = assert((vim.uv or vim.loop).new_timer()) end
-  timer:stop()
-  -- Timer callbacks run outside the main loop, where buffer writes are not
-  -- allowed; `vim.schedule` hands the sweep back to it.
-  timer:start(DELAY, 0, function() vim.schedule(M.sweep) end)
 end
 
 --- The `format_on_save.filter` installed in `plugins/astrolsp.lua`: format on a

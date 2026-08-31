@@ -70,7 +70,7 @@ local PATTERN = "^([%w_%-%./ ]+%.cs)%((%d+),(%d+)%):%s+(%a+)%s+(%u+%d+):%s*(.*)$
 ---@param include_warnings? boolean
 ---@return table[] items Quickfix items, in the order Unity printed them.
 function M.diagnostics(root, include_warnings)
-  local log = require("user.unity").log_file()
+  local log = require("user.integrations.unity").log_file()
   local file = io.open(log, "r")
   if not file then return {} end
 
@@ -114,7 +114,7 @@ end
 --- Load Unity's compiler diagnostics into the quickfix list.
 ---@param include_warnings? boolean
 function M.errors(include_warnings)
-  local root = require("user.unity").require_root()
+  local root = require("user.integrations.unity").require_root()
   if not root then return end
 
   local kind = include_warnings and "diagnostic" or "error"
@@ -143,7 +143,7 @@ end
 --- constantly and a reloading buffer fights the cursor. This is the same
 --- reasoning as `overseer`'s output pane in `plugins/tasks.lua`.
 function M.tail()
-  local log = require("user.unity").log_file()
+  local log = require("user.integrations.unity").log_file()
   if vim.fn.filereadable(log) ~= 1 then
     vim.notify(("No editor log at %s"):format(log), vim.log.levels.WARN, { title = "Unity" })
     return

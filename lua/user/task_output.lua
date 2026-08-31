@@ -9,7 +9,7 @@
 -- For a run you are actually watching that is the wrong trade: a tqdm bar, a
 -- traceback, a table of metrics all want width, while the list is spending it
 -- on one line per task whose contents you already know. So the output takes the
--- whole strip, and the task list moved to `<Leader>rt`, on demand.
+-- whole strip, and the task list remains available on demand.
 --
 -- WHY NOT `direction = "horizontal"` on overseer's own `open_output`: it runs a
 -- plain `:split` from wherever the cursor happens to be, so the output lands
@@ -18,7 +18,7 @@
 -- bottom, always full width.
 --
 -- Used by the `user_output_pane` component (which opens it when a task starts)
--- and by `<Leader>ro` / `<Leader>ri` in `lua/plugins/tasks.lua`.
+-- and by the contextual task output actions.
 local M = {}
 
 --- How tall the strip is, in lines.

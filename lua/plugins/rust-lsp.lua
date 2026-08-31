@@ -124,7 +124,7 @@ return {
       --
       -- `diagnostics.enable` is on below even when bacon-ls owns diagnostics,
       -- because rust-analyzer is the only one that can report a file no `mod`
-      -- reaches -- see `user.rust_diagnostics` for the measurement and the
+      -- reaches -- see `user.languages.rust.diagnostics` for the measurement and the
       -- rule. This is the other half: its rustc-code diagnostics are filtered
       -- out on arrival so the overlap never reaches the sign column.
       --
@@ -136,7 +136,7 @@ return {
       -- `diagnosticProvider`, so Neovim pulls, and a filter on
       -- `publishDiagnostics` alone sits on the client and never runs.
       if bacon_owns_diagnostics then
-        opts.server.handlers = require("user.rust_diagnostics").install(opts.server.handlers)
+        opts.server.handlers = require("user.languages.rust.diagnostics").install(opts.server.handlers)
       end
 
       local previous = opts.server.settings
@@ -209,7 +209,7 @@ return {
               -- The overlap that got this turned off in the first place is
               -- handled at the client instead -- see the `handlers` wrapper in
               -- the rustaceanvim spec above and the rule in
-              -- `user.rust_diagnostics`. rust-analyzer's rustc-code
+              -- `user.languages.rust.diagnostics`. rust-analyzer's rustc-code
               -- diagnostics (`E0308` and friends) are dropped on arrival when
               -- bacon-ls owns them; its own names (`unlinked-file`,
               -- `inactive-code`, the proc-macro failures) are kept, because

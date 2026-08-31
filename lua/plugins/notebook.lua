@@ -1,6 +1,7 @@
--- `<Leader>j` -- notebooks. A Jupyter kernel, in this editor, in this file.
+-- Notebook runtime wiring. User-facing actions are registered with the shared
+-- contextual action system; there is no separate notebook key vocabulary.
 --
--- WHAT THIS IS FOR: the thing Colab is good at and `<Leader>rf` is not. A
+-- WHAT THIS IS FOR: the thing a fresh Python process is not good at. A
 -- script run is a fresh process every time, so loading the dataset, building
 -- the model and looking at one layer's activations means paying for the first
 -- two on every iteration of the third. A kernel keeps the process alive
@@ -16,7 +17,7 @@
 --   * jupytext.nvim -- makes `.ipynb` editable. Converts to a `.py` with `# %%`
 --                      cells on read and back on write, so the buffer is real
 --                      Python and every language-server key still works.
---   * user.notebook -- cells, kernel selection, and the round-trip of saved
+--   * user.integrations.notebook -- cells, kernel selection, and saved
 --                      outputs. See that file; the reasoning lives there.
 --
 -- NOT quarto-nvim / otter.nvim, which is the other common way to do this. Those
@@ -28,13 +29,13 @@
 --
 --     :NotebookBootstrap     builds the host venv (uv), then restart
 --     :NotebookHealth        says which of the pieces are missing
---     <Leader>jk             registers the project's venv as a kernel
---     <Leader>jj             run the cell under the cursor
+--     <Leader>ra             register the project's venv as a kernel
+--     <Leader>rr             run the cell under the cursor
 --
--- `<Leader>jk` is per project and needs `ipykernel` in it: `uv add --dev
+-- Kernel registration is per project and needs `ipykernel`: `uv add --dev
 -- ipykernel`. Without it the only kernel on the machine is the host venv's,
 -- which has none of your dependencies -- `import torch` would fail in a cell
--- while working fine under `<Leader>rf`.
+-- while working fine as a normal Python module.
 
 ---@type LazySpec
 return {
@@ -55,8 +56,8 @@ return {
     opts = function()
       return {
         -- Which graphics protocol the terminal on the other end speaks.
-        -- `user.notebook` works it out; foot gets sixel, kitty gets kitty.
-        backend = require("user.notebook").image_backend(),
+        -- The integration works it out; foot gets sixel, kitty gets kitty.
+        backend = require("user.integrations.notebook").image_backend(),
 
         -- Shell out to the `magick` binary rather than link against
         -- ImageMagick through the `magick` luarock. The rock is the faster of
@@ -100,7 +101,8 @@ return {
     -- directories -- and this plugin is deferred to a filetype, so at build
     -- time it is not on `runtimepath` and the scan finds nothing. It writes a
     -- manifest with no Molten in it and reports success, and the first
-    -- `<Leader>jj` says `:MoltenInit` is not an editor command. Load it first.
+    -- the first contextual cell run says `:MoltenInit` is not an editor
+    -- command. Load it first.
     build = function()
       require("lazy").load { plugins = { "molten-nvim" } }
       vim.cmd "UpdateRemotePlugins"
@@ -112,7 +114,7 @@ return {
     -- is what these need: `python3_host_prog` must be set before the host
     -- starts, and the `.ipynb` autocmds must exist before you open one.
     init = function()
-      require("user.notebook").setup()
+      require("user.integrations.notebook").setup()
 
       vim.g.molten_image_provider = "image.nvim"
 
@@ -126,7 +128,7 @@ return {
       vim.g.molten_wrap_output = true
       vim.g.molten_output_win_max_height = 20 -- a stack trace should not eat the screen
 
-      -- `<Leader>je` opens the float on top for the times the virtual lines
+      -- The context menu opens the float on top when virtual lines
       -- are not enough -- a long traceback to scroll, or an image to look at
       -- properly. Entering it is the only way to select text out of output.
       vim.g.molten_enter_output_behavior = "open_and_enter"
@@ -158,76 +160,4 @@ return {
     },
   },
 
-  {
-    "AstroNvim/astrocore",
-    ---@param opts AstroCoreOpts
-    opts = function(_, opts)
-      local maps = assert(opts.mappings) -- guaranteed by `astrocore.lua`
-      --- `<Leader>j` mappings all go through `user.notebook`, and requiring it
-      --- inside the closure is what keeps it off the startup path.
-      ---@param fn string
-      ---@param arg any?
-      local function nb(fn, arg)
-        return function() require("user.notebook")[fn](arg) end
-      end
-
-      maps.n["<Leader>j"] = { desc = "󰠮 Notebook" }
-
-      -- ── The two keys you actually wear out ────────────────────────────────
-      -- Run this cell and stay put -- for iterating on the same block.
-      maps.n["<Leader>jj"] = { nb("run_cell", false), desc = "Run cell" }
-      -- Run it and move on. This is Colab's Shift+Enter, and how you walk a
-      -- notebook from the top.
-      maps.n["<Leader>jn"] = { nb("run_cell", true), desc = "Run cell and go to the next" }
-
-      -- ── Running, the rest ─────────────────────────────────────────────────
-      maps.n["<Leader>jl"] = { nb("run", "line"), desc = "Run this line" }
-      maps.x["<Leader>jj"] = { nb("run", "visual"), desc = "Run selection" }
-      maps.n["<Leader>jA"] = { nb "run_all", desc = "Run all cells" }
-      -- Re-run the cell that produced the output you are standing on, without
-      -- having to find it again.
-      maps.n["<Leader>jr"] = { "<Cmd>MoltenReevaluateCell<CR>", desc = "Re-run this cell" }
-
-      -- ── Cells ─────────────────────────────────────────────────────────────
-      maps.n["<Leader>jc"] = { nb("insert_cell", true), desc = "New cell below" }
-      maps.n["<Leader>ja"] = { nb("insert_cell", false), desc = "New cell above" }
-      -- Pair-jumps, so `æj` / `øj` on the Danish layout -- see `danish-keys.lua`.
-      maps.n["]j"] = { nb("goto_cell", 1), desc = "Next cell" }
-      maps.n["[j"] = { nb("goto_cell", -1), desc = "Previous cell" }
-
-      -- ── Output ────────────────────────────────────────────────────────────
-      maps.n["<Leader>jo"] = { "<Cmd>MoltenShowOutput<CR>", desc = "Show output (float)" }
-      -- `noautocmd` is not optional here, and Molten's docs say so: entering
-      -- the output window fires the autocmds that Molten itself listens to for
-      -- "the cursor left the cell", and it closes the window under you.
-      maps.n["<Leader>je"] = { "<Cmd>noautocmd MoltenEnterOutput<CR>", desc = "Enter output (scroll, select)" }
-      maps.n["<Leader>jh"] = { "<Cmd>MoltenHideOutput<CR>", desc = "Hide the output float" }
-      -- Hand the image off to the system viewer. Worth having in foot, where
-      -- the inline sixel render is the slow, low-fidelity one -- this is how
-      -- you look at a figure properly without saving it first.
-      maps.n["<Leader>jp"] = { "<Cmd>MoltenImagePopup<CR>", desc = "Open this output's image in a viewer" }
-      -- Plotly and friends emit HTML, which no terminal can draw.
-      maps.n["<Leader>jb"] = { "<Cmd>MoltenOpenInBrowser<CR>", desc = "Open HTML output in the browser" }
-      -- Removes the cell AND its output. Molten tracks cells by extmark, so
-      -- deleting the lines alone leaves the output orphaned on screen.
-      maps.n["<Leader>jd"] = { "<Cmd>MoltenDelete<CR>", desc = "Delete this cell's output" }
-
-      -- ── Kernel ────────────────────────────────────────────────────────────
-      -- `<Leader>jj` starts a kernel by itself; these are for taking over.
-      maps.n["<Leader>ji"] = { "<Cmd>MoltenInit<CR>", desc = "Start a kernel (pick one)" }
-      maps.n["<Leader>jk"] = { nb "register_kernel", desc = "Register this project's venv as a kernel" }
-      maps.n["<Leader>jx"] = { "<Cmd>MoltenInterrupt<CR>", desc = "Interrupt (KeyboardInterrupt)" }
-      -- The one for when the state is wrong rather than the code. `!` also
-      -- clears the outputs, so you are not reading results from before.
-      maps.n["<Leader>jZ"] = { "<Cmd>MoltenRestart!<CR>", desc = "Restart the kernel (clears outputs)" }
-      maps.n["<Leader>jq"] = { "<Cmd>MoltenDeinit<CR>", desc = "Shut the kernel down" }
-
-      -- ── Notebook files ────────────────────────────────────────────────────
-      -- Both happen automatically for `.ipynb` (see `user.notebook`); these are
-      -- for doing it by hand, e.g. exporting a `.py` you have been working in.
-      maps.n["<Leader>jI"] = { "<Cmd>MoltenImportOutput<CR>", desc = "Import outputs from the .ipynb" }
-      maps.n["<Leader>jE"] = { "<Cmd>MoltenExportOutput!<CR>", desc = "Export outputs to the .ipynb" }
-      maps.n["<Leader>j?"] = { "<Cmd>NotebookHealth<CR>", desc = "Check the notebook setup" }
-    end,
-  },
 }

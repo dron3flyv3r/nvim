@@ -28,8 +28,8 @@
 --
 -- HOW TO USE IT: open Unity, put the cursor on a line inside a MonoBehaviour,
 -- `<Leader>db` to breakpoint it, `<Leader>dc` to attach, then press Play in
--- Unity (or `<Leader>Up` from here). AstroNvim owns the `<Leader>d` keys; the
--- Unity-specific ones live under `<Leader>U`.
+-- Unity through the contextual menu. AstroNvim still owns the native
+-- `<Leader>d` debugger keys.
 
 local M = {}
 
@@ -88,11 +88,11 @@ end
 ---@param bufnr integer
 ---@return table[]
 function M.configurations(bufnr)
-  local unity = require "user.unity"
+  local unity = require "user.integrations.unity"
   local root = unity.root(bufnr)
   if not root then return {} end
 
-  local editors = require "user.unity_editor"
+  local editors = require "user.integrations.unity.editor"
   local configs = {}
   for _, instance in ipairs(editors.list()) do
     local mine = instance.project == root
@@ -145,9 +145,9 @@ function M.setup()
   return true
 end
 
---- Attach to Unity, or explain why not. This is what `<Leader>Ua` calls.
+--- Attach to Unity, or explain why not. This is the contextual debug action.
 function M.attach()
-  local root = require("user.unity").require_root()
+  local root = require("user.integrations.unity").require_root()
   if not root then return end
 
   if not M.extension_path() then

@@ -5,15 +5,8 @@
 -- WHAT GOES WHERE. This file is only the wiring; every decision that needed
 -- explaining is in the module it belongs to:
 --
---   user.unity            what counts as a project, and which .sln to open
---   user.unity_editor     which Unity processes are running, and on what ports
---   user.unity_dap        the Mono debug adapter, and attaching to the editor
---   user.unity_messenger  the UDP protocol Unity's own IDE packages speak
---   user.unity_tests      Unity Test Framework runs, failures into quickfix
---   user.unity_log        Unity's compiler errors into quickfix
---   user.unity_assets     .meta companions, and the class-name/file-name rule
---   user.unity_docs       the Scripting Reference for the symbol under cursor
---   user.unity_shim       making Unity accept Neovim as its script editor
+--   user.integrations.unity.* contains project detection, editor discovery,
+--   debugging, messaging, tests, logs, asset rules, docs, and the editor shim.
 --
 -- ── The language server ──────────────────────────────────────────────────────
 --
@@ -93,105 +86,13 @@ local filetypes = {
   },
 }
 
---- `<Leader>U` -- the Unity keys.
----
---- A prefix of its own rather than hanging off `<Leader>d` (AstroNvim's
---- debugger) or `<Leader>r` (run), because only one of these is debugging and
---- none of them is a task: they are messages to another process. Attaching the
---- debugger is here too, next to the things you press around it, and the
---- ordinary `<Leader>d` keys still drive the session once it is running.
----@param maps table
-local function mappings(maps)
-  local function unity(fn)
-    return function()
-      local root = require("user.unity").require_root()
-      if root then fn(root) end
-    end
-  end
-
-  --- A mapping that sends one message to the editor holding this project open.
-  ---@param type_name string A key of `user.unity_messenger`'s `TYPE`.
-  ---@param said string What to say once it is on its way.
-  ---@param desc string The which-key entry.
-  local function message(type_name, said, desc)
-    return {
-      unity(function(root)
-        local editors = require "user.unity_editor"
-        local instance = editors.require_for_project(root)
-        if not instance then return end
-        local messenger = require "user.unity_messenger"
-        messenger.send_checked(
-          instance,
-          messenger.TYPE[type_name],
-          nil,
-          function() vim.notify(said, vim.log.levels.INFO, { title = "Unity" }) end
-        )
-      end),
-      desc = desc,
-    }
-  end
-
-  maps.n["<Leader>U"] = { desc = "󰚯 Unity" }
-
-  -- Debugging. `<Leader>Ua` attaches; everything after that is AstroNvim's
-  -- `<Leader>d` keys -- `<Leader>db` to breakpoint, `<Leader>do`/`di` to step.
-  maps.n["<Leader>Ua"] = { function() require("user.unity_dap").attach() end, desc = "Attach debugger to Unity" }
-
-  -- Play mode. Note that Play tears down Unity's message socket on its way in
-  -- and rebinds it after the domain reload, so Stop within a second of Play can
-  -- land on nothing -- see `user.unity_messenger`.
-  maps.n["<Leader>Up"] = message("Play", "Entering play mode", "Play")
-  maps.n["<Leader>Us"] = message("Stop", "Leaving play mode", "Stop play mode")
-  -- Not `message()`: a restart is two messages with a wait between them that
-  -- has to be observed rather than guessed. See `user.unity_play`.
-  maps.n["<Leader>UR"] = {
-    unity(function(root)
-      local instance = require("user.unity_editor").require_for_project(root)
-      if instance then require("user.unity_play").restart(instance) end
-    end),
-    desc = "Restart play mode (stop, then play)",
-  }
-  maps.n["<Leader>Uz"] = message("Pause", "Paused", "Pause")
-  maps.n["<Leader>UZ"] = message("Unpause", "Resumed", "Unpause")
-
-  -- The one that earns the whole messaging channel: Unity only notices your
-  -- edits when its window regains focus, so a save in Neovim normally means
-  -- alt-tab, wait, alt-tab back. This recompiles without moving.
-  maps.n["<Leader>Ur"] = message("Refresh", "Refreshing assets", "Refresh assets (recompile)")
-
-  -- Unity's own compiler output, which knows about asmdef boundaries and source
-  -- generators that the language server's stale csproj files do not.
-  maps.n["<Leader>Ue"] =
-    { function() require("user.unity_log").errors() end, desc = "Unity compile errors to quickfix" }
-  maps.n["<Leader>UE"] = {
-    function() require("user.unity_log").errors(true) end,
-    desc = "Unity errors + warnings to quickfix",
-  }
-  maps.n["<Leader>Ul"] = { function() require("user.unity_log").tail() end, desc = "Tail Unity's editor log" }
-
-  -- Tests. EditMode on the plain keys because that is the fast one; PlayMode
-  -- enters play mode and takes seconds, so it is spelled out.
-  maps.n["<Leader>Ut"] = {
-    function() require("user.unity_tests").run_at_cursor "EditMode" end,
-    desc = "Run test under cursor (EditMode)",
-  }
-  maps.n["<Leader>UT"] = { function() require("user.unity_tests").pick "EditMode" end, desc = "Pick a test (EditMode)" }
-  maps.n["<Leader>Um"] = {
-    function() require("user.unity_tests").pick "PlayMode" end,
-    desc = "Pick a test (PlayMode)",
-  }
-
-  maps.n["<Leader>Ud"] = { function() require("user.unity_docs").open() end, desc = "Unity docs for symbol" }
-  maps.n["<Leader>Ui"] = { function() require("user.unity_shim").status() end, desc = "Unity integration status" }
-end
-
 ---@type LazySpec
 return {
   -- ── Language server ───────────────────────────────────────────────────────
   --
   -- `roslyn_ls` needs telling which solution to open and where the project root
   -- is; both, and why AstroLSP's `config` table could not carry them, are in
-  -- `user.unity_lsp`.
+  -- `user.integrations.unity.lsp`.
   --
   -- `init` rather than `config`: it runs at startup, and the override has to be
   -- registered before the first `cs` buffer's `FileType` -- which is when
@@ -199,7 +100,7 @@ return {
   {
     "neovim/nvim-lspconfig",
     optional = true,
-    init = function() require("user.unity_lsp").setup() end,
+    init = function() require("user.integrations.unity.lsp").setup() end,
   },
 
   -- KEEPING THE OTHER TWO C# SERVERS OUT.
@@ -213,7 +114,7 @@ return {
   --
   -- `automatic_enable` is where that decision is actually made -- AstroLSP's
   -- `handlers = { csharp_ls = false }` looks like the right lever and is dead
-  -- code in this config; see `user.unity_lsp` for why.
+  -- code in this config; see `user.integrations.unity.lsp` for why.
   --
   -- WHY ROSLYN IS THE ONE THAT STAYS:
   --
@@ -249,7 +150,7 @@ return {
   },
 
   -- Belt to those braces: if the mason-lspconfig bridge described in
-  -- `user.unity_lsp` is ever repaired, this is the lever that will then matter.
+  -- `user.integrations.unity.lsp` is ever repaired, this is the lever that will then matter.
   {
     "AstroNvim/astrolsp",
     ---@type AstroLSPOpts
@@ -301,7 +202,7 @@ return {
     optional = true,
     -- WHY AN AUTOCMD AND NOT `config`. The adapter has to be registered before
     -- the first `dap.continue()`, or plain `<Leader>dc` offers no Unity entry
-    -- and you have to know to press `<Leader>Ua` instead. But nvim-dap is
+    -- and the contextual debug action would become the only way in. But nvim-dap is
     -- configured by AstroNvim, and a `config` function here would *replace*
     -- that one rather than run alongside it. `User LazyLoad` fires once
     -- nvim-dap is actually loaded, whoever loaded it and however -- and
@@ -312,7 +213,7 @@ return {
         desc = "Register the Unity debug adapter once nvim-dap is loaded",
         callback = function(args)
           if args.data ~= "nvim-dap" then return end
-          require("user.unity_dap").setup()
+          require("user.integrations.unity.dap").setup()
           return true -- one-shot; delete the autocmd
         end,
       })
@@ -325,11 +226,9 @@ return {
     ---@param opts AstroCoreOpts
     opts = function(_, opts)
       opts.filetypes = require("astrocore").extend_tbl(opts.filetypes or {}, filetypes)
-      mappings(assert(opts.mappings))
-
       local autocmds = opts.autocmds or {}
       -- Starting roslyn. mason-lspconfig v1 -- which is what is on disk, see
-      -- `user.unity_lsp.enable` -- has no mapping for `roslyn-language-server`,
+      -- `user.integrations.unity.lsp.enable` has no mapping for `roslyn-language-server`,
       -- so it never hands the server to AstroLSP and nothing enables it. This
       -- is the one thing standing between a correctly configured C# server and
       -- a `.cs` buffer with no client attached.
@@ -339,7 +238,7 @@ return {
           pattern = "AstroLspSetup",
           desc = "Start roslyn (mason-lspconfig v1 has no mapping for it)",
           once = true,
-          callback = function() require("user.unity_lsp").enable() end,
+          callback = function() require("user.integrations.unity.lsp").enable() end,
         },
       }
       autocmds.unity_project = {
@@ -347,56 +246,56 @@ return {
           event = { "BufReadPost", "BufNewFile" },
           desc = "Listen for Unity's open-this-file requests in this project",
           callback = function(args)
-            local root = require("user.unity").root(args.buf)
+            local root = require("user.integrations.unity").root(args.buf)
             -- Cheap and idempotent: `register` returns early when another
             -- Neovim already owns the socket.
-            if root then require("user.unity_shim").register(root) end
+            if root then require("user.integrations.unity.shim").register(root) end
           end,
         },
         {
           event = "BufWritePost",
           pattern = "*.cs",
           desc = "Warn when a MonoBehaviour's class name does not match its file name",
-          callback = function(args) require("user.unity_assets").check_class_name(args.buf) end,
+          callback = function(args) require("user.integrations.unity.assets").check_class_name(args.buf) end,
         },
       }
       opts.autocmds = autocmds
 
       opts.commands = opts.commands or {}
       opts.commands.UnityShim = {
-        function() require("user.unity_shim").install() end,
+        function() require("user.integrations.unity.shim").install() end,
         desc = "Install the shim that makes Unity treat Neovim as its script editor",
       }
       opts.commands.UnityStatus = {
-        function() require("user.unity_shim").status() end,
+        function() require("user.integrations.unity.shim").status() end,
         desc = "Report which parts of the Unity integration are live",
       }
       opts.commands.UnityAttach = {
-        function() require("user.unity_dap").attach() end,
+        function() require("user.integrations.unity.dap").attach() end,
         desc = "Attach the debugger to a running Unity editor",
       }
       opts.commands.UnityTests = {
-        function(args) require("user.unity_tests").pick(args.args ~= "" and args.args or "EditMode") end,
+        function(args) require("user.integrations.unity.tests").pick(args.args ~= "" and args.args or "EditMode") end,
         desc = "Pick and run a Unity test",
         nargs = "?",
-        complete = function() return require("user.unity_tests").MODES end,
+        complete = function() return require("user.integrations.unity.tests").MODES end,
       }
       opts.commands.UnityErrors = {
-        function(args) require("user.unity_log").errors(args.bang) end,
+        function(args) require("user.integrations.unity.log").errors(args.bang) end,
         desc = "Unity's compiler diagnostics into the quickfix list (! for warnings too)",
         bang = true,
       }
     end,
   },
 
-  -- The `.meta` half of `user.unity_assets`. Same hook as
+  -- The `.meta` half of `user.integrations.unity.assets`. Same hook as
   -- `plugins/lsp-file-events.lua` uses, for the same reason: neo-tree is where
   -- files get moved, and it is the only place that knows a rename happened.
   {
     "nvim-neo-tree/neo-tree.nvim",
     optional = true,
     opts = function(_, opts)
-      local assets = require "user.unity_assets"
+      local assets = require "user.integrations.unity.assets"
       opts.event_handlers = opts.event_handlers or {}
       vim.list_extend(opts.event_handlers, {
         { event = "file_deleted", handler = function(path) assets.deleted(path) end },

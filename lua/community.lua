@@ -45,20 +45,14 @@ return {
   -- what lets `gd` land inside std). Mason's copy is an upstream release built
   -- against a different rustc and drifts out of step.
   --
-  -- Tuning -- the check command, the split target directory, the `<Leader>R`
-  -- keys, and the Overseer bridge for `<Leader>Rr` -- lives in
-  -- `plugins/rust-lsp.lua`.
+  -- Tuning -- the check command, split target directory, and Overseer bridge
+  -- lives in `plugins/rust-lsp.lua` and `plugins/rust-run.lua`. Cursor-aware
+  -- Rust actions are exposed by `user.context.providers.rust`.
   { import = "astrocommunity.pack.rust" },
-
-  -- ── Editing ───────────────────────────────────────────────────────────────
-  -- <A-hjkl> to move lines and selections around.
-  { import = "astrocommunity.motion.mini-move" },
-  -- NOTE: vim-visual-multi is configured by hand in `plugins/multicursor.lua`,
-  -- not imported from astrocommunity -- see that file for why.
 
   -- ── Running things ────────────────────────────────────────────────────────
   -- Detects justfiles, Makefiles and CMake and turns their targets into tasks.
-  -- Remapped from `<Leader>M` to `<Leader>r` in `plugins/tasks.lua`.
+  -- Project tasks feed the contextual action system under `<Leader>r`.
   { import = "astrocommunity.code-runner.overseer-nvim" },
 
   { import = "astrocommunity.colorscheme.onedarkpro-nvim" },

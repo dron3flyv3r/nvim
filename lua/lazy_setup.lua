@@ -1,7 +1,7 @@
 -- Must run before any plugin `init` function: AstroNvim's treesitter spec
 -- registers nvim-treesitter's query predicates from its `init`, and those are
 -- what this repairs. See the file for the full story.
-require("user.ts_directives").setup()
+require("user.compat.treesitter_directives").setup()
 
 require("lazy").setup({
   {

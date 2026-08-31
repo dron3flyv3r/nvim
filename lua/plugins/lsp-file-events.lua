@@ -52,7 +52,7 @@ return {
       -- `FocusGained` and `TermLeave` are the two that matter: they are
       -- "you came back from wherever you ran `uv add`". `BufEnter` catches
       -- the rest, and `check` returns after a `stat` when nothing moved.
-      local python_env = require "user.python_env"
+      local python_env = require "user.languages.python.environment"
       autocmds.python_env_refresh = {
         {
           event = { "FocusGained", "TermLeave", "TermClose", "DirChanged" },
@@ -72,7 +72,7 @@ return {
 
       opts.commands = opts.commands or {}
       opts.commands.PythonEnvRefresh = {
-        function() require("user.python_env").refresh() end,
+        function() require("user.languages.python.environment").refresh() end,
         desc = "Re-scan this project's virtualenv for newly installed packages",
       }
     end,

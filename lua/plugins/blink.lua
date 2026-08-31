@@ -78,7 +78,7 @@ return {
     -- and no parameters, and this fills in the rest.
     opts.sources.providers.cpp_definition = {
       name = "C++ def",
-      module = "user.cpp_definition_source",
+      module = "user.languages.cpp.definition_source",
       -- Above `lsp` (the default is 0), so when both answer -- and they both
       -- will, since clangd offers the bare name for the same prefix -- the
       -- complete definition is the item under the cursor.

@@ -11,7 +11,7 @@
 -- something, that build becomes the thing we wait on -- which is what you meant
 -- by "run this next".
 --
--- Used by `<Leader>rq` / `<Leader>rQ` in `lua/plugins/tasks.lua`.
+-- Used by the queue and stop-all contextual task actions.
 local M = {}
 
 ---Created with `autostart = false`, in the order they will run.

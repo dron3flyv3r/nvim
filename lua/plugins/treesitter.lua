@@ -28,7 +28,7 @@
 -- -- every filetype silently fell back to regex syntax.
 --
 -- Pinning `master` puts the plugin back on the API AstroNvim drives, and
--- `user.ts_directives` is exactly the patch that makes `master` work on Neovim
+-- `user.compat.treesitter_directives` is the patch that makes `master` work on Neovim
 -- 0.12 -- read its header, it was written for this branch and says so.
 --
 -- Moving to `main` properly is a real migration: replacing AstroNvim's config
@@ -97,7 +97,7 @@ return {
   --
   --     query:iter_matches(qnode, bufnr, start_row, end_row, { all = false })
   --
-  -- `all = false` is the same retired contract that `user.ts_directives`
+  -- `all = false` is the same retired contract that the compatibility module
   -- exists to reinstate for query *directives* -- it asked Neovim to hand back
   -- one node per capture instead of a list. Neovim 0.12 removed the option, so
   -- every capture arrives as a table, and `locals.lua:286` does

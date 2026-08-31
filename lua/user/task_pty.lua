@@ -1,6 +1,6 @@
 -- Keep a running task's pty the same size as the window its output is shown in.
 --
--- THE BUG THIS FIXES: run a training script with `<Leader>rf` and every tqdm
+-- THE BUG THIS FIXES: run a training script contextually and every tqdm
 -- update lands on a NEW LINE -- a wall of half-drawn progress bars scrolling
 -- past, instead of one bar filling up in place.
 --
@@ -130,7 +130,7 @@ function M.setup()
   })
 
   -- Everything that can change that size afterwards: dragging a split,
-  -- `<Leader>rt` toggling the task list, `<Leader>ro` opening the output
+  -- toggling the task list or opening the output
   -- somewhere else, resizing the terminal Neovim itself runs in.
   vim.api.nvim_create_autocmd({ "WinResized", "WinClosed", "BufWinEnter", "VimResized", "TabEnter" }, {
     group = group,

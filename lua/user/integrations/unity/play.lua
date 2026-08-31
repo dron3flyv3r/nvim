@@ -54,7 +54,7 @@ local DEADLINE_MS = 30000
 --- is playing: it just starts.
 ---@param instance UnityInstance
 function M.restart(instance)
-  local messenger = require "user.unity_messenger"
+  local messenger = require "user.integrations.unity.messenger"
 
   -- The same guard `send_checked` gives every other key: distinguish "Unity is
   -- not listening" from "the key did nothing", before we start a sequence whose

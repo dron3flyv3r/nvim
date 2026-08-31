@@ -55,7 +55,7 @@ local function meta_of(path) return path .. ".meta" end
 ---@param source string
 ---@param destination string
 function M.moved(source, destination)
-  local root = require("user.unity").root(source)
+  local root = require("user.integrations.unity").root(source)
   if not root or not is_asset(root, source) then return end
 
   local source_meta = meta_of(source)
@@ -103,7 +103,7 @@ end
 --- Delete an asset's `.meta` file along with it.
 ---@param path string
 function M.deleted(path)
-  local root = require("user.unity").root(path)
+  local root = require("user.integrations.unity").root(path)
   if not root or not is_asset(root, path) then return end
 
   local meta = meta_of(path)
@@ -191,7 +191,7 @@ end
 function M.check_class_name(bufnr)
   local path = vim.api.nvim_buf_get_name(bufnr)
   if path == "" or not vim.endswith(path, ".cs") then return end
-  local root = require("user.unity").root(path)
+  local root = require("user.integrations.unity").root(path)
   if not root or not is_asset(root, path) then return end
 
   local name, is_mono = first_type(bufnr)

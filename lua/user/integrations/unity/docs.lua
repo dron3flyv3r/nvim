@@ -53,7 +53,7 @@ end
 ---@return string target A file path or a URL.
 ---@return boolean local_docs
 function M.url(root, symbol)
-  local unity = require "user.unity"
+  local unity = require "user.integrations.unity"
   local exe, version = unity.editor_exe(root)
 
   if exe then
@@ -72,7 +72,7 @@ end
 
 --- Open the Scripting Reference for the symbol under the cursor.
 function M.open()
-  local root = require("user.unity").require_root()
+  local root = require("user.integrations.unity").require_root()
   if not root then return end
 
   local symbol = M.symbol_at_cursor()

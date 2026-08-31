@@ -1,4 +1,4 @@
--- Wiring for `user.lsp_bridge`, which is where the whole explanation lives:
+-- Wiring for `user.compat.lsp_bridge`, which is where the explanation lives:
 -- AstroNvim v5 talks to mason-lspconfig v1, the installed plugin is v2, and the
 -- result was that AstroLSP never saw a single Mason-installed server.
 ---@type LazySpec
@@ -33,7 +33,7 @@ return {
       -- editor with zero language servers.
       --
       -- With it on, `lsp_setup` uses `vim.lsp.config` + `vim.lsp.enable` --
-      -- Neovim's own mechanism, and the one `user.unity_lsp` already relies on.
+      -- Neovim's own mechanism, also used by the Unity LSP integration.
       -- It also makes AstroLSP apply its `capabilities` and `flags` globally via
       -- `vim.lsp.config("*", ...)`, which it otherwise skips entirely -- so this
       -- is also what makes `astrolsp.lua`'s settings reach anything.
@@ -90,7 +90,7 @@ return {
           pattern = "AstroLspSetup",
           desc = "Hand Mason's language servers to AstroLSP (mason-lspconfig v2 shim)",
           once = true,
-          callback = function() require("user.lsp_bridge").setup() end,
+          callback = function() require("user.compat.lsp_bridge").setup() end,
         },
       }
       opts.autocmds = autocmds

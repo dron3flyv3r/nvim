@@ -2,7 +2,7 @@
 --
 -- Shared by two callers so they can never disagree:
 --   * `lua/overseer/template/user_python.lua` -- the entries `<Leader>rr` lists
---   * `lua/plugins/tasks.lua`                 -- `<Leader>rf`, run it now
+--   * `lua/user/context/providers/python.lua` -- run it in the current context
 --
 -- THE POINT OF ALL THIS is the difference between these two commands:
 --

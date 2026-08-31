@@ -19,7 +19,7 @@
 -- module name with a pattern that requires "overseer/template/" in the path --
 -- so a directory named anything else fails to load.
 
-local python = require "user.python_target"
+local python = require "user.languages.python.target"
 
 --- Neovim's default 'errorformat' knows nothing about Python, so a traceback
 --- lands in the quickfix list as plain text with no file or line and `æq`/`øq`

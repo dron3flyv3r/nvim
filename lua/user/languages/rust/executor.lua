@@ -1,6 +1,6 @@
 -- Run rustaceanvim's runnables as overseer tasks.
 --
--- WHAT RUSTACEANVIM DOES BY DEFAULT: `<Leader>Rr` asks rust-analyzer what is
+-- WHAT RUSTACEANVIM DOES BY DEFAULT: its runnables action asks rust-analyzer what is
 -- runnable at the cursor -- this binary, this example, this `#[test]` -- and
 -- hands the winner to a `rustaceanvim.Executor`. The shipped ones each open
 -- their own window: `termopen` splits a scratch terminal and binds `<Esc>` to
@@ -9,16 +9,15 @@
 --
 -- WHY THAT IS THE WRONG SHAPE HERE: every other way of running something in
 -- this config goes through overseer and lands in the bottom output pane --
--- `<Leader>rr` for a project's own tasks, `<Leader>Cb` for a CMake build,
--- `<Leader>rf` for a Python module. That pane is not just a window; it is the
+-- project tasks, CMake, Python, and Rust. That pane is not just a window; it is the
 -- whole set of verbs that come with it:
 --
 --     <Leader>rl   re-run the last task           <Leader>ro  look at it
---     <Leader>rk   kill it                        <Leader>ri  type at it
---     <Leader>rq   queue behind the current run   <Leader>rt  what is running
+--     <Leader>rk   stop it                        <Leader>ro  inspect output
+--     <Leader>ra   queue or inspect other task actions
 --     æq / øq      step through the errors
 --
--- With `termopen`, `<Leader>Rr` would be the one run in this editor that has
+-- With `termopen`, Rust would be the one run path in this editor that has
 -- none of them: a split you close with `<Esc>` and re-open by pressing the key
 -- again. So the executor below is a two-line adapter -- take the command
 -- rust-analyzer resolved, start it as an overseer task -- and Rust runs join
@@ -33,8 +32,8 @@ local M = {}
 ---
 --- Copied from overseer's own `cargo` template (`lua/overseer/template/
 --- cargo.lua`) -- verbatim except for the last pattern, which is added here and
---- explained where it sits. Copied on purpose: `<Leader>rr` -> `cargo build` and
---- `<Leader>Rr` -> `cargo run --bin foo` are the same compiler saying the same
+--- explained where it sits. Copied on purpose: `cargo build` and
+--- `cargo run --bin foo` are the same compiler saying the same
 --- thing, and they should produce the same quickfix entries. Overseer does not
 --- export it, hence the copy rather than a `require`.
 ---

@@ -2,7 +2,7 @@
 --
 -- THE GAP THIS FILLS: `<Leader>rr` offers what a project declares, and for C++
 -- that is a justfile (the ESP32 sketches), a Makefile, or -- via
--- `plugins/cpp-cmake.lua` and the `<Leader>C` keys -- a CMakeLists. A lone
+-- `plugins/cpp-cmake.lua` -- a CMakeLists. A lone
 -- `scratch.cpp` in a directory declares nothing, so the picker came up empty
 -- for exactly the file where "just run it" is the whole intent: a snippet off
 -- cppreference, a five-line check of what `std::views::chunk` actually does.

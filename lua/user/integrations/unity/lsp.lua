@@ -95,7 +95,7 @@ function M.setup()
         return
       end
 
-      local unity = require("user.unity").root(bufnr)
+      local unity = require("user.integrations.unity").root(bufnr)
       if unity then
         on_dir(unity)
         return
@@ -116,7 +116,7 @@ function M.setup()
         local root = client.config.root_dir
         if not root then return end
 
-        local unity = require "user.unity"
+        local unity = require "user.integrations.unity"
         -- `root` is the Unity root whenever `root_dir` above found one, but ask
         -- rather than assume: this same server also attaches to ordinary C#
         -- projects, and this hook has to keep working for them.
@@ -271,7 +271,7 @@ function M.setup()
       -- smaller loss here than it looks, because Unity compiles the whole
       -- project itself on every refresh and knows things Roslyn does not
       -- (assembly definition boundaries, IL post-processors, source
-      -- generators). `<Leader>Ue` pulls that ground truth into the quickfix
+      -- generators). The contextual Problems action pulls that ground truth into quickfix
       -- list -- see `user.unity_log`. Roslyn covers the file you are in;
       -- Unity covers the project.
       --

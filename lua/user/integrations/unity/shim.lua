@@ -13,7 +13,7 @@
 --
 -- Pass it and you get three things at once:
 --
---   1. the control socket, so `<Leader>Up` really does press Play;
+--   1. the control socket, so the contextual Run action really does press Play;
 --   2. SDK-style `.csproj` files (`SdkStyleProjectGeneration`), which is the
 --      format `roslyn_ls` is actually developed against;
 --   3. Microsoft's Unity analyzers wired into those csproj files
@@ -104,7 +104,7 @@ function M.register(root)
   if vim.fn.exists "*UnityOpenFromEditor" == 0 then
     vim.cmd [[
       function! UnityOpenFromEditor(payload) abort
-        return luaeval('require("user.unity_shim").open(_A)', a:payload)
+        return luaeval('require("user.integrations.unity.shim").open(_A)', a:payload)
       endfunction
     ]]
   end
@@ -240,8 +240,8 @@ end
 --- looking at the filesystem -- it takes a round trip -- so every other line is
 --- built first and the notification waits for that one.
 function M.status()
-  local unity = require "user.unity"
-  local dap = require "user.unity_dap"
+  local unity = require "user.integrations.unity"
+  local dap = require "user.integrations.unity.dap"
 
   local lines = {}
   local function add(ok, text) table.insert(lines, ("%s %s"):format(ok and "OK  " or "--  ", text)) end
@@ -260,7 +260,7 @@ function M.status()
   add(unity.solution(root) ~= nil, ("solution: %s"):format(unity.solution(root) or "none found"))
   add(vim.uv.fs_stat(M.socket_path(root)) ~= nil, "open-from-Unity socket bound")
 
-  local instance = require("user.unity_editor").for_project(root)
+  local instance = require("user.integrations.unity.editor").for_project(root)
   if not instance then
     add(false, "no Unity editor running for this project")
     vim.notify(table.concat(lines, "\n"), vim.log.levels.INFO, { title = "Unity status" })
@@ -276,7 +276,7 @@ function M.status()
     )
   )
 
-  require("user.unity_messenger").ping(instance, function(listening)
+  require("user.integrations.unity.messenger").ping(instance, function(listening)
     add(listening, "Unity control socket answering (Play / Refresh / tests)")
     if not listening then
       table.insert(lines, "")

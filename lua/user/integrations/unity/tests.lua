@@ -30,7 +30,7 @@
 -- that would report `RunStarted` and then nothing at all. The keepalive is
 -- started with the run and stopped when it finishes.
 
-local messenger = require "user.unity_messenger"
+local messenger = require "user.integrations.unity.messenger"
 
 local M = {}
 
@@ -160,7 +160,7 @@ function M.setup()
   end)
 
   messenger.on(messenger.TYPE.RunFinished, function()
-    local root = require("user.unity").root()
+    local root = require("user.integrations.unity").root()
     if run and root then report(root) end
   end)
 end
@@ -170,9 +170,9 @@ end
 ---@param filter? string
 function M.run(mode, filter)
   M.setup()
-  local root = require("user.unity").require_root()
+  local root = require("user.integrations.unity").require_root()
   if not root then return end
-  local instance = require("user.unity_editor").require_for_project(root)
+  local instance = require("user.integrations.unity.editor").require_for_project(root)
   if not instance then return end
 
   if run then
@@ -193,9 +193,9 @@ end
 ---@param mode string `"EditMode"` or `"PlayMode"`
 function M.pick(mode)
   M.setup()
-  local root = require("user.unity").require_root()
+  local root = require("user.integrations.unity").require_root()
   if not root then return end
-  local instance = require("user.unity_editor").require_for_project(root)
+  local instance = require("user.integrations.unity.editor").require_for_project(root)
   if not instance then return end
 
   -- One-shot: unsubscribe the moment the list for *our* mode arrives, or this

@@ -3,9 +3,8 @@
 -- Two specs, because the feature touches two owners:
 --
 --   * AstroCore, for the triggers and the `<Leader>uW` toggle;
---   * AstroLSP, to stop an automatic write from also reformatting the line you
---     are still typing -- the one interaction that would otherwise make this
---     unusable, and the same call VS Code makes for `afterDelay`.
+--   * AstroLSP, to distinguish a passive leave/focus write from an explicit
+--     write where format-on-save is expected.
 --
 -- The toggle is deliberately not persisted: resession saves options, not
 -- globals, so every session starts with autosave on. It is *seeded* rather than
@@ -21,22 +20,10 @@ return {
       local autocmds = opts.autocmds or {}
       autocmds.autosave = {
         {
-          -- VS Code's `afterDelay`. `TextChangedI` is in here on purpose: VS
-          -- Code saves while you type, and with formatting held back (see
-          -- `user/autosave.lua`) an insert-mode write changes nothing you can
-          -- see. Both events reset the clock, so this is one write per pause,
-          -- not one per keystroke.
-          event = { "TextChanged", "TextChangedI" },
-          desc = "Auto-save shortly after the edits stop",
-          callback = function() autosave.schedule() end,
-        },
-        {
-          -- VS Code's `onFocusChange` (the first three) and `onWindowChange`
-          -- (`FocusLost` -- you alt-tabbed away). No debounce: leaving is the
-          -- signal, and waiting a second after it risks the buffer being gone.
-          event = { "BufLeave", "WinLeave", "InsertLeave", "FocusLost" },
-          desc = "Auto-save on leaving a buffer, window, insert mode or Neovim",
-          -- See the `nested` note under the `CursorHold` trigger below.
+          -- Preserve Neovim's explicit buffer/file distinction while editing.
+          -- A passive save happens only when leaving the buffer or application.
+          event = { "BufLeave", "FocusLost" },
+          desc = "Auto-save when leaving a buffer or Neovim loses focus",
           nested = true,
           callback = function() autosave.sweep() end,
         },
@@ -48,34 +35,6 @@ return {
           event = { "BufReadPost", "BufNewFile", "BufWritePost", "FileChangedShellPost" },
           desc = "Remember the file state autosave is allowed to write over",
           callback = function(args) autosave.stamp(args.buf) end,
-        },
-        {
-          -- The safety net for the case this was built for: a code action
-          -- edited *another* file and you have typed nothing since, so no text
-          -- event has fired anywhere. Costs nothing -- `sweep` on a clean
-          -- session is a loop of `modified` checks -- and fires once per idle
-          -- period, after `'updatetime'`.
-          event = { "CursorHold", "CursorHoldI" },
-          desc = "Auto-save buffers dirtied by something other than typing",
-          -- WITHOUT THIS, THE WRITE IS INVISIBLE. A `:write` run from inside an
-          -- autocmd callback fires none of its own autocmds unless the outer
-          -- one is `nested` (`:h autocmd-nested`) -- so an autosaved buffer got
-          -- no `BufWritePost`, and therefore no `didSave` to the language
-          -- servers, no `*.cs` class-name check from `unity.lua`, no new-file
-          -- notification from `lsp-file-events.lua`, and no `stamp()`. The
-          -- missing stamp is the one that bit: see `M.write` in
-          -- `user/autosave.lua` for the measurement.
-          --
-          -- Every one of those consumers is cheap, idempotent and wanted on an
-          -- automatic write; the one that is not -- format-on-save, which now
-          -- reaches `BufWritePre` for real -- is held back by the
-          -- `format_on_save.filter` installed in the AstroLSP spec below.
-          --
-          -- `.ipynb` is the exception and needs no guard here: `MoltenExportOutput!`
-          -- is a few hundred milliseconds and `eligible()` already refuses to
-          -- autosave notebooks at all.
-          nested = true,
-          callback = function() autosave.sweep() end,
         },
       }
       opts.autocmds = autocmds

@@ -1,4 +1,4 @@
--- Cells, kernels and the run keys behind `<Leader>j`.
+-- Cells and kernels behind the shared contextual action menu.
 --
 -- The Colab loop is: put the cursor in a block of code, press one key, see the
 -- output -- text, a DataFrame, a matplotlib figure -- appear underneath it,
@@ -9,8 +9,8 @@
 -- A CELL is the run of lines between two `# %%` markers. That is the "percent
 -- format": what jupytext writes, what VS Code's interactive window reads, and
 -- what you get from a Colab notebook downloaded as `.py`. A file with no
--- markers at all is one cell, so `<Leader>jj` in a plain script runs the whole
--- thing -- `<Leader>jc` starts carving it up.
+-- markers at all is one cell; the context menu can insert markers to carve it
+-- into smaller cells.
 --
 -- WHY THE FILE ON DISK IS STILL A `.py`: jupytext.nvim converts `.ipynb` on
 -- read and back on write, so what sits in the buffer is ordinary Python. That
@@ -34,7 +34,7 @@ local CELL = "^%s*#%s*%%%%"
 --- text cell silently costs you every plot in the file.
 local CELL_PROSE = "^%s*#%s*%%%%%s*%[markdown%]"
 
---- The line inserted by `<Leader>jc` / `<Leader>ja`.
+--- The line inserted by the contextual cell actions.
 local MARKER = "# %%"
 
 --- Python packages the Molten host needs, as `{ install name, import name }`.
@@ -167,7 +167,7 @@ end
 function M.goto_cell(dir)
   local starts = M.cell_starts()
   if vim.tbl_isempty(starts) then
-    vim.notify("No `# %%` cells in this file -- <Leader>jc adds one", vim.log.levels.INFO, { title = "Notebook" })
+    vim.notify("No `# %%` cells in this file -- <Leader>ra can add one", vim.log.levels.INFO, { title = "Notebook" })
     return
   end
 
@@ -220,17 +220,17 @@ local function available_kernels()
   return kernels
 end
 
---- Resolve the current buffer with `user.python_target`.
+--- Resolve the current buffer with `user.languages.python.target`.
 ---
 --- That module answers "how do I run this Python file", and it decides whether
 --- a buffer is Python by looking at the extension -- rightly, since it feeds
---- `<Leader>rf` and `python -m` on a notebook is meaningless. But a `.ipynb`
+--- `python -m` on a notebook is meaningless. But a `.ipynb`
 --- open here IS Python, in the same project, wanting the same interpreter, so
 --- it is handed over under the name jupytext gives it on disk anyway.
 ---@return user.PythonTarget?
 local function target_for_buffer()
   local file = vim.api.nvim_buf_get_name(0)
-  return require("user.python_target").resolve((file:gsub("%.ipynb$", ".py")))
+  return require("user.languages.python.target").resolve((file:gsub("%.ipynb$", ".py")))
 end
 
 --- The kernel name this project registers itself under: its root directory,
@@ -245,7 +245,7 @@ end
 --- Run `fn` with a kernel attached to this buffer, starting one if needed.
 ---
 --- The kernel is picked, not prompted for, whenever the project has registered
---- one (see `M.register_kernel`) -- that is what makes the first `<Leader>jj`
+--- one (see `M.register_kernel`) -- that is what makes the first `<Leader>rr`
 --- of the day a single keypress instead of a keypress and a menu.
 ---
 --- Molten's own bare `:MoltenInit` also prompts, but it does so through
@@ -259,7 +259,7 @@ function M.with_kernel(fn)
   local kernels = available_kernels()
   if vim.tbl_isempty(kernels) then
     vim.notify(
-      "No Jupyter kernels installed -- <Leader>jk registers this project's venv as one",
+      "No Jupyter kernels installed -- <Leader>ra can register this project's venv",
       vim.log.levels.WARN,
       { title = "Notebook" }
     )
@@ -271,7 +271,7 @@ function M.with_kernel(fn)
   -- and code sent in the window between the two is accepted, executed, and
   -- has its output dropped on the floor: the cell sits at `Out[...]: * On
   -- Hold` forever while the next cell you run inherits its result. So the
-  -- very first `<Leader>jj` in a buffer waits for Molten to say it is ready.
+  -- very first contextual cell run waits for Molten to say it is ready.
   local function start(name)
     vim.api.nvim_create_autocmd("User", {
       pattern = "MoltenKernelReady",
@@ -292,7 +292,7 @@ function M.with_kernel(fn)
 end
 
 --- Register this project's interpreter as a Jupyter kernel named after the
---- project, so `<Leader>jj` can find it without asking.
+--- project, so `<Leader>rr` can find it without asking.
 ---
 --- WHY THIS IS NEEDED AT ALL: the kernel is a separate process, and Jupyter
 --- starts it from a *kernelspec* -- a `kernel.json` under
@@ -328,7 +328,7 @@ function M.register_kernel()
     vim.schedule(function()
       if out.code == 0 then
         vim.notify(
-          ("Kernel `%s` registered -- <Leader>jj will use it from now on"):format(name),
+          ("Kernel `%s` registered -- <Leader>rr will use it from now on"):format(name),
           vim.log.levels.INFO,
           { title = "Notebook" }
         )
@@ -449,7 +449,7 @@ function M.bootstrap()
         vim.g.python3_host_prog = M.host_python()
         vim.cmd "UpdateRemotePlugins"
         vim.notify(
-          "Molten host ready. Restart Neovim, then <Leader>jk in a project.",
+          "Molten host ready. Restart Neovim, then use <Leader>ra in a project.",
           vim.log.levels.INFO,
           { title = "Notebook" }
         )
@@ -527,7 +527,7 @@ end
 ---
 ---     remove_comments.lua:19: attempt to index local 'region' (a nil value)
 ---
---- Same root cause as `user.ts_directives` -- since Neovim 0.11 a capture may
+--- Same root cause as `user.compat.treesitter_directives` -- a capture may
 --- match several nodes, so directive metadata is keyed and shaped differently
 --- than the code here assumes. The error surfaces from deep inside a Python
 --- remote call on every `:w` of a notebook, and the outputs are silently not
@@ -577,7 +577,7 @@ function M.setup()
   -- directory, and nothing on this machine has ever created that directory --
   -- Jupyter itself only makes it when you run `jupyter` something, which this
   -- arrangement never does. Molten catches the resulting `FileNotFoundError`
-  -- and reports it through `vim.notify`, so on a fresh machine `<Leader>jj`
+  -- and reports it through `vim.notify`, so on a fresh machine `<Leader>rr`
   -- flashes one error and then silently does nothing at all, forever.
   local runtime = jupyter_runtime_dir()
   if not vim.uv.fs_stat(runtime) then vim.fn.mkdir(runtime, "p") end

@@ -54,7 +54,7 @@ return {
     uv.run_command = function(cmd)
       run_command(cmd)
       local subcommand = cmd:match "^%s*uv%s+([%w-]+)"
-      if subcommand and touches_env[subcommand] then require("user.python_env").watch() end
+      if subcommand and touches_env[subcommand] then require("user.languages.python.environment").watch() end
     end
     -- `setup` published the original under this name as well.
     _G.run_command = uv.run_command

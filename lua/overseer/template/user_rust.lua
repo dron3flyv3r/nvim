@@ -106,7 +106,7 @@ return {
                 -- alone and rustc under cargo print the same diagnostics, and
                 -- Neovim's default errorformat parses neither, because the
                 -- message and its `--> file:line:col` are on separate lines.
-                errorformat = require("user.rust_executor").errorformat,
+                errorformat = require("user.languages.rust.executor").errorformat,
                 open_on_match = false,
                 items_only = true,
                 -- rust-analyzer attaches to a standalone file too (it treats it

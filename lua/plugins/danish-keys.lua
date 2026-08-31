@@ -48,11 +48,6 @@ return {
       end
     end
 
-    -- `?` becomes the cheatsheet (below), so give backwards-search a new home.
-    -- `g?` is Vim's rot13 operator, which nobody has ever needed.
-    maps.n["g?"] = { "?", desc = "Search backwards" }
-    maps.x["g?"] = { "?", desc = "Search backwards" }
-
     -- `|` and `\` (AstroNvim's split keys) are both AltGr on Danish. Keep them,
     -- but add leader alternatives that don't need a modifier at all.
     maps.n["<Leader>s"] = { desc = "󰓩 Split" }
@@ -61,10 +56,8 @@ return {
     maps.n["<Leader>sc"] = { "<Cmd>close<CR>", desc = "Close split" }
     maps.n["<Leader>so"] = { "<Cmd>only<CR>", desc = "Close other splits" }
 
-    -- Cheatsheet: `?` from normal/visual, `<F1>` from anywhere including insert.
+    -- F1 is additive; native `?` remains backward search.
     local function cheatsheet() require("cheatsheet").open() end
-    maps.n["?"] = { cheatsheet, desc = "Cheatsheet" }
-    maps.x["?"] = { cheatsheet, desc = "Cheatsheet" }
     maps.n["<F1>"] = { cheatsheet, desc = "Cheatsheet" }
     maps.x["<F1>"] = { cheatsheet, desc = "Cheatsheet" }
     maps.i["<F1>"] = {

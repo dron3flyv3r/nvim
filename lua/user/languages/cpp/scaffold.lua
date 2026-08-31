@@ -440,7 +440,7 @@ local TEMPLATES = {
 ---
 --- NOTE there is no regenerate afterwards. CMake does not need one: Ninja
 --- writes a rule that re-runs cmake whenever `CMakeLists.txt` is newer than the
---- cache, so the next `<Leader>Cb` picks the new source up on its own.
+--- cache, so the next contextual build picks the new source up on its own.
 ---@param root string
 ---@param source_path string
 ---@return string? target the target the file was added to, nil if nothing was written
