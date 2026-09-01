@@ -37,28 +37,13 @@
 -- own `do`/`dp`, which revert to whatever is actually in the other pane; that
 -- is the only answer that is right in every case. See `revert_hunk`.
 --
--- Neither is the write afterwards a plain `:w`. See `write_quietly`.
+-- Reverts are deliberately NOT written here. `user.diff_review` protects every
+-- worktree buffer until q asks whether the whole review should be saved or
+-- discarded.
 
 ---@param msg string
 ---@param level? integer
 local function notify(msg, level) require("astrocore").notify(msg, level or vim.log.levels.WARN, { title = "Git" }) end
-
---- Write after a revert, without letting the formatter loose on the file.
----
---- `plugins/astrolsp.lua` turns format-on-save on for every filetype, so a
---- bare `:write` here would revert one hunk and reformat the other two hundred
---- lines -- turning "undo this change" into a diff against everything. AstroLSP
---- reads `vim.b.autoformat` at write time (it is what `<Leader>uf` toggles), so
---- switching it off around the write is the supported way to say "save this,
---- don't touch it". `nil` afterwards is not a bug: unset is the default state,
---- and assigning nil restores it.
-local function write_quietly()
-  local previous = vim.b.autoformat
-  vim.b.autoformat = false
-  local ok, err = pcall(vim.cmd, "silent write")
-  vim.b.autoformat = previous
-  if not ok then notify(tostring(err), vim.log.levels.ERROR) end
-end
 
 --- Is this buffer the actual file on disk, as opposed to a rendering of some
 --- revision of it?
@@ -93,7 +78,7 @@ local function diff_target()
   end
 end
 
---- Run one of the `diffget`/`diffput` pair and write the result.
+---Run one of the `diffget`/`diffput` pair in the protected review buffer.
 ---
 --- Which of the two depends on where the cursor is, and they are mirror
 --- images: `get` pulls the old text into your file, `put` pushes it there. So
@@ -108,6 +93,7 @@ local function apply_revert(worktree_cmd, other_cmd, what)
   local target, from_worktree = diff_target()
   if not target then return notify "Nothing editable in this diff -- both sides are old revisions" end
   if not vim.bo[target].modifiable or vim.bo[target].readonly then return notify "That file is not modifiable" end
+  if not require("user.diff_review").track(target) then return notify "This is not a working-tree review" end
 
   local before = vim.b[target].changedtick
   local ok, err = pcall(vim.cmd, from_worktree and worktree_cmd or other_cmd)
@@ -116,7 +102,6 @@ local function apply_revert(worktree_cmd, other_cmd, what)
   -- the key, nothing happens, and there is no telling that from a no-op.
   if vim.b[target].changedtick == before then return notify("No " .. what .. " here -- n / N jump to one") end
 
-  vim.api.nvim_buf_call(target, write_quietly)
   vim.cmd.diffupdate()
 end
 
@@ -145,26 +130,29 @@ local function revert_line()
   revert_lines(lnum, lnum)
 end
 
---- `u`: take back the last revert -- from either pane.
+---`u`: take back the last review edit -- from either pane.
 ---
 --- Plain `u` would half-work. It undoes the buffer you are standing in, and a
 --- revert always lands in the worktree one however you triggered it, so from
 --- the left pane you would be undoing a rendering of an old commit and your
---- file would keep the change. It also leaves the file on disk holding the
---- reverted text, because `apply_revert` wrote it -- so this re-writes too,
---- and the diff you are looking at stays true.
+--- file would keep the change.
 local function undo_revert()
   local target = diff_target()
   if not target then return notify "Nothing editable in this diff -- both sides are old revisions" end
+  local review = require "user.diff_review"
+  if not review.track(target) then return notify "This is not a working-tree review" end
+  if not review.changed(target) then return notify "Nothing from this review to undo in this file" end
   vim.api.nvim_buf_call(target, function()
     local before = vim.b.changedtick
     local ok, err = pcall(vim.cmd, "silent undo")
     if not ok then return notify(tostring(err), vim.log.levels.ERROR) end
     if vim.b.changedtick == before then return notify "Nothing left to undo in this file" end
-    write_quietly()
   end)
   vim.cmd.diffupdate()
 end
+
+---Rider's whole-file rollback, but still only in memory until the exit prompt.
+local function revert_file() apply_revert("%diffget", "%diffput", "change in this file") end
 
 --- `<Leader>gr` from visual mode: the lines you selected, and no others.
 --- `'<`/`'>` are not set until the selection ends, so the bounds are read
@@ -195,7 +183,7 @@ end
 local function label_pane(bufnr, winid, ctx)
   local hl, text
   if is_worktree_buf(bufnr) then
-    hl, text = "DiffAdd", "YOURS -- the file on disk. Reverts land here, whichever pane you press them in."
+    hl, text = "DiffAdd", "YOURS -- safe review buffer. Nothing is written until q -> Save."
   elseif ctx.symbol == "a" then
     -- The left side of a file-history diff is a commit too, not the index,
     -- so this deliberately does not say "committed".
@@ -313,22 +301,30 @@ return {
       "DiffviewFileHistory",
     },
     opts = function()
-      local actions = require "diffview.actions"
-      local close = "<Cmd>DiffviewClose<CR>"
+      local review = require "user.diff_review"
+      review.install_close_command()
+      local close = review.close
+      local blocked = review.block_index_change
 
       return {
         -- Highlight the changed WORDS inside a changed line, not just the line.
         -- Rider does this and it is most of why its diffs are readable.
         enhanced_diff_hl = true,
-        hooks = { diff_buf_win_enter = label_pane },
+        hooks = {
+          diff_buf_win_enter = function(bufnr, winid, ctx)
+            label_pane(bufnr, winid, ctx)
+            review.track(bufnr)
+          end,
+          view_closed = review.closed,
+        },
         file_panel = {
           listing_style = "tree",
           win_config = { position = "left", width = 35 },
         },
         keymaps = {
-          -- `disable_defaults` stays off: diffview's own keys (`<Tab>` next
-          -- file, `-` stage, `S`/`U` stage-all/unstage-all, `g?` for the full
-          -- list) are the ones this view is documented with everywhere.
+          -- Defaults stay on for motions, folds and g? help. Mutating Git's
+          -- index is overridden below because it cannot participate in the
+          -- in-memory review transaction.
           view = {
             { "n", "q", close, { desc = "Close the diff" } },
 
@@ -342,6 +338,8 @@ return {
             -- undo doing what you already expect it to -- see `undo_revert`
             -- for the two things it has to do that plain `u` does not.
             { "n", "u", undo_revert, { desc = "Undo the last revert" } },
+            { "n", "r", revert_hunk, { desc = "Revert this change (pending)" } },
+            { "n", "R", revert_file, { desc = "Revert this file (pending)" } },
             { "n", "<Leader>gr", revert_hunk, { desc = "Revert this change" } },
             { "x", "<Leader>gr", revert_selection, { desc = "Revert the selected lines" } },
             -- `gl` is gitsigns' blame-this-line everywhere else, and is taken
@@ -350,18 +348,24 @@ return {
             -- to say, while "just this one line of the block I deleted" is the
             -- thing you actually reach for.
             { "n", "<Leader>gl", revert_line, { desc = "Revert this line only" } },
-            -- The whole file, from inside the diff. `X` does this on the file
-            -- panel and is diffview's own default there; in the diff itself `X`
-            -- is still Vim's delete-a-character, which you may well want in a
-            -- pane you can edit. So the capital-is-wider pair from gitsigns
-            -- (`gr` hunk / `gR` buffer) carries over instead.
-            { "n", "<Leader>gR", actions.restore_entry, { desc = "Revert the whole file" } },
+            -- The whole file, from inside the diff. Diffview's normal `X` in
+            -- the panel writes immediately, so it is blocked below; R uses the
+            -- same in-memory transaction as r. The leader aliases preserve the
+            -- lower/upper scope convention from gitsigns (`gr` hunk / `gR`
+            -- buffer).
+            { "n", "<Leader>gR", revert_file, { desc = "Revert the whole file (pending)" } },
           },
           file_panel = {
             { "n", "q", close, { desc = "Close the diff" } },
+            { "n", "-", blocked, { desc = "Staging disabled during safe review" } },
+            { "n", "s", blocked, { desc = "Staging disabled during safe review" } },
+            { "n", "S", blocked, { desc = "Staging disabled during safe review" } },
+            { "n", "U", blocked, { desc = "Staging disabled during safe review" } },
+            { "n", "X", review.block_restore, { desc = "Use R in the diff for a pending whole-file revert" } },
           },
           file_history_panel = {
             { "n", "q", close, { desc = "Close the history" } },
+            { "n", "X", review.block_history_restore, { desc = "Restoring history is disabled during safe review" } },
           },
         },
       }
