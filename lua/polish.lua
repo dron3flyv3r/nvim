@@ -39,6 +39,15 @@ return function()
     end
   end, { expr = true, silent = true, desc = "Previous snippet field or move left" })
 
+  -- Native <C-Right> means “next word”. At `call()` on the end of a line that
+  -- can cross the newline looking for another word. This configuration uses it
+  -- as the ergonomic counterpart to End instead: remain on this line, after
+  -- its final character. Kept in Select mode as well for snippet fields.
+  vim.keymap.set({ "i", "s" }, "<C-Right>", "<End>", {
+    silent = true,
+    desc = "Move to end of current line",
+  })
+
   -- The hand-written snippets in `~/.config/nvim/snippets`. AstroNvim's LuaSnip
   -- config already calls `from_vscode.lazy_load()`, but that only scans the
   -- *roots* of runtimepath entries for a `package.json` -- and ours is one level

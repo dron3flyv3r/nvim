@@ -107,6 +107,16 @@ return {
 
     mappings = {
       n = {
+        -- Neovim gives every attached LSP buffer a plain `K` mapping. Keep
+        -- the familiar key, but give documentation enough room to show a Rust
+        -- signature and its docs without a narrow, hard-to-read popup. A
+        -- second `K` focuses it, where normal scrolling, searching and `q`
+        -- work as expected.
+        K = {
+          function() require("user.hover").open() end,
+          desc = "Documentation for current symbol",
+          cond = "textDocument/hover",
+        },
         -- `cond` is a method name: the key only exists on buffers whose
         -- server can actually answer it, so `<Leader>lk` is absent in a
         -- filetype without call hierarchy rather than silently doing nothing.

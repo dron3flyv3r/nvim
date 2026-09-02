@@ -26,6 +26,13 @@ local STATIC = {
     { "<Leader>a…", "AI tools" }, { "<F7>", "toggle terminal" },
     { "<Leader>uW", "toggle leave/focus autosave" },
   } },
+  { "READING ERRORS & DOCS", {
+    { "gl / <Leader>ld", "full error on this line; press again to focus and scroll" },
+    { "<Leader>xx / xX", "browse project / current-buffer diagnostics with preview" },
+    { "æd / ød", "next / previous diagnostic" },
+    { "K", "documentation for symbol under cursor; press again to focus" },
+    { "q", "close a focused error or documentation popup" },
+  } },
   { "NATIVE FIRST", {
     { "?", "backward search (unchanged)" }, { "<C-o> / <C-i>", "jumplist back / forward" },
     { "[b / ]b", "previous / next buffer" }, { "grn / gra", "LSP rename / code action" },
