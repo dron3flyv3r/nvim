@@ -64,16 +64,11 @@ return {
   -- nothing but the C++ source below.
   ---@param opts blink.cmp.Config
   opts = function(_, opts)
-    -- Tab is indentation, full stop. AstroNvim's default puts completion
-    -- selection and snippet jumps ahead of its fallback, so an auto-opened
-    -- completion menu can replace text when you meant to indent. Completion
-    -- navigation remains on <C-n>/<C-p>; snippets use the explicit
-    -- <C-l>/<C-h> mappings in `polish.lua`.
+    -- Tab/Shift-Tab retain AstroNvim's defaults: next/previous suggestion when
+    -- the completion menu is open, then snippet navigation and normal fallback.
+    -- The cursor arrows must keep moving through the buffer even while that
+    -- menu is open; <C-n>/<C-p> remain available as alternative navigation.
     opts.keymap = opts.keymap or {}
-    opts.keymap["<Tab>"] = { "fallback" }
-    opts.keymap["<S-Tab>"] = { "fallback" }
-    -- Suggestions are navigated deliberately with <C-n>/<C-p>. The cursor
-    -- arrows must keep moving through the buffer even while that menu is open.
     opts.keymap["<Up>"] = { "fallback" }
     opts.keymap["<Down>"] = { "fallback" }
 

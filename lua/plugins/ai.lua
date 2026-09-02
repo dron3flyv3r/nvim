@@ -66,6 +66,23 @@ return {
     -- Codex already lives on `<Leader>tc`; this is an alias under the AI group.
     maps.n["<Leader>ax"] = { function() require("codex").toggle() end, desc = "Toggle Codex" }
 
+    -- Read-only Copilot explanations. On a bare cursor the current line is the
+    -- focus and its enclosing function is context; visual mode uses precisely
+    -- the selected code. The answer appears in a disposable Markdown popup,
+    -- while the full conversation stays hidden until `<Leader>at` opens it.
+    maps.n["<Leader>ae"] = {
+      function() require("user.ai_explain").ask("quick", "normal") end,
+      desc = "Explain code",
+    }
+    maps.n["<Leader>aE"] = {
+      function() require("user.ai_explain").ask("deep", "normal") end,
+      desc = "Teach code in depth",
+    }
+    maps.n["<Leader>at"] = {
+      function() require("user.ai_explain").open_chat() end,
+      desc = "Discuss last explanation",
+    }
+
     -- ── Claude ────────────────────────────────────────────────────────────
     --
     -- Every one of these is a `<Cmd>`, not a `require`, on purpose: the plugin
@@ -97,6 +114,14 @@ return {
     -- `maps.x` rather than `maps.v`: `v` also covers select mode, where typing
     -- a printable key is meant to replace the selection.
     maps.x = maps.x or {}
+    maps.x["<Leader>ae"] = {
+      function() require("user.ai_explain").ask("quick", "visual") end,
+      desc = "Explain selection",
+    }
+    maps.x["<Leader>aE"] = {
+      function() require("user.ai_explain").ask("deep", "visual") end,
+      desc = "Teach selection in depth",
+    }
     maps.x["<Leader>as"] = { "<Cmd>ClaudeCodeSend<CR>", desc = "Send selection to Claude" }
 
     -- The same key on a file in the tree adds that file instead. Buffer-local

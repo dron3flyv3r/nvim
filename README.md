@@ -54,3 +54,35 @@ for Neovim itself.
 Autosave is deliberately conservative: eligible modified files are written on
 `BufLeave` and `FocusLost`, not while typing. Explicit `:write` remains the
 normal save-and-format operation.
+
+## Collaboration
+
+`<Leader>C` contains Teamtype's local-first collaboration actions. Every peer
+uses a real local project directory and their own editor configuration, so LSP,
+Git, project search, tests, debugging, and personal plugins continue to work.
+
+Before connecting, both peers should have a clean checkout at the same commit.
+The joining peer's differing files can be overwritten. `.git` stays local by
+default; do not add Teamtype's experimental `--sync-vcs` option for normal pair
+programming, and let one person handle commits during a session.
+
+Host:
+
+1. Start Neovim in the project root and press `<Leader>Ch` (or use
+   `:TeamtypeHost`).
+2. Wait for the join code; it is copied automatically. `<Leader>Cy` or
+   `:TeamtypeCopyCode` copies it again.
+3. Send the code through a trusted channel.
+
+Guest:
+
+1. Start from the same clean commit, or use an empty directory.
+2. Open Neovim in that directory, press `<Leader>Cj`, and paste the join code.
+
+Both peers then open files normally with their own file explorers and pickers.
+`<Leader>Cf` follows a peer, `<Leader>Cp` jumps to a peer cursor, `<Leader>Ci`
+shows connection information, `<Leader>Cl` shows daemon output, and
+`<Leader>Cs` stops the daemon started by this Neovim. Teamtype protects attached
+buffers after a connection closes, so restart Neovim before continuing normal
+editing. Closing Neovim also stops that managed daemon; synchronized files
+remain on disk.

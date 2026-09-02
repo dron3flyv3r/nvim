@@ -26,12 +26,25 @@ local STATIC = {
     { "<Leader>a…", "AI tools" }, { "<F7>", "toggle terminal" },
     { "<Leader>uW", "toggle leave/focus autosave" },
   } },
+  { "COLLABORATION", {
+    { "<Leader>Ch / Cj", "host this project / join with invitation code" },
+    { "<Leader>Cy", "copy the active invitation code" },
+    { "<Leader>Cp / Cf", "jump to / follow a peer cursor" },
+    { "<Leader>Cs / Ci", "stop sharing / connection information" },
+    { "<Leader>Cl", "Teamtype daemon log" },
+  } },
   { "READING ERRORS & DOCS", {
     { "gl / <Leader>ld", "full error on this line; press again to focus and scroll" },
     { "<Leader>xx / xX", "browse project / current-buffer diagnostics with preview" },
     { "æd / ød", "next / previous diagnostic" },
     { "K", "documentation for symbol under cursor; press again to focus" },
     { "q", "close a focused error or documentation popup" },
+  } },
+  { "AI EXPLANATIONS", {
+    { "<Leader>ae", "explain current line or visual selection" },
+    { "<Leader>aE", "teach current line or selection in depth" },
+    { "<Leader>at", "open the last explanation as a conversation" },
+    { "q / <Esc>", "close the explanation popup; the conversation is retained" },
   } },
   { "NATIVE FIRST", {
     { "?", "backward search (unchanged)" }, { "<C-o> / <C-i>", "jumplist back / forward" },
