@@ -271,11 +271,31 @@ return {
           if file == "" or vim.bo.buftype ~= "" then
             return notify "No file in this window -- <Leader>gH for the whole repository"
           end
-          vim.cmd("DiffviewFileHistory " .. vim.fn.fnameescape(file))
+          local line = vim.api.nvim_win_get_cursor(0)[1]
+          vim.cmd(("DiffviewFileHistory -L %d,%d:%s"):format(line, line, vim.fn.fnameescape(file)))
         end,
-        desc = "History of this file",
+        desc = "History of this line",
+      }
+      maps.x = maps.x or {}
+      maps.x["<Leader>gh"] = {
+        function()
+          local file = vim.api.nvim_buf_get_name(0)
+          if file == "" or vim.bo.buftype ~= "" then return notify "No file in this window" end
+          local first, last = vim.fn.line "v", vim.fn.line "."
+          if first > last then
+            first, last = last, first
+          end
+          vim.cmd(("DiffviewFileHistory -L %d,%d:%s"):format(first, last, vim.fn.fnameescape(file)))
+        end,
+        desc = "History of selected lines",
       }
       maps.n["<Leader>gH"] = { "<Cmd>DiffviewFileHistory<CR>", desc = "History of the repository" }
+      maps.n["<Leader>gb"] = {
+        function() require("gitsigns").toggle_current_line_blame() end,
+        desc = "Toggle current-line blame",
+      }
+      maps.n["<Leader>gB"] =
+        { function() require("gitsigns").blame_line { full = true } end, desc = "Full blame for line" }
 
       -- Lower/upper is scope, the same way gitsigns' `gr`/`gR` and `gs`/`gS`
       -- already read in this config: the capital takes more with it.

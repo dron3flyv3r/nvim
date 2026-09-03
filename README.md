@@ -16,6 +16,10 @@ without requiring another universal run/test/debug abstraction.
 | Key | Meaning |
 | --- | --- |
 | `<Leader>ra` | actions valid in the current project |
+| `<Leader>n…` | personal project notes (outside the repository) |
+| `<Leader>d…` | active debug-session controls and breakpoints |
+| `<Leader>ar…` | Claude review and investigation prompts |
+| `<Leader>gb/gB/gh` | toggle blame, inspect blame, line history |
 | `<Leader>Up/Us/Ur` | enter, stop, or restart Unity Play mode |
 | `<Leader>Ub/Ut/Ua` | refresh Unity, test at cursor, or attach debugger |
 | `<Leader>Ue/Uw/Ul` | Unity errors, warnings, or editor log |
@@ -25,6 +29,16 @@ without requiring another universal run/test/debug abstraction.
 
 Use `:ContextStatus` to see what was detected and `:checkhealth user` to check
 the assumptions owned by this configuration.
+
+## Personal notes and HTTP requests
+
+`<Leader>nn` creates a personal Markdown note from the current line or selection;
+`<Leader>no` and `<Leader>ns` open and search notes for the current project. Notes
+are stored under Neovim's data directory, never in the project repository.
+
+Open `.http` or `.rest` files to use HTTP actions from `<Leader>ra`. Kulala reads
+JetBrains-compatible `http-client.env.json` environment files; keep local secrets
+in that file and exclude it through the repository's `.git/info/exclude`.
 
 ## Verification
 

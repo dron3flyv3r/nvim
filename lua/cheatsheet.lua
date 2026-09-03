@@ -36,6 +36,7 @@ local STATIC = {
       { "<Leader>ff / fw", "find files / search project" },
       { "<Leader>xx / xX", "workspace / buffer diagnostics" },
       { "<Leader>gd", "review repository diff" },
+      { "<Leader>n… / d…", "project notes / debug session controls" },
       { "<Leader>sm / sw", "zoom split / pick window" },
       { "<Leader>T…", "tab-page operations" },
       { "<Leader>a…", "AI tools" },
