@@ -1,26 +1,3 @@
--- Danish (ISO) keyboard layout optimisations.
---
--- Vim's defaults assume a US layout. On a Danish keyboard the keys Vim leans on
--- hardest are the ones that cost an AltGr or a dead key:
---
---     [  ]   AltGr+8 / AltGr+9   -- the prefix for every pair-jump (]b ]d ]q ...)
---     {  }   AltGr+7 / AltGr+0   -- paragraph / block motion
---     $      AltGr+4             -- end of line
---     ^      dead key + space    -- first non-blank character
---
--- Meanwhile æ ø å sit on prime real estate (æ and ø are on the home row, right
--- under your ring and little finger) and mean nothing to Vim. So we trade:
---
---     ø -> [     Ø -> {     å -> $
---     æ -> ]     Æ -> }     Å -> ^
---
--- `remap = true` on the bracket keys is essential, not cosmetic: `]b`, `]d`,
--- `]g` and friends are themselves mappings, so a non-recursive `æ -> ]` would
--- send a literal `]` and nothing would fire.
---
--- Two things Danish makes *easier* than US, worth knowing: `<` and `>` are
--- unshifted on the key left of Z (so indenting is cheap), and `,` -- your
--- localleader -- is unshifted too.
 ---@type LazySpec
 return {
   "AstroNvim/astrocore",

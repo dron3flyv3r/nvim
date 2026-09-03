@@ -1,35 +1,3 @@
--- Running Unity's tests from Neovim, with the failures in the quickfix list.
---
--- This rides on the same UDP channel as Play/Pause -- see
--- `user.unity_messenger` for the protocol and for why Unity has to be told
--- Neovim is its script editor before any of it works. Unity's Test Framework
--- does the running; we ask for a list, ask for a run, and read the results back
--- as they arrive.
---
--- THE FOUR MESSAGES:
---
---     RetrieveTestList  "EditMode"                -> TestListRetrieved "EditMode:{json}"
---     ExecuteTests      "EditMode:Some.Test.Name" -> RunStarted {json}
---                                                    TestStarted / TestFinished {json} per test
---                                                    RunFinished {json}
---
--- The JSON is `JsonUtility.ToJson` over the adaptor types in
--- `Editor/Testing/`, and it is *flattened*: a tree of suites and tests arrives
--- as one array where each element points at its parent by index, with the root
--- at index 0 carrying `Parent: -1`. So a "test" is an element with a `Method`,
--- and its display name is already in `FullName`.
---
--- WHY THE RESULTS COME BACK OVER TCP. A test list for a real project is far
--- more than the 8 KB a datagram carries, so Unity switches to its one-shot TCP
--- mode for the big ones. `user.unity_messenger` handles that transparently --
--- worth knowing only because it explains why `TestListRetrieved` can take a
--- beat longer to arrive than everything else.
---
--- WHY A KEEPALIVE. Unity forgets a client after four seconds of silence and
--- only broadcasts run events to clients it remembers, so a run that outlasts
--- that would report `RunStarted` and then nothing at all. The keepalive is
--- started with the run and stopped when it finishes.
-
 local messenger = require "user.integrations.unity.messenger"
 
 local M = {}
@@ -52,13 +20,6 @@ local function decode(value)
   return decoded
 end
 
---- Pull the first source location out of a Mono stack trace.
----
---- Mono's format is
----     at Fixture.TestName () [0x0002a] in /abs/path/Tests/Foo.cs:41
---- and the frame we want is the first one inside the project, which -- because
---- the assertion helpers are in NUnit, not in your code -- is not always the
---- top frame. Take the first frame whose file is under `root`.
 ---@param trace string|nil
 ---@param root string
 ---@return string|nil file
@@ -145,10 +106,6 @@ function M.setup()
     local decoded = decode(value)
     local adaptors = decoded and decoded.TestResultAdaptors
     if not adaptors then return end
-    -- Index 0 of the flattened array is the node this event is about; its
-    -- children follow. A leaf (a single test) is the only thing with no
-    -- children, and for a suite-level event we would double-count, so only
-    -- record when the event carries exactly one adaptor.
     if #adaptors ~= 1 then return end
     local adaptor = adaptors[1]
     table.insert(run.results, {
@@ -234,20 +191,10 @@ function M.pick(mode)
   messenger.send_checked(instance, messenger.TYPE.RetrieveTestList, mode)
 end
 
---- The test under the cursor, as NUnit would name it: `Namespace.Fixture.Method`.
----
---- Derived from Treesitter rather than from Unity's list, so it works without a
---- round trip -- and so it works on a test you have only just written, which
---- Unity has not compiled yet.
 ---@return string|nil
 function M.test_at_cursor()
   if vim.bo.filetype ~= "cs" then return nil end
 
-  -- ASKING FOR THE PARSER BY NAME, not `vim.treesitter.get_node()`. That
-  -- helper reads the parser *attached* to the buffer, which exists only once
-  -- something has started highlighting it -- so it returns nil in a buffer
-  -- opened but not yet drawn, and in any headless run. Naming the language
-  -- creates the parser if it has to.
   local ok, parser = pcall(vim.treesitter.get_parser, 0, "c_sharp")
   if not ok or not parser then return nil end
   local tree = parser:parse()[1]

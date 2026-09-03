@@ -1,10 +1,3 @@
--- Process owner for Teamtype's local-first collaboration daemon.
---
--- Teamtype synchronizes real files between peers, so every participant keeps
--- their own Neovim config, LSPs, Git checkout, build tools, and project search.
--- This module only owns daemons started from this Neovim; an externally started
--- `teamtype share/join` process still works with the editor plugin normally.
-
 local M = {}
 
 local process
@@ -15,9 +8,7 @@ local pending = { stdout = "", stderr = "" }
 local project_root
 local buffers_attached = false
 
-local function notify(message, level)
-  vim.notify(message, level or vim.log.levels.INFO, { title = "Teamtype" })
-end
+local function notify(message, level) vim.notify(message, level or vim.log.levels.INFO, { title = "Teamtype" }) end
 
 local function copy(text)
   vim.fn.setreg('"', text)
@@ -127,9 +118,12 @@ local function start(args, label)
       local was_stopping = stopping
       stopping = false
       if was_stopping then
-        notify("Collaboration stopped; restart Neovim before continuing to edit shared buffers")
+        notify "Collaboration stopped; restart Neovim before continuing to edit shared buffers"
       elseif result.code ~= 0 then
-        notify(("%s exited with code %d; use :TeamtypeLog for details"):format(label, result.code), vim.log.levels.ERROR)
+        notify(
+          ("%s exited with code %d; use :TeamtypeLog for details"):format(label, result.code),
+          vim.log.levels.ERROR
+        )
       else
         notify(label .. " stopped")
       end
@@ -138,9 +132,7 @@ local function start(args, label)
   process = current
 end
 
-function M.host()
-  start({ "teamtype", "share", "--username", vim.env.USER or "friend" }, "Host daemon")
-end
+function M.host() start({ "teamtype", "share", "--username", vim.env.USER or "friend" }, "Host daemon") end
 
 function M.join()
   vim.ui.input({ prompt = "Teamtype join code: " }, function(code)

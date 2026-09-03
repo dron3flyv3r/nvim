@@ -1,11 +1,3 @@
---- Transactional editing for Diffview working-tree reviews.
----
---- Diffview normally edits the real file buffer. That is pleasantly Vim-like,
---- but it also means a `:write` (or this config's BufLeave autosave) makes a
---- revert permanent immediately. This module puts a small transaction around
---- those buffers: their contents remain ordinary editable Neovim buffers, but
---- autosave is suppressed until the review is explicitly saved or discarded.
-
 local M = {}
 
 ---@class DiffReviewSnapshot
@@ -33,10 +25,6 @@ local orphans = {}
 ---@type table<integer, DiffReviewSession>
 local protected = {}
 
----True only around the writes approved by the Save choice. A BufWritePre guard
----below rejects muscle-memory `:w`, `ZZ`, `<Leader>w`, and plugin writes while
----the transaction is pending. `:noautocmd write` remains Neovim's intentional
----expert escape hatch, much like `qall!` is for modified buffers.
 local writing = false
 
 ---@param msg string

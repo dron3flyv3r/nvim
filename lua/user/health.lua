@@ -48,6 +48,14 @@ function M.check()
   executable("uv", false, "Python environment and notebook bootstrap actions prefer uv")
   executable("jupytext", false, "Opening .ipynb as editable Python requires jupytext")
 
+  vim.health.start "Collaboration"
+  executable("teamtype", true, "Install the Teamtype CLI to host or join collaborative sessions")
+  if ok and lazy.plugins["teamtype-nvim"] then
+    vim.health.ok "teamtype-nvim is registered"
+  else
+    vim.health.error "teamtype-nvim is not registered"
+  end
+
   vim.health.start "Context actions"
   local context_ok, context = pcall(require, "user.context")
   if not context_ok then

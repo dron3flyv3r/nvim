@@ -1,29 +1,8 @@
--- Working out how to run the Python file you are looking at.
---
--- Shared by two callers so they can never disagree:
---   * `lua/overseer/template/user_python.lua` -- the entries `<Leader>rr` lists
---   * `lua/user/context/providers/python.lua` -- run it in the current context
---
--- THE POINT OF ALL THIS is the difference between these two commands:
---
---     uv run python -m lec5.main      <- puts the project ROOT on sys.path
---     uv run python lec5/main.py      <- puts lec5/ on sys.path
---
--- Only the first one can resolve `from lec5.foo import bar` or a relative
--- `from .foo import bar`. That is why the module form is what these keys reach
--- for first, and why the working directory is always the project root.
-
 local M = {}
 
 --- Markers for "top of the project" -- the directory that must be on sys.path.
 local ROOT_MARKERS = { "pyproject.toml", "setup.py", "setup.cfg", "requirements.txt", ".git" }
 
---- How to invoke Python here, as a command prefix.
----
---- Order matters. `uv run` comes first because it re-resolves the locked
---- dependencies before running; calling `.venv/bin/python` directly keeps
---- working right up until a dependency changes, then silently runs against a
---- stale environment.
 ---@param root string
 ---@return string[] prefix, string label
 local function interpreter(root)
@@ -42,11 +21,6 @@ local function interpreter(root)
   return { "python3" }, "python3"
 end
 
---- The dotted name `python -m` wants, or nil if the file sits outside the root.
----
---- `lec5/main.py` -> `lec5.main`, and `lec5/__init__.py` -> `lec5`, because
---- `-m lec5` is how you run a package; `-m lec5.__init__` would import it twice
---- under two different names.
 ---@param file string
 ---@param root string
 ---@return string?

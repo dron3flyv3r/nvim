@@ -1,45 +1,5 @@
--- The two Unity-specific ways to break a project from a file manager.
---
--- ── 1. Orphaned .meta files ──────────────────────────────────────────────────
---
--- Every asset under `Assets/` has a sibling `<name>.<ext>.meta` holding a GUID,
--- and *that GUID is the only thing scenes and prefabs store*. A scene does not
--- reference `PlayerController.cs`; it references
--- `guid: 3f9a1c2b4d5e6f708192a3b4c5d6e7f8`, and Unity resolves that to whichever
--- file's `.meta` claims it.
---
--- So renaming `PlayerController.cs` without taking its `.meta` along does not
--- rename a script. It deletes one and creates another: Unity finds a `.cs` with
--- no `.meta`, mints a fresh GUID, and every component slot in every scene and
--- prefab that pointed at the old GUID becomes the dreaded
---
---     The referenced script (Unknown) on this Behaviour is missing!
---
--- ...on objects you did not touch, in scenes you did not open, and it is not
--- obvious which commit did it. Unity's own project window, Rider and VS all
--- move the `.meta`; a plain `mv`, `git mv` or a neo-tree rename does not.
---
--- Deletion has the mirror problem, though a much milder one: the leftover
--- `.meta` is harmless but Unity logs a warning for every one, and they
--- accumulate in the repository forever.
---
--- Directories have `.meta` files too, and the same rules.
---
--- ── 2. Class name / file name mismatch ───────────────────────────────────────
---
--- Unity will not attach a MonoBehaviour whose class name differs from its file
--- name. The compiler is perfectly happy, the language server is perfectly
--- happy, and the only symptom is that the component cannot be added -- Unity
--- says "the script needs to derive from MonoBehaviour" or silently refuses the
--- drag. It is a rule of Unity's serialiser, not of C#, so nothing else in the
--- toolchain will ever mention it. `M.check_class_name` does, on save.
-
 local M = {}
 
---- Is this path inside the part of a Unity project that has `.meta` files?
----
---- `Assets/` and `Packages/` (embedded packages) do; `Library/`, `Temp/` and the
---- project root do not.
 ---@param root string
 ---@param path string
 ---@return boolean
@@ -112,21 +72,6 @@ function M.deleted(path)
   vim.notify(("Deleted %s too"):format(vim.fs.basename(meta)), vim.log.levels.INFO, { title = "Unity" })
 end
 
---- The name of the first type declared in the buffer, and whether it is a
---- Unity-serialised type.
----
---- Unity's rule is about the *first* public class, and a file with one type in
---- it -- which is nearly all of them -- has no ambiguity. Treesitter rather
---- than a regex because `class` appears in comments, in strings and in generic
---- constraints.
----
---- WALKED BY HAND RATHER THAN QUERIED. The obvious version is a query with
---- `bases: (base_list) @bases`, and it raises
---- `Invalid field name "bases"` -- in `tree-sitter-c-sharp` a
---- `class_declaration` has exactly two fields, `name` and `body`, and the
---- `base_list` holding `: MonoBehaviour, IThing` is an *unnamed* child. So the
---- children get walked directly, which also makes "first type, descending only
---- through namespaces" straightforward to express.
 ---@param bufnr integer
 ---@return string|nil name
 ---@return boolean is_mono Whether it derives from MonoBehaviour or ScriptableObject.
@@ -182,11 +127,6 @@ local function first_type(bufnr)
   return name, is_mono
 end
 
---- Warn when a MonoBehaviour's class name does not match its file name.
----
---- Only for MonoBehaviour / ScriptableObject: a plain helper class can be named
---- whatever it likes, and warning about those would be noise on every file that
---- legitimately holds several small types.
 ---@param bufnr integer
 function M.check_class_name(bufnr)
   local path = vim.api.nvim_buf_get_name(bufnr)

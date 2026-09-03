@@ -1,20 +1,3 @@
--- Keeping language servers up to date about files that appear and disappear,
--- so that a module you created five minutes ago is importable without
--- restarting Neovim.
---
--- All of the reasoning is in `lua/user/lsp_file_events.lua`; this file is only
--- the wiring. Two ways a file comes into existence in a session, two hooks:
---
---   * you write a buffer that had no file behind it yet -- `:e new.py`, edit,
---     `:w`, or `:w some/other/name.py` from an existing buffer
---   * you add, delete, rename or move in neo-tree
---
--- Both hooks sit next to AstroLSP's `file_operations` handlers, which watch the
--- same two moments and send a different, more selective set of notifications --
--- see `lsp_file_events.lua` for why one does not replace the other.
---
--- The same staleness one layer out -- a package installed after Neovim started
--- -- is `user/python_env.lua`, and its triggers are at the bottom of this file.
 ---@type LazySpec
 return {
   {
@@ -46,12 +29,6 @@ return {
         },
       }
 
-      -- One `stat` of `site-packages`, at moments that already happen. See
-      -- `user/python_env.lua` for why this is a poll and not a watcher.
-      --
-      -- `FocusGained` and `TermLeave` are the two that matter: they are
-      -- "you came back from wherever you ran `uv add`". `BufEnter` catches
-      -- the rest, and `check` returns after a `stat` when nothing moved.
       local python_env = require "user.languages.python.environment"
       autocmds.python_env_refresh = {
         {

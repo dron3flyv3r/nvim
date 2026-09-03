@@ -1,63 +1,3 @@
--- Finding the Unity editors that are running right now, and which project each
--- one has open.
---
--- Two things need this: the debugger (which port do I attach to) and the
--- editor remote control (which port do I send Play to). Both need to be sure
--- they picked the *right* Unity, because on this machine there are routinely
--- three or four processes called `Unity` alive at once and only one of them is
--- an editor you can talk to.
---
--- THE PORT FORMULA. Unity derives both of its ports from its own pid:
---
---     debugger  = 56000 + (pid % 1000)      -- the Mono soft-debugger socket
---     messaging = debugger + 2              -- the VS/Unity UDP channel
---
--- That is not a guess -- it is `DebuggingPort()` / `MessagingPort()` in
--- `com.unity.ide.visualstudio`'s `VisualStudioIntegration.cs`, which you can
--- read in any project under
--- `Library/PackageCache/com.unity.ide.visualstudio@*/Editor/`. So a pid is all
--- we need, and there is nothing to discover over the network.
---
--- WHY WE READ `/proc` AND NOT UNITY'S OWN PROBE. The VS Tools for Unity
--- extension ships `UnityAttachProbe.dll`, which finds editors by UDP broadcast
--- and prints them as JSON. It works, and it has one fatal gap for us: its
--- `projectName` field comes back empty, so it cannot tell you which project an
--- editor has open. It also cannot tell an editor from an asset-import worker --
--- run it on this machine with one editor open and it reports three "Editors",
--- because Unity forks `AssetImportWorker` children that inherit the discovery
--- socket. Attaching a debugger to one of those gets you a session that never
--- hits a breakpoint.
---
--- `/proc/<pid>/cmdline` answers both questions exactly, because Unity puts them
--- on its own command line:
---
---     Unity -projectPath /home/me/git/display_master -riderPath ...
---     Unity -adb2 -batchMode -noUpm -name AssetImportWorker6 -projectPath ...
---
--- The worker is the one with `-batchMode`. The editor is the one without.
---
--- WHAT THE EDITOR IS CALLED. Not `Unity`, necessarily. A Hub install of Unity 6
--- runs a per-version launcher:
---
---     ~/Unity/Hub/Editor/6000.3.14f1/Editor/unityhub-unity-editor-6000.3.14f1
---
--- and `/proc/<pid>/comm` is capped at 15 characters (`TASK_COMM_LEN`), so that
--- arrives as the truncated `unityhub-unity-`. Standalone installs and macOS
--- still use `Unity`. Matching either name exactly is therefore a trap, and
--- matching loosely is also a trap -- one editor drags along `Unity.Licensing`,
--- `UnityShaderCompiler`, `UnityPackageManager`, `Unity.ILPP.Runner` and
--- `UnityAutoQuitter`, none of which have a debugger port.
---
--- So `comm` is used only as a cheap prefilter (anything with "unity" in it) and
--- the real test is the command line: an editor is a process that was given a
--- `-projectPath` and was not given `-batchMode`. None of the helpers above take
--- a project path, and every asset-import worker takes `-batchMode`.
---
--- The cost is that this is Linux-only. That is the platform this config runs
--- on, and the alternative -- believing the probe -- is wrong rather than
--- portable. `M.list` simply returns nothing elsewhere, and every caller already
--- has to handle "no editor is running".
-
 local M = {}
 
 ---@class UnityInstance
@@ -123,11 +63,6 @@ function M.list()
           if flag == "-batchmode" then batch = true end
           if flag == "-projectpath" and argv[i + 1] then project = canonical(argv[i + 1]) end
         end
-        -- A project path proves this is an editor rather than one of Unity's
-        -- helper processes. `comm == "Unity"` is kept as a second way in for a
-        -- hand-launched editor that picked its project from the startup dialog
-        -- and so has no `-projectPath`: it can never match `for_project`, but it
-        -- should still be offerable in the debugger picker.
         if not batch and (project or process == "Unity") then
           table.insert(instances, {
             pid = pid,

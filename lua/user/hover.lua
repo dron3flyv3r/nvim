@@ -1,8 +1,3 @@
--- A readable LSP documentation window.
---
--- Servers decide which documentation and type context they return.  This only
--- controls how that answer is presented: wide enough for Rust signatures,
--- tall enough for doc comments, and still bounded to leave the source visible.
 local M = {}
 
 function M.open()

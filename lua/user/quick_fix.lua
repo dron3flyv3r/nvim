@@ -1,55 +1,5 @@
---- VS Code's Ctrl+`.` -- a code-action key that answers where the cursor is,
---- not only where the *column* is.
----
---- WHY THIS FILE EXISTS. `<Leader>xa` and `<Leader>la` both call
---- `textDocument/codeAction` for a zero-width range at the cursor. Every server
---- is free to decide what that range means, and the two servers in this config
---- decide it very differently:
----
----   * basedpyright and ruff answer for the whole statement the cursor is in,
----     and ruff always offers its source-level actions (organize imports, add a
----     `# noqa`). Python therefore always has *something*, wherever you press.
----
----   * clangd resolves the range to the smallest AST node containing it and
----     offers only the tweaks that fit that node. Measured on a four-line
----     method:
----
----         int scaled(int factor) {     -- column 2 (the indent):  nothing
----         ^--- column 8 (the name):  "Move function body to out-of-line"
----
----     One space to the left of the function name and the same key reports
----     `No code actions available`. That is the whole bug report: it looks
----     broken in C++ because the target is a few columns wide, and VS Code
----     never made you aim.
----
---- THE FIX, and why it is a second request rather than just a wider one: ask at
---- the cursor first, and only if nobody offers anything, ask again for the
---- range covering the whole line. Order matters, because the two requests do
---- not return the same list and the precise one is usually the one you meant --
---- with the cursor on `NULL`, clangd offers "Expand macro 'NULL'"; widen to the
---- line and that disappears in favour of "Extract to function", because now the
---- node under the range is the statement. So the widened list is the fallback,
---- never the default: you lose nothing you had, and you gain a hit anywhere on
---- the line when you previously got silence.
----
---- The cost is one extra round trip on the miss path only. clangd has the file
---- parsed already -- enumerating tweaks is a tree walk, not a rebuild -- so
---- this is not noticeable in practice.
----
---- VISUAL MODE IS LEFT ALONE. A selection is already an explicit range, and it
---- is the range the extract tweaks read (see `plugins/refactor.lua`); widening
---- it to whole lines would silently change what "extract this" means.
-
 local M = {}
 
---- The LSP diagnostics on `lnum` that actually contain the cursor.
----
---- This mirrors what `vim.lsp.buf.code_action` sends as `context.diagnostics`,
---- and it has to: a server's quickfixes are generated *from* the diagnostics in
---- the context, so a probe that sent more of them than the real request would
---- report actions the real request then fails to produce. Same rule as the
---- built-in -- a zero-width diagnostic matches only at its own position,
---- otherwise the cursor must be inside `[start, end)`.
 ---@param bufnr integer
 ---@param lnum integer 0-indexed line
 ---@param col integer 0-indexed byte column
@@ -71,12 +21,6 @@ local function diagnostics_at(bufnr, lnum, col)
   return at
 end
 
---- Does any attached server offer an action for the exact cursor position?
----
---- Answers with the actions discarded -- this only decides which range the real
---- request should use, and re-requesting is cheaper than reimplementing the
---- `codeAction/resolve` round trip and the command execution that follow a
---- choice.
 ---@param bufnr integer
 ---@param win integer
 ---@param callback fun(found: boolean)

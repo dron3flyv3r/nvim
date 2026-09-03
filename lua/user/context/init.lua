@@ -1,7 +1,3 @@
--- Project-aware actions without replacing Neovim's editing language.
--- Providers describe what is meaningful for the current buffer; this module
--- merges them, selects the strongest implementation of a universal verb, and
--- exposes the complete set through a transient vim.ui.select picker.
 local M = {}
 
 ---@class user.Context
@@ -15,11 +11,9 @@ local M = {}
 ---@field id string
 ---@field label string
 ---@field category? string
----@field verb? "run"|"test"|"debug"|"build"|"output"|"stop"
 ---@field priority? integer
 ---@field available? boolean|string|fun(ctx: user.Context): boolean|string
 ---@field run fun(ctx: user.Context)
----@field repeat_action? fun(ctx: user.Context)
 ---@field provider? user.ContextProvider
 
 ---@class user.ContextProvider
@@ -31,7 +25,6 @@ local M = {}
 ---@field status? fun(ctx: user.Context): string[]
 
 local providers = {}
-local last ---@type { action: user.ContextAction, provider_id: string }?
 
 ---@param provider user.ContextProvider
 function M.register(provider)
@@ -122,49 +115,6 @@ function M.execute(action, ctx)
     vim.notify(err, vim.log.levels.ERROR, { title = action.label })
     return
   end
-  if action.repeat_action then last = { action = action, provider_id = action.provider and action.provider.id or "" } end
-end
-
----@param verb user.ContextAction.verb
----@param ctx? user.Context
----@return user.ContextAction?
-function M.action_for_verb(verb, ctx)
-  ctx = ctx or M.resolve()
-  local candidates = vim.tbl_filter(function(action) return action.verb == verb end, M.actions(ctx))
-  table.sort(candidates, function(a, b)
-    if a.priority ~= b.priority then return a.priority > b.priority end
-    return a.label < b.label
-  end)
-  for _, action in ipairs(candidates) do
-    local available = availability(action.available, ctx)
-    if available then return action end
-  end
-end
-
----@param verb user.ContextAction.verb
-function M.run_verb(verb)
-  local ctx = M.resolve()
-  local action = M.action_for_verb(verb, ctx)
-  if action then return M.execute(action, ctx) end
-  vim.notify(
-    ("No %s action for %s -- <Leader>ra shows what is available"):format(verb, ctx.filetype ~= "" and ctx.filetype or "this buffer"),
-    vim.log.levels.INFO,
-    { title = "Context" }
-  )
-end
-
-function M.repeat_last()
-  if not last then
-    vim.notify("No repeatable contextual action has run yet", vim.log.levels.INFO, { title = "Context" })
-    return
-  end
-  local ctx = M.resolve()
-  if last.provider_id ~= "" and not vim.iter(ctx.providers):any(function(provider) return provider.id == last.provider_id end) then
-    vim.notify("The last action belongs to a different context", vim.log.levels.INFO, { title = "Context" })
-    return
-  end
-  local ok, err = pcall(last.action.repeat_action, ctx)
-  if not ok then vim.notify(err, vim.log.levels.ERROR, { title = "Repeat " .. last.action.label }) end
 end
 
 function M.pick()
@@ -192,7 +142,10 @@ function M.status()
   local lines = {
     "buffer: " .. (ctx.file ~= "" and vim.fn.fnamemodify(ctx.file, ":~") or "[unnamed]"),
     "filetype: " .. (ctx.filetype ~= "" and ctx.filetype or "[none]"),
-    "providers: " .. (#ctx.providers > 0 and table.concat(vim.tbl_map(function(p) return p.name end, ctx.providers), ", ") or "none"),
+    "providers: " .. (#ctx.providers > 0 and table.concat(
+      vim.tbl_map(function(p) return p.name end, ctx.providers),
+      ", "
+    ) or "none"),
   }
   for _, provider in ipairs(ctx.providers) do
     if provider._detail then table.insert(lines, ("  %s: %s"):format(provider.name, provider._detail)) end

@@ -1,35 +1,3 @@
--- Reading diagnostics: the one under the cursor, all of them, and a filter for
--- the ones you do not care about right now.
---
--- WHAT NEOVIM ALREADY GIVES YOU, AND WHERE IT STOPS.
---
---   * `vim.diagnostic.open_float()` shows the messages on the current line in a
---     popup -- and that popup is *not* focusable as configured, so a long
---     message is truncated at the window edge with no way to scroll it. Roslyn
---     and basedpyright both routinely emit type errors longer than the screen
---     is wide (a generic C# signature is a paragraph), so "I can see there is
---     an error but not what it says" is the normal case, not the edge case.
---     `M.float` passes `focus = true`, which makes the second press *enter* the
---     popup: then it is an ordinary window and `j`, `<C-d>`, `/` and `y` all
---     work, and `q` closes it.
---
---   * `vim.diagnostic.setqflist()` lists all of them -- in the quickfix list,
---     which is the same flat strip with no fuzzy filter and no preview that
---     made `<Leader>lR` feel worse than grep. Those keys are still there under
---     `<Leader>x`, but `M.picker` sends the same data to snacks instead, so
---     "list every error" lands in the window `<Leader>ff` uses.
---
---   * Nothing filters by severity. `vim.diagnostic.config` accepts a `severity`
---     on each renderer, but it is a config edit, not a toggle -- and the four
---     renderers have to be kept in step or you get signs in the gutter for
---     hints whose text is hidden.
---
--- THE FILTER IS ONE PIECE OF STATE, READ BY EVERYTHING. `M.min_severity` is
--- nil (show all) or `ERROR` (errors only), and it drives the virtual text, the
--- underline, the signs, the pickers *and* the `]d` / `æd` jumps. That last one
--- is the whole point: a filter that hides hints but still stops on them when
--- you walk the list has not hidden anything, it has just made them invisible.
-
 local M = {}
 
 --- The lowest severity that is allowed to be seen, or nil for "all of them".
@@ -42,30 +10,11 @@ M.min_severity = nil
 ---@return vim.diagnostic.SeverityFilter|nil
 function M.severity_filter() return M.min_severity and { min = M.min_severity } or nil end
 
---- The renderers that have to agree with each other. `float` is deliberately
---- absent: a popup you asked for by pressing a key is not noise, and hiding
---- half of what is wrong with the line you are looking at would be a bug
---- dressed up as a feature.
 local RENDERERS = { "virtual_text", "virtual_lines", "underline", "signs" }
 
---- What each renderer looked like before we touched it, so that switching the
---- filter off restores exactly that. Without this, a renderer configured as
---- plain `true` comes back as `{}` -- which every renderer here happens to read
---- the same way, but it means the config no longer round-trips, and the next
---- person to `:lua =vim.diagnostic.config()` has to work out why.
 ---@type table<string, any>
 local unfiltered = {}
 
---- Push `M.min_severity` into `vim.diagnostic.config`.
----
---- Each renderer is rewritten rather than merged into, because turning the
---- filter *off* means the `severity` key has to be *gone*, and `tbl_extend`
---- cannot express "remove this key".
----
---- A renderer that is switched off entirely (`false`, or absent) is left alone
---- in both directions, so this composes with AstroNvim's own `<Leader>ud` /
---- `<Leader>uv` toggles rather than fighting them: if virtual text was turned
---- off while the filter was on, switching the filter off leaves it off.
 local function apply()
   local current = vim.diagnostic.config() or {}
   local severity = M.severity_filter()
@@ -121,13 +70,6 @@ function M.toggle()
   )
 end
 
---- Open the diagnostics on the cursor's line; press again to step into them.
----
---- The three presses cycle show -> focus -> back, which is
---- `open_floating_preview`'s own behaviour once `focus` is set; the only part
---- that is ours is noticing we are already inside the popup, because otherwise
---- the "nothing here" check below fires on the popup's own empty buffer and the
---- third press does nothing.
 function M.float()
   if vim.api.nvim_win_get_config(0).relative ~= "" then
     vim.cmd.wincmd "p"
@@ -158,11 +100,6 @@ function M.float()
   }
 end
 
---- Every diagnostic, in the `<Leader>ff` picker.
----
---- The project-wide source is cwd-filtered by snacks' own default, which is
---- what you want: without it a single open file from a `Library/PackageCache`
---- or a `site-packages` drags its whole dependency's worth of hints in.
 ---@param scope? "buffer" Defaults to the whole project.
 function M.picker(scope)
   local picker = require("snacks").picker

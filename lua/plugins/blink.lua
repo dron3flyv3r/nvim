@@ -1,25 +1,3 @@
--- Completion tweaks for `blink.cmp` (AstroNvim v5's completion engine).
---
--- `signature.enabled` defaults to false upstream, so AstroNvim only styles the
--- window without ever showing it. Turning it on gives the VS Code style hint:
--- a float listing the function's parameters and their types, with the parameter
--- you're currently typing highlighted. It updates as you type commas.
---
--- Note AstroLSP has its own `features.signature_help`; AstroNvim automatically
--- disables that one when blink's is enabled, so there's no double popup.
-
---- Drop pyrefly's suggestions when basedpyright already made the same one.
----
---- Python runs two servers that can both answer `textDocument/completion` --
---- see `python-lsp.lua` for why -- and blink merges every LSP client's items
---- into one `lsp` source without reconciling them. (Its own config has a
---- `deduplicate` field, but it is marked `TODO: implement`.) Left alone that
---- shows every ordinary completion twice.
----
---- basedpyright is the authority: it resolves types through decorators, which
---- pyrefly cannot. pyrefly exists only to cover the case basedpyright answers
---- with silence -- a half-typed element inside a `[...]` -- and there is
---- nothing of basedpyright's to collide with, so its list passes through whole.
 ---@param items blink.cmp.CompletionItem[]
 ---@return blink.cmp.CompletionItem[]
 local function dedupe_python_lsp(_, items)
@@ -58,32 +36,17 @@ end
 ---@type LazySpec
 return {
   "Saghen/blink.cmp",
-  -- A function rather than a table because `sources.default` is a list, and a
-  -- list in an `opts` table replaces rather than appends -- writing it plainly
-  -- would drop `lsp`, `path`, `snippets` and `buffer` and leave completion with
-  -- nothing but the C++ source below.
   ---@param opts blink.cmp.Config
   opts = function(_, opts)
-    -- Tab/Shift-Tab retain AstroNvim's defaults: next/previous suggestion when
-    -- the completion menu is open, then snippet navigation and normal fallback.
-    -- The cursor arrows must keep moving through the buffer even while that
-    -- menu is open; <C-n>/<C-p> remain available as alternative navigation.
     opts.keymap = opts.keymap or {}
     opts.keymap["<Up>"] = { "fallback" }
     opts.keymap["<Down>"] = { "fallback" }
 
     opts.sources = opts.sources or {}
     opts.sources.providers = opts.sources.providers or {}
-    opts.sources.providers.lsp = vim.tbl_deep_extend(
-      "force",
-      opts.sources.providers.lsp or {},
-      { transform_items = dedupe_python_lsp }
-    )
+    opts.sources.providers.lsp =
+      vim.tbl_deep_extend("force", opts.sources.providers.lsp or {}, { transform_items = dedupe_python_lsp })
 
-    -- Out-of-line definitions from the paired header. See
-    -- `user/cpp_definition_source.lua` -- the short version is that clangd
-    -- completes `Application::ini` to the bare name `init` with no return type
-    -- and no parameters, and this fills in the rest.
     opts.sources.providers.cpp_definition = {
       name = "C++ def",
       module = "user.languages.cpp.definition_source",

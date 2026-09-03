@@ -1,10 +1,3 @@
--- Read-only code explanations with an optional handoff to a full conversation.
---
--- CopilotChat owns the conversation history. A new explanation briefly opens
--- its chat buffer so the request is recorded, hides it before Neovim redraws,
--- and presents the completed answer in our own disposable Markdown popup.
--- Opening the chat later therefore continues the exact conversation that made
--- the popup instead of starting from a pasted copy of the answer.
 local M = {}
 
 local popup_win

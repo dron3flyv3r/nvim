@@ -1,48 +1,3 @@
---- `git stash`, as two keys and a `:Stash` command.
----
---- Rider's Shelve/Unshelve dialog has a message field and an "include
---- untracked" checkbox, and that is genuinely the whole feature. So this is not
---- a git wrapper -- it is those two inputs, plus the three things that dialog
---- does around them and a terminal does not:
----
----   * it stashes what you can SEE, not what is on disk;
----   * it says "nothing to stash" instead of printing git's exit code;
----   * it reloads the buffers afterwards, because the files just changed
----     underneath them.
----
---- ── STASHING WHAT YOU CAN SEE ───────────────────────────────────────────────
----
---- `git stash` reads the working tree from disk. Neovim's buffers are not the
---- disk -- an unwritten buffer is an edit git cannot see, so it does not get
---- stashed, and then `git stash` reverts the file on disk while your buffer
---- still holds the newer text. Nothing is lost (the buffer is still dirty), but
---- what you get back from the stash is not what you stashed, which is the one
---- outcome a stash must never produce.
----
---- So `flush()` runs first. It reuses `user.autosave`'s sweep, which knows
---- which buffers may be written and which must not be (see that file -- the
---- disk-conflict prompt in particular). If autosave is switched off, or a
---- buffer is one it refuses to touch, the buffer stays dirty and this warns by
---- name rather than stashing a half-truth silently.
----
---- ── WHY `-u` IS A SEPARATE KEY AND `-a` IS NOT ──────────────────────────────
----
----   * plain -- tracked files only. A new file you have not `git add`ed stays
----     put, which is usually what you want: it cannot conflict with anything.
----   * `-u` -- untracked files come along. The case this exists for: you
----     scaffolded three new files and want the branch clean to look at
----     something else. `<Leader>gZ`.
----   * `-a` -- ignored files too. That is `build/`, `.venv/`, `target/`,
----     `node_modules/`. Stashing those is almost always an accident and popping
----     them back is slow, so it is reachable as `:Stash -a` and has no key.
----
---- ── AFTER A POP THAT CONFLICTS ──────────────────────────────────────────────
----
---- `git stash pop` that hits a conflict writes conflict markers into the files
---- AND KEEPS THE STASH. That is deliberate on git's part -- the stash is your
---- way back if the merge goes badly -- but on a picker it reads as "I pressed
---- pop and nothing happened". `restore()` says so explicitly.
-
 local M = {}
 
 local levels = vim.log.levels
@@ -63,11 +18,6 @@ local function git(args, cwd)
   return res.code == 0, vim.trim((res.stdout or "") .. (res.stderr or ""))
 end
 
---- The repository the current buffer belongs to, which is not always Neovim's
---- cwd -- `<Leader>ff` opens files from anywhere.
----
---- Matches `.git` as either a directory or a FILE, because in a worktree or a
---- submodule it is a file containing a `gitdir:` pointer.
 ---@return string?
 function M.root()
   local name = vim.api.nvim_buf_get_name(0)
@@ -92,11 +42,6 @@ local function flush()
   return unsaved
 end
 
---- Is there anything for a stash of this mode to pick up?
----
---- `--porcelain` is the machine-readable status and it takes the same
---- untracked/ignored switches the stash does, so the question is asked in
---- exactly the terms it will be answered in.
 ---@param root string
 ---@param mode "tracked"|"untracked"|"all"
 ---@return boolean
@@ -107,10 +52,6 @@ local function has_changes(root, mode)
   return ok and out ~= ""
 end
 
---- The files on disk just changed. `checktime` re-reads any buffer whose file
---- moved (`polish.lua` relies on the same mechanism after a `git checkout`),
---- and gitsigns has to be told, or the signs in the gutter describe the diff
---- from before the stash.
 local function reload()
   vim.cmd.checktime()
   local ok, gitsigns = pcall(require, "gitsigns")
@@ -188,28 +129,11 @@ local function restore(item, verb)
   notify(("git stash %s hit a problem -- %s is still in the list.\n%s"):format(verb, item.stash, out), levels.ERROR)
 end
 
---- The stash list. `<Leader>gT`.
----
---- snacks already has the finder, the formatter and a preview that shows the
---- stash's full diff; all that is missing is that its only action is `apply`.
---- Enter becomes `pop` (you almost always want the entry gone), with `apply`
---- and `drop` added beside it.
----
---- The letter keys are normal-mode only -- the picker opens in insert mode with
---- the cursor in the filter box, where `a` and `d` have to stay being `a` and
---- `d`. `<C-y>` and `<C-x>` are the same two actions without leaving insert;
---- both are free in snacks' default key table.
 function M.list()
   if not M.root() then return notify("Not inside a git repository", levels.WARN) end
   local ok, snacks = pcall(require, "snacks")
   if not ok then return notify("snacks.nvim is not loaded", levels.ERROR) end
 
-  --- Dropping is the one irreversible action here, so it asks. The picker is
-  --- closed first and reopened after: `vim.fn.confirm` draws on the command
-  --- line, and a blocking prompt underneath a floating picker that is waiting
-  --- for input of its own is a fight over the keyboard. Reopening also
-  --- re-runs `git stash list`, which matters because dropping renumbers every
-  --- entry below the one that went.
   local function drop(picker, item)
     if not item then return end
     picker:close()
@@ -248,12 +172,6 @@ function M.list()
   }
 end
 
---- `:Stash [-u|-a] [message]`.
----
---- The flags are read off the front so that `:Stash -u wip on the parser` is
---- one obvious line, and a message with no flags needs no quoting. No message
---- means the same prompt the keys give you -- `:Stash` and `<Leader>gz` are the
---- same command by two routes.
 ---@param args table the `nvim_create_user_command` argument table
 function M.command(args)
   local words, i = args.fargs, 1

@@ -1,49 +1,3 @@
--- Talking to a running Unity editor: Play, Pause, Stop, Refresh, run tests.
---
--- WHAT THIS SPEAKS. Unity's `com.unity.ide.visualstudio` package binds a UDP
--- socket and listens for a tiny binary protocol -- the one Visual Studio and
--- the VS Code Unity extension use for "Attach and Play" and for the test
--- explorer. The whole implementation is C# you can read in any project at
--- `Library/PackageCache/com.unity.ide.visualstudio@*/Editor/Messaging/`, and
--- the wire format is four files' worth of `BinaryWriter`:
---
---     int32  message type      (little endian; the `MessageType` enum)
---     int32  payload length    (0 if there is no payload)
---     bytes  payload           (UTF-8, `length` bytes)
---
--- Unity replies to whatever address the datagram came from, so one socket both
--- sends and receives and there is nothing to negotiate.
---
--- WHY THIS BEATS SHIPPING AN EDITOR SCRIPT. The usual way to drive Unity from
--- outside is to drop a C# file into `Assets/Editor/` that opens a socket of its
--- own. That means committing a file to a shared repository so that one person
--- can use a different editor, and it means the bridge is down for exactly as
--- long as the project has a compile error -- which is when you most want to
--- press Refresh. This channel is Unity's own, lives in a package, and is up
--- whenever the editor is.
---
--- THE ONE THING YOU HAVE TO DO. Unity only binds the socket when its External
--- Script Editor is set to something the VS package recognises:
--- `VisualStudioIntegration`'s static constructor starts with
---
---     if (!VisualStudioEditor.IsEnabled) return;
---
--- Neovim is not Visual Studio, so out of the box nothing is listening and every
--- command here times out. `user.unity_shim` is the fix and explains itself;
--- `M.ping` is what lets the commands say so instead of failing silently.
---
--- TWO BEHAVIOURS THAT LOOK LIKE BUGS AND ARE NOT:
---
---   * `Play` disposes Unity's messager on its way into play mode
---     (`case MessageType.Play: Shutdown(); ...`). Entering play mode reloads the
---     domain, the `[InitializeOnLoad]` constructor runs again and it rebinds --
---     so there is a window of a second or so after Play where Stop and Pause
---     go nowhere. Press it again.
---   * Unity forgets a client it has not heard from for four seconds, and
---     forgotten clients stop receiving the test-run broadcasts. `M.keepalive`
---     is a 2-second ping that holds the registration open for as long as a test
---     run is in flight.
-
 local bit = require "bit"
 
 local M = {}
@@ -86,8 +40,6 @@ for name, value in pairs(M.TYPE) do
   M.NAME[value] = name
 end
 
--- ── Wire format ───────────────────────────────────────────────────────────────
-
 --- Little-endian int32. Hand-rolled because `string.pack` is Lua 5.3 and
 --- Neovim is LuaJIT (5.1); `bit` is LuaJIT's own and always available.
 ---@param n integer
@@ -129,18 +81,9 @@ local function decode(buf)
   return type, buf:sub(pos + 4, pos + 4 + length - 1)
 end
 
--- ── The socket ────────────────────────────────────────────────────────────────
-
 local socket ---@type uv.uv_udp_t|nil
 local subscribers = {} ---@type table<integer, fun(value: string, port: integer)[]>
 
---- Read a message Unity was too polite to send over UDP.
----
---- Payloads of 8 KB or more (a test list, always) do not go in a datagram.
---- Unity instead opens a one-shot TCP listener, sends `Tcp` with the value
---- `"<port>:<bytes>"`, and serves the original message body to the first thing
---- that connects -- then gives up after five seconds. So: connect, read exactly
---- that many bytes, and decode it as if it had arrived normally.
 ---@param host string
 ---@param value string `"<port>:<bytes>"`
 ---@param from_port integer The port the UDP notice came from, for the callbacks.
@@ -181,11 +124,6 @@ local function fetch_over_tcp(host, value, from_port)
   end)
 end
 
---- The shared socket, created on first use.
----
---- Bound to port 0 so the OS picks one: the port only has to be stable for as
---- long as Unity remembers us as a client, and it is the same socket for the
---- whole session.
 ---@return uv.uv_udp_t|nil
 local function ensure_socket()
   if socket and not socket:is_closing() then return socket end
@@ -221,13 +159,6 @@ local function ensure_socket()
   return socket
 end
 
---- Listen for one kind of message from Unity.
----
---- Returns an unsubscribe function, and a caller waiting for a single reply
---- MUST call it. `ping` and the test-list request are both one-shots that
---- happen every time a key is pressed, so a subscriber list that only grows is
---- a leak with a slow fuse: the stale closures all still run on every datagram,
---- they just return early.
 ---@param type integer One of `M.TYPE`.
 ---@param fn fun(value: string, port: integer)
 ---@return fun() off
@@ -260,12 +191,6 @@ function M.send(instance, type, value)
   return true
 end
 
---- Is Unity's VS integration actually listening?
----
---- The only way to know is to ask: a `Ping` should come back as a `Pong` within
---- a few milliseconds on loopback. A timeout means the editor is running but
---- has not bound the socket, which in practice always means its External Script
---- Editor is set to something other than a VS-family editor.
 ---@param instance UnityInstance
 ---@param callback fun(listening: boolean)
 ---@param timeout? integer Milliseconds, default 700.
@@ -296,13 +221,6 @@ function M.ping(instance, callback, timeout)
   end)
 end
 
---- `M.send`, but only once we know someone is home -- and with an explanation
---- when nobody is.
----
---- This is what every user-facing command goes through, because the failure
---- mode it guards against is the confusing one: Unity is open, the keymap
---- fires, nothing happens, and there is no way to tell a broken socket from a
---- Unity that never bound one.
 ---@param instance UnityInstance
 ---@param type integer
 ---@param value? string
@@ -323,16 +241,8 @@ function M.send_checked(instance, type, value, on_sent)
   end)
 end
 
--- ── Keeping Unity interested ─────────────────────────────────────────────────
-
 local keepalive_timer ---@type uv.uv_timer_t|nil
 
---- Ping `instance` every two seconds so Unity keeps broadcasting to us.
----
---- `VisualStudioIntegration.OnUpdate` drops any client it has not heard from in
---- four seconds, and `BroadcastMessage` -- which is how every test-run event
---- reaches us -- only goes to remembered clients. Without this a run that takes
---- longer than four seconds delivers `RunStarted` and then goes quiet.
 ---@param instance UnityInstance
 function M.keepalive_start(instance)
   M.keepalive_stop()

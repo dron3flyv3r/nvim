@@ -1,38 +1,3 @@
--- Noticing that the virtualenv changed, so a package you just installed is
--- importable without restarting Neovim.
---
--- THE PROBLEM, and it is the same one as `lsp_file_events.lua` one layer out:
--- `uv add rich` in a terminal, come back, and `import rich` is still underlined
--- `Import "rich" could not be resolved`, with no completion on `rich.`. The
--- package is installed and correct; basedpyright resolved that import once,
--- cached the failure, and has no idea the environment moved underneath it.
--- Neovim does not watch files on Linux (the long version of why is at the top
--- of `lsp_file_events.lua`), so nothing tells it.
---
--- WHAT ACTUALLY FIXES IT is one notification. basedpyright keeps a separate
--- *library* watcher from its source watcher, and a `didChangeWatchedFiles`
--- event anywhere under the search path lands in `_libraryUpdated`, which
--- invalidates the import resolver and re-analyses everything (see
--- `invalidateAndForceReanalysis(LibraryWatcherChanged)` in the bundled
--- `pyright-langserver.js`). Pointing it at the `site-packages` directory itself
--- is enough -- it does not need the list of files that arrived, which is
--- convenient, because we do not have one.
---
--- HOW WE KNOW THE ENVIRONMENT MOVED: `site-packages` has an mtime, and it
--- changes whenever an entry is added to or removed from it. So instead of
--- watching anything, `check` stats one directory at moments that already
--- happen anyway -- you focus the window again, you leave a terminal, you enter
--- a Python buffer -- and compares. One `stat` is nothing, it costs exactly zero
--- while you sit still, and it does not care *how* the environment changed:
--- `uv add`, `uv sync`, `uv remove`, `pip install` in a `:terminal`, a task from
--- `<Leader>r`, or a rebuild in a window Neovim never saw.
---
--- The first check on a directory only records the mtime, so opening a project
--- never fires a spurious refresh.
---
--- Wired up in `plugins/lsp-file-events.lua`; `:PythonEnvRefresh` does it by
--- hand for whatever the mtime cannot see.
-
 local file_events = require "user.lsp_file_events"
 
 local M = {}
@@ -50,12 +15,6 @@ local resolved = {}
 ---@type table<string, string>
 local seen = {}
 
---- The `site-packages` of the virtualenv in use for `file`.
----
---- `$VIRTUAL_ENV` comes first: uv.nvim exports it when it activates an
---- environment, and if one is active it is the one the servers were started
---- with, wherever on disk it lives. `<root>/.venv` is the fallback, and the
---- normal case.
 ---@param file string
 ---@return string?
 local function site_packages(file)
@@ -106,13 +65,6 @@ function M.check(bufnr, force)
   return true
 end
 
---- Check every loaded Python buffer.
----
---- What the window-level triggers use, because they fire while a *terminal* is
---- the current buffer -- you were just in it running `uv add` -- and checking
---- the current buffer would find no Python and no environment. Buffers sharing
---- one virtualenv cost one `stat` between them: the first records the new mtime
---- and the rest see it unchanged.
 ---@return boolean notified
 function M.check_all()
   local notified = false
@@ -126,16 +78,6 @@ end
 ---@type uv.uv_timer_t?
 local watcher
 
---- Watch for the environment to change over the next `timeout_ms`, then stop.
----
---- For installs started from inside Neovim that never move the cursor:
---- `<Leader>va` and friends run `uv add` in the background and leave you in the
---- same buffer, so none of the "you came back from somewhere" triggers fire,
---- and there is no completion callback to hang this off.
----
---- Bounded on both ends: it stops at the first change it sees, and gives up
---- after `timeout_ms` if the install failed or resolved nothing. A second call
---- replaces the first, so leaning on the keymap does not accumulate timers.
 ---@param timeout_ms integer? default 90s, enough for a cold resolve
 function M.watch(timeout_ms)
   local deadline = vim.uv.now() + (timeout_ms or 90000)

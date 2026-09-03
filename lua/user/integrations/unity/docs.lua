@@ -1,29 +1,5 @@
--- `K` for the Unity API: opening the Scripting Reference page for the symbol
--- under the cursor.
---
--- WHY THIS IS NOT JUST HOVER. `roslyn_ls`'s hover shows you the signature and
--- whatever XML doc comment the assembly shipped with, and Unity's assemblies
--- ship with almost none -- hover `Rigidbody.AddForce` and you get the overload
--- list and nothing about what a ForceMode actually does. The Scripting
--- Reference has the prose, the code example and the "see also"; it is where you
--- were going to end up anyway.
---
--- LOCAL DOCS FIRST. The Unity Hub can install the documentation alongside an
--- editor, and if it is there it is both faster and exactly the right version --
--- the API moved a lot between 2021 and 6000. Failing that, fall back to
--- docs.unity3d.com pinned to the project's version, because the unversioned URL
--- redirects to whatever is current and will happily show you a method that does
--- not exist in your editor.
-
 local M = {}
 
---- The symbol to look up: `Rigidbody` on its own, or `Rigidbody.AddForce` when
---- the cursor is on a member.
----
---- Walked out of the line text rather than asked of the language server,
---- because the answer wanted here is the *documented* name -- the type and the
---- member as the reference indexes them -- not the resolved symbol, and a
---- dotted chain is exactly what the URL needs.
 ---@return string|nil
 function M.symbol_at_cursor()
   local word = vim.fn.expand "<cword>"

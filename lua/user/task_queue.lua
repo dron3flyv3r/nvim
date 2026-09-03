@@ -1,17 +1,3 @@
--- A serial run queue for overseer tasks.
---
--- Overseer starts everything immediately: press `<Leader>rr` twice and you get
--- two processes fighting over the same GPU, the same build directory or the
--- same serial port. This module is the "…after the current one" answer: a task
--- is created but left PENDING, and only started once whatever is running has
--- finished.
---
--- The queue is deliberately *not* limited to tasks it started itself. If a
--- build kicked off with `<Leader>rr` is already running when you queue
--- something, that build becomes the thing we wait on -- which is what you meant
--- by "run this next".
---
--- Used by the queue and stop-all contextual task actions.
 local M = {}
 
 ---Created with `autostart = false`, in the order they will run.
@@ -25,9 +11,7 @@ local blocker = nil
 
 ---@param task overseer.Task|nil
 ---@return boolean
-local function busy(task)
-  return task ~= nil and not task:is_disposed() and (task:is_running() or task:is_pending())
-end
+local function busy(task) return task ~= nil and not task:is_disposed() and (task:is_running() or task:is_pending()) end
 
 ---Wait for `task` to finish (or vanish), then start the next queued task.
 ---@param task overseer.Task
@@ -65,11 +49,7 @@ function M.pump()
       -- `start()` refused: a component vetoed it, or the strategy failed. It
       -- will never run and never fire `on_complete`, so drop it rather than let
       -- it wedge everything behind it.
-      vim.notify(
-        ("Could not start %q -- skipping it"):format(task.name),
-        vim.log.levels.WARN,
-        { title = "Task queue" }
-      )
+      vim.notify(("Could not start %q -- skipping it"):format(task.name), vim.log.levels.WARN, { title = "Task queue" })
     end
   end
 end

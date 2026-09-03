@@ -1,43 +1,5 @@
--- Keep a running task's pty the same size as the window its output is shown in.
---
--- THE BUG THIS FIXES: run a training script contextually and every tqdm
--- update lands on a NEW LINE -- a wall of half-drawn progress bars scrolling
--- past, instead of one bar filling up in place.
---
--- Overseer starts the process on a pty sized to the whole editor -- literally
--- `vim.o.columns - 4` by `vim.o.lines - 4`, see `strategy/jobstart.lua` -- and
--- then shows the output in the dock, which is half of the bottom strip. On this
--- setup that means the process is told it has a 116x36 terminal while the grid
--- it is actually drawing into is 79x12.
---
--- tqdm believes the pty. It asks the terminal how wide it is (TIOCGWINSZ), is
--- told 116, and draws a 116-cell bar. Neovim's grid wraps that onto two rows,
--- and the `\r` that begins the next update only rewinds the LAST row -- so the
--- row above it stays on screen forever. One orphaned row per update, which is
--- exactly the "it prints instead of redrawing" symptom. Anything that redraws
--- with `\r` is affected the same way: rich, keras, huggingface, wget, pip.
---
--- Sizing the pty to the window fixes it at the source. The bar is drawn to fit
--- the grid, nothing wraps, and `\r` lands where the program meant it to.
---
--- TIMING MATTERS, because tqdm defaults to `dynamic_ncols=False`: it reads the
--- width ONCE, when the bar is constructed, and a resize after that will not fix
--- a bar that already exists. The `FileType OverseerOutput` autocmd below fires
--- from inside `Task:start()`, just after the components have opened the output
--- pane -- milliseconds after the process is spawned and long before Python has
--- finished importing torch, so the first bar is already right. The window
--- events keep it right afterwards, which is what `dynamic_ncols=True` and
--- anything else handling SIGWINCH will pick up.
---
--- Wired up from `lua/plugins/tasks.lua`.
 local M = {}
 
---- The size of the terminal grid Neovim gives `bufnr`, in cells.
----
---- When a terminal buffer is on screen more than once, Neovim sizes the grid to
---- the LARGEST of those windows -- checked: the same buffer in a 39- and a
---- 40-column window gets a 40-column grid. So that is the size to match, not
---- whichever window the cursor happens to be in.
 ---@param bufnr integer
 ---@return integer|nil width nil when the buffer is not on screen at all
 ---@return integer|nil height
@@ -93,11 +55,6 @@ end
 
 local scheduled = false
 
---- Match every running task's pty to its output window, on the next tick.
----
---- Deferred for two reasons: on `WinClosed` the window that is going away is
---- still in `nvim_list_wins()`, and dragging a split boundary fires a burst of
---- events that should cost one resize, not twenty.
 local function sync_all()
   if scheduled then return end
   scheduled = true
@@ -118,10 +75,6 @@ end
 function M.setup()
   local group = vim.api.nvim_create_augroup("user_task_pty", { clear = true })
 
-  -- A task started. `Task:start()` sets this filetype on the output buffer
-  -- immediately after dispatching `on_start`, which is what opened the pane --
-  -- so the window exists by the time we look for it. See the timing note above
-  -- for why this cannot wait.
   vim.api.nvim_create_autocmd("FileType", {
     group = group,
     pattern = "OverseerOutput",

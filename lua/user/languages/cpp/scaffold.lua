@@ -1,46 +1,5 @@
--- Creating a C++ class: the two files, the include between them, and the line
--- in CMakeLists that makes the second one get compiled.
---
--- WHY THIS IS NOT A SNIPPET: a snippet expands inside a buffer that already
--- exists, and the tedious half of "new class" happens before there is a buffer
--- -- deciding the file name, deciding which directory, creating a *pair* of
--- files that have to agree about the include, and telling the build system the
--- .cpp is there. `blink.cmp` and `snippets/` cover the inside-a-file half
--- perfectly well; this covers the rest.
---
--- WHY IT DETECTS RATHER THAN IMPOSES: there are two established C++ house
--- styles in this user's own code and they disagree about nearly everything.
---
---     ~/code/SOPA-ESP32-MK3   flat directory, snake_case pairs
---                             (settings_store.h / settings_store.cpp),
---                             `#pragma once`, no namespace, no CMakeLists
---     ~/code/evlo-sim-mk1     src/, C++20, CMake with an explicit source list
---                             (`add_executable(app src/main.cpp)`)
---
--- A scaffolder with a hardcoded style is wrong in one of those projects and
--- annoying in both, so every decision below -- file name case, header
--- extension, guard style, namespace, target directory -- is read off the files
--- that are already there. The defaults only apply to an empty project.
---
--- WHERE THE FILES GO: beside the buffer you are in, unless you say otherwise.
--- The prompt takes a path as well as a name -- `audio/mixer` creates the pair in
--- an `audio/` subdirectory of wherever the plain name would have gone, creating
--- it if it is not there yet, and `/src/audio/mixer` is the same thing measured
--- from the project root instead. Everything downstream (the include between the
--- files, the path written into CMakeLists) follows from the real paths, so a
--- subdirectory needs no special handling in any of it.
---
--- WHAT IT DELIBERATELY DOES NOT DO: overwrite. If either file exists the whole
--- operation stops before writing anything; there is no merge, no backup and no
--- prompt, because the cost of getting that wrong is somebody's afternoon.
-
 local M = {}
 
---- Directories that are never this project's own source.
----
---- `external/` matters most: evlo-sim-mk1 vendors all of Dear ImGui there, and
---- imgui's ~30 lowercase headers would otherwise outvote the handful of files
---- the project actually wrote when the naming convention is counted.
 local SKIP_DIRS = {
   ["build"] = true,
   ["external"] = true,
@@ -66,14 +25,6 @@ local function project_root(start)
   return found and vim.fs.dirname(found) or start
 end
 
---- `audio_mixer` -> `AudioMixer`, but `AudioMixer` -> `AudioMixer`.
----
---- The asymmetry is deliberate and comes from the SOPA code: file names there
---- are snake_case (`settings_store.h`) while the types inside them are
---- PascalCase (`struct DeviceSettings`). So a lowercase name typed at the
---- prompt is a *file* name being spelled out and wants converting, whereas
---- anything with a capital in it is already a type name and must be left
---- exactly as written -- `HTTPServer` has to survive.
 ---@param name string
 ---@return string
 local function to_pascal(name)
@@ -82,11 +33,6 @@ local function to_pascal(name)
   return (pascal:gsub("[_%-%s]", ""))
 end
 
---- `AudioMixer` -> `audio_mixer`, `HTTPServer` -> `http_server`.
----
---- Two passes because one does not handle runs of capitals: the first splits
---- `oM` in `audioMixer`, the second splits `PSe` in `HTTPServer` so the break
---- lands before the last capital of the run rather than after it.
 ---@param name string
 ---@return string
 local function to_snake(name)
@@ -96,14 +42,6 @@ local function to_snake(name)
   return (snake:lower())
 end
 
---- Header files belonging to the project itself, for the conventions to be
---- read off.
----
---- Only four directories, each two levels deep, rather than a walk of the
---- whole tree: the convention is visible in the first dozen files and a
---- recursive scan of a repo with a vendored dependency in it is both slow and
---- -- per `SKIP_DIRS` above -- misleading. The buffer's own directory comes
---- first because in a project with several conventions the local one wins.
 ---@param root string
 ---@param bufdir string?
 ---@return string[] paths
@@ -197,7 +135,9 @@ local function conventions(root, bufdir)
 
   local best_ns, best_ns_count = nil, 0
   for ns, count in pairs(namespaces) do
-    if count > best_ns_count then best_ns, best_ns_count = ns, count end
+    if count > best_ns_count then
+      best_ns, best_ns_count = ns, count
+    end
   end
 
   return {
@@ -215,21 +155,6 @@ local function conventions(root, bufdir)
   }
 end
 
---- Where the header and the source belong.
----
---- The rule that does the work is "beside the file you are looking at", which
---- is correct in both of this user's projects without either of them being a
---- special case: editing `ui_root.cpp` in SOPA's flat directory puts the new
---- pair in that directory, and editing `src/main.cpp` in evlo puts it in
---- `src/`. The `include/` branch is for the third layout -- the one where
---- public headers are installed -- which is common enough in other people's
---- CMake projects to be worth handling even though neither project here uses
---- it.
----
---- This is only the *base*: a path typed at the prompt (`audio/mixer`) is
---- appended to both of the directories returned here, so the include layout
---- keeps mirroring -- `include/<project>/audio/` and `src/audio/` -- instead of
---- flattening the header back out beside its siblings.
 ---@param root string
 ---@param bufdir string?
 ---@return string header_dir, string source_dir
@@ -251,13 +176,6 @@ local function destinations(root, bufdir)
   return include, source_dir
 end
 
---- The path the .cpp should `#include`, as written between the quotes.
----
---- Beside each other this is just the file name. Under `include/` it has to be
---- the path relative to the include root, or the compiler will not find it
---- from another directory -- `#include "audio_mixer.h"` next to
---- `include/evlo/audio_mixer.h` compiles only by accident, from files that
---- happen to sit in the same directory.
 ---@param root string
 ---@param header_path string
 ---@param source_dir string
@@ -272,12 +190,6 @@ local function include_spelling(root, header_path, source_dir)
   return vim.fs.basename(header_path)
 end
 
---- Split `audio/mixer` into the subdirectory and the name.
----
---- The last slash is the separator, because a class name cannot contain one --
---- everything before it is a path and the remainder is the identifier. A
---- leading slash means "from the project root" rather than "from here", which
---- is the escape hatch for the case the buffer's directory gets wrong.
 ---@param input string
 ---@return string? subdir  nil when no slash was typed at all
 ---@return string name
@@ -288,12 +200,6 @@ local function split_path(input)
   return (dir:gsub("^/+", "")), name, vim.startswith(dir, "/")
 end
 
---- Resolve `.` and `..` textually, for an absolute path.
----
---- Not `vim.fs.normalize`: which of these it collapses has changed across
---- Neovim versions, and the whole point of doing it here is to be able to check
---- the answer against the project root afterwards -- `../../etc/foo` has to come
---- out as a path that fails that check, not as one that quietly did not resolve.
 ---@param path string
 ---@return string? nil when the path climbs above `/`
 local function collapse(path)
@@ -336,24 +242,8 @@ local function wrap_namespace(conv, body)
   return lines
 end
 
---- The three shapes this can create.
----
---- Each returns the header body and, for `class`, the source body. They are
---- deliberately close to empty: the point is to get past the boilerplate that
---- has one correct answer (the guard, the include, the `Class::` qualification)
---- and stop before the part that does not (what the class actually does).
---- clang-format runs on save and will re-indent all of it to the project's
---- `.clang-format`, so the spacing here only has to be legible.
 ---@type table<string, fun(class: string, conv: CppConventions): string[], string[]?>
 local TEMPLATES = {
-  --- A class with an out-of-line default constructor.
-  ---
-  --- The constructor is there to give the .cpp a reason to exist and something
-  --- to pattern-match on -- it is the one line that demonstrates the
-  --- `AudioMixer::AudioMixer()` form you then copy for every other method. No
-  --- destructor: declaring one you do not need suppresses the implicit move
-  --- operations, which is the rule-of-zero trap, and `<Leader>lcm` declares the
-  --- whole set properly on the day you do need them.
   class = function(class, conv)
     local header = wrap_namespace(conv, {
       "class " .. class .. " {",
@@ -369,14 +259,6 @@ local TEMPLATES = {
     return header, source
   end,
 
-  --- A pure-virtual base: the thing other classes inherit from.
-  ---
-  --- Header-only, because there is nothing to put in a .cpp. The virtual
-  --- destructor is the entire reason this is a separate template rather than a
-  --- comment on the class one -- deleting a derived object through a base
-  --- pointer without it is undefined behaviour, it is silent, and it is the
-  --- single most common bug in hand-written C++ interfaces. `= default` rather
-  --- than `{}` so the move operations are not suppressed.
   interface = function(class, conv)
     return wrap_namespace(conv, {
       "class " .. class .. " {",
@@ -388,13 +270,6 @@ local TEMPLATES = {
     })
   end,
 
-  --- A class template.
-  ---
-  --- Header-only and not negotiable about it: a template is not code until it
-  --- is instantiated, so the definitions have to be visible at every use site.
-  --- Splitting one across a .h and a .cpp produces link errors, not compile
-  --- errors, which is why this template exists separately from `class` --
-  --- creating the .cpp at all would be the mistake.
   template = function(class, conv)
     return wrap_namespace(conv, {
       "template <typename T>",
@@ -408,39 +283,6 @@ local TEMPLATES = {
   end,
 }
 
---- Add `rel_path` to the source list of the CMake target that already compiles
---- something from the same directory.
----
---- WHAT IT LOOKS FOR is a target whose list already mentions a file in the new
---- file's directory -- that is the evidence that this is where sources for that
---- target go. `add_executable(app src/main.cpp)` plus a new `src/audio_mixer.cpp`
---- is a match; a target that only lists files from `external/` is not, and gets
---- left alone rather than guessed at.
----
---- IF NOTHING COMPILES THAT DIRECTORY it walks up. A path typed at the prompt
---- can name a directory that did not exist a second ago, so there is nothing in
---- it for any target to already list, and the exact-match rule alone would leave
---- every new subdirectory out of the build -- which fails at link time, long
---- after the mistake. `src/audio/mixer.cpp` in a project whose only target lists
---- `src/main.cpp` joins that target. The walk stops at the project root, so it
---- can pick the wrong target in a project with several; that is visible in the
---- notification and one undo away, which the missing symbol is not.
----
---- WHAT IT REFUSES: a source list that is not a literal list -- a `GLOB`
---- anywhere in the file, or a target whose sources are a `${VAR}`. Those
---- projects collect their sources indirectly and need no edit at all; writing
---- the path in would be duplicate, not helpful. Returning nil here is a success,
---- not a failure, and is reported differently from having found nothing.
----
---- WHY TEXT AND NOT TREESITTER: the cmake parser is not in this config's
---- `ensure_installed`, so requiring it would make this silently do nothing on a
---- machine that has not downloaded it. The shapes being matched are two
---- keywords and a balanced paren, which is inside what a text scan does
---- reliably.
----
---- NOTE there is no regenerate afterwards. CMake does not need one: Ninja
---- writes a rule that re-runs cmake whenever `CMakeLists.txt` is newer than the
---- cache, so the next contextual build picks the new source up on its own.
 ---@param root string
 ---@param source_path string
 ---@return string? target the target the file was added to, nil if nothing was written
@@ -452,12 +294,6 @@ local function add_to_cmake(root, source_path)
   local ok, lines = pcall(vim.fn.readfile, cmake_path)
   if not ok or type(lines) ~= "table" then return nil, "none" end
 
-  -- Whether this project's sources reach the target by some route other than a
-  -- literal list, so a project that needs no edit can be told apart from one
-  -- where the edit was wanted and did not happen. `file(GLOB ...)` is matched
-  -- across the whole file rather than inside a target block, because that is
-  -- where it is written -- the glob fills a variable several lines above the
-  -- `add_executable` that uses it.
   local indirect = false
   for _, line in ipairs(lines) do
     if line:find "GLOB" then
@@ -492,10 +328,6 @@ local function add_to_cmake(root, source_path)
           if depth <= 0 then break end
         end
 
-        -- `add_executable(app ${SRC})`: the sources are a variable, so there is
-        -- no list to sort a path into and nothing is missing from the build.
-        -- Everything after the target's own name counts, since the target may
-        -- itself be spelled `${NAME}`.
         local _, name_end = lines[i]:find(target, 1, true)
         local variable = lines[i]:sub((name_end or 0) + 1):find "%${" ~= nil
         for j = i + 1, last do
@@ -507,12 +339,6 @@ local function add_to_cmake(root, source_path)
         indirect = indirect or variable
 
         if not variable then
-          -- Where the new path sorts among the entries this block already lists
-          -- from the same directory. `first_after` is the first entry that sorts
-          -- after it (insert above that one); `last_same` is the last entry from
-          -- the directory at all (insert below that one, when the new file sorts
-          -- last). If neither is set this block compiles nothing from that
-          -- directory and is not ours to edit.
           local first_after, last_same, indent = nil, nil, nil
 
           for j = i, last do
@@ -602,20 +428,14 @@ function M.create(kind)
     local header_dir, source_dir = destinations(root, bufdir)
 
     if subdir then
-      -- A root-relative path is taken literally and puts both files in the one
-      -- directory named. Splitting it across `include/` would mean guessing
-      -- which half of `/src/audio` the user meant, and the reason to type the
-      -- root-relative form in the first place is to stop the guessing.
       local base_header, base_source = header_dir, source_dir
-      if from_root then base_header, base_source = root, root end
+      if from_root then
+        base_header, base_source = root, root
+      end
 
       local resolved_header = collapse(vim.fs.joinpath(base_header, subdir))
       local resolved_source = collapse(vim.fs.joinpath(base_source, subdir))
 
-      -- `..` is allowed -- `../dsp/filter` from `src/audio` is a reasonable
-      -- thing to type -- but only as far as the project root. Beyond that the
-      -- CMake edit, the include spelling and the paths in the notification are
-      -- all meaningless, so it is refused rather than half-supported.
       if
         not resolved_header
         or not resolved_source
@@ -644,11 +464,7 @@ function M.create(kind)
     -- possible.
     for _, path in ipairs { header_path, source_path } do
       if vim.uv.fs_stat(path) then
-        return vim.notify(
-          "Already exists: " .. path:sub(#root + 2),
-          vim.log.levels.ERROR,
-          { title = "New " .. kind }
-        )
+        return vim.notify("Already exists: " .. path:sub(#root + 2), vim.log.levels.ERROR, { title = "New " .. kind })
       end
     end
 
@@ -679,10 +495,6 @@ function M.create(kind)
     if added_to then
       message = message .. "\nadded to CMake target `" .. added_to .. "`"
     elseif not_added == "nomatch" then
-      -- Nothing in the file compiles this directory or any directory above it,
-      -- so there was no list to sort the path into. Said out loud because the
-      -- alternative is a file that compiles fine on its own and is simply never
-      -- linked, which shows up much later as a missing symbol.
       message = message .. "\nnot added to CMakeLists: no target lists a source near it"
       level = vim.log.levels.WARN
     end

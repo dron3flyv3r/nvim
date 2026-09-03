@@ -5,35 +5,43 @@ text objects, jumplist navigation, buffers, windows, tab pages, quickfix, and
 commands remain the editing language. Plugins add project intelligence and
 tool integrations; they do not introduce a second editor model.
 
-## Contextual development actions
+## Development actions
 
-`<Leader>r` is the single project-action namespace. The same small vocabulary
-works in every language and project:
+Frequent Unity actions live under `<Leader>U`, and Rust actions under
+`<Leader>R`. `<Leader>ra` is the fallback picker for less frequent operations
+valid in the current project, including notebooks, CMake, Cargo manifests, and
+Unity maintenance actions. New integrations such as Godot can join that picker
+without requiring another universal run/test/debug abstraction.
 
 | Key | Meaning |
 | --- | --- |
-| `<Leader>ra` | all actions valid at the cursor |
-| `<Leader>rr` | run the most specific current target |
-| `<Leader>rl` | repeat the last contextual run |
-| `<Leader>rt` | test the most specific current target |
-| `<Leader>rd` | debug the most specific current target |
-| `<Leader>rb` | build or refresh the current project |
-| `<Leader>ro` | show the most relevant output |
-| `<Leader>rk` | stop the most relevant running process |
-
-Cursor context wins. For example, `<Leader>rr` runs a notebook cell when the
-cursor is in a cell-based Python buffer, a Rust runnable in Rust, Unity Play in
-a Unity project, a CMake target in CMake C/C++, and otherwise opens the project
-task picker. Specialist operations stay discoverable in `<Leader>ra` instead
-of occupying separate language-specific prefixes.
+| `<Leader>ra` | actions valid in the current project |
+| `<Leader>Up/Us/Ur` | enter, stop, or restart Unity Play mode |
+| `<Leader>Ub/Ut/Ua` | refresh Unity, test at cursor, or attach debugger |
+| `<Leader>Ue/Uw/Ul` | Unity errors, warnings, or editor log |
+| `<Leader>Rr/Rt/Rd` | run, test, or debug the Rust cursor target |
+| `<Leader>Rb` | choose a Cargo build task |
+| `<Leader>Re/Rx/Ro` | explain error, expand macro, or open docs.rs |
 
 Use `:ContextStatus` to see what was detected and `:checkhealth user` to check
 the assumptions owned by this configuration.
 
+## Verification
+
+Run `scripts/check.sh` after changing the configuration. It parses every Lua
+file, runs formatting and lint checks when their tools are installed, starts
+Neovim with temporary cache/state directories, audits local mapping
+declarations, exercises focused integration tests, and keeps full-line comments
+below 25% of executable Lua.
+
+Set `NVIM_CONFIG_STRICT=1` to require `stylua` and `selene`, as CI should.
+Architectural rationale that would otherwise overwhelm source files lives in
+[`docs/decisions`](docs/decisions/README.md).
+
 ## Layout
 
 - `lua/plugins/` contains Lazy/AstroNvim wiring and user-facing mappings.
-- `lua/user/context/` owns context detection, action selection, and providers.
+- `lua/user/context/` owns the fallback project-action picker and providers.
 - `lua/user/workbench/` owns shared execution and output operations.
 - `lua/user/languages/` contains language-specific engines.
 - `lua/user/integrations/` contains external runtimes such as Unity and Jupyter.
@@ -63,8 +71,8 @@ Git, project search, tests, debugging, and personal plugins continue to work.
 
 Before connecting, both peers should have a clean checkout at the same commit.
 The joining peer's differing files can be overwritten. `.git` stays local by
-default; do not add Teamtype's experimental `--sync-vcs` option for normal pair
-programming, and let one person handle commits during a session.
+default; leave `--sync-vcs` disabled for normal pair programming, and let one
+person handle commits during a session.
 
 Host:
 

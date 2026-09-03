@@ -1,28 +1,3 @@
--- Session restore.
---
--- AstroNvim already ships `resession.nvim` and already *saves* a session on exit
--- (see `astrocore.sessions.autosave`, which writes both a "Last Session" and a
--- per-directory "dirsession"). What it does not do by default is *restore* one
--- automatically, so this adds that.
---
--- THE GOTCHA THIS FILE EXISTS FOR: `nvim` and `nvim .` are not the same thing.
--- `nvim .` launches with one argument, so a naive `argc(-1) == 0` guard skips
--- the restore and you get neo-tree on an empty slate instead of your session.
--- We handle three cases:
---
---     nvim          -> restore the dirsession for the current directory
---     nvim <dir>    -> cd into <dir>, then restore *its* dirsession
---     nvim <file>   -> untouched, no restore
---
--- So the loop you want works: `:qa` writes the session for the cwd, and
--- `nvim .` in that same directory brings back the buffers/splits/tabs.
-
---- The directory this nvim was launched to work in, or nil if it was launched
---- on a file (or on several arguments), in which case we stay out of the way.
----
---- Normalised to an absolute path with no trailing slash, because that is
---- exactly the spelling `getcwd()` will report once we've cd'd there -- and
---- `getcwd()` is what autosave used as the session name on the way out.
 ---@return string?
 local function launch_dir()
   local argc = vim.fn.argc(-1) -- args nvim *started* with, not the current arglist
@@ -78,11 +53,6 @@ return {
     },
   },
   {
-    -- neo-tree hijacks a directory buffer to show its tree, but it does the
-    -- actual work on a 10ms debounce -- so it lands *after* our restore and
-    -- plants the tree in the window that should be holding your first file.
-    -- Flipping the config later can't stop an already-queued hijack, so when we
-    -- know a session is coming, don't let it arm in the first place.
     "nvim-neo-tree/neo-tree.nvim",
     optional = true,
     opts = function(_, opts)

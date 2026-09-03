@@ -11,7 +11,12 @@ end
 function M.actions()
   return {
     { id = "cpp.new_class", label = "Create class (.h + .cpp)", category = "Create", run = create "class" },
-    { id = "cpp.new_interface", label = "Create interface (abstract base)", category = "Create", run = create "interface" },
+    {
+      id = "cpp.new_interface",
+      label = "Create interface (abstract base)",
+      category = "Create",
+      run = create "interface",
+    },
     { id = "cpp.new_template", label = "Create class template", category = "Create", run = create "template" },
   }
 end

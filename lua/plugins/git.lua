@@ -1,61 +1,7 @@
--- Git: a review view you can revert from, and stashing.
---
--- ── WHAT WAS ALREADY HERE ───────────────────────────────────────────────────
---
--- gitsigns owns the gutter and everything hunk-sized *inside a file you are
--- editing*: `æg`/`øg` to walk hunks, `<Leader>gp` to peek at one, `<Leader>gr`
--- to revert one, `<Leader>gs` to stage one, `<Leader>gl` to blame the line.
--- Those keys are AstroNvim's and they are good; none of them are touched here.
---
--- snacks owns the pickers: `<Leader>gt` status, `<Leader>gb` branches,
--- `<Leader>gc` commits, `<Leader>gC` this file's commits.
---
--- What neither of them has is the thing Rider calls the Changes tool window: a
--- list of every changed file down the left, the diff of the selected one beside
--- it, and revert on a keypress in both. gitsigns can only show you the file you
--- are already in (`:Gitsigns diffthis`), and a picker preview is read-only.
--- That is the gap diffview fills, and it is the reason for the one new plugin.
---
--- ── WHY `<Leader>gd` MOVED ──────────────────────────────────────────────────
---
--- It was gitsigns' `diffthis` -- this buffer against the index, in a split.
--- diffview does that and the other four things you wanted from it, under the
--- same name, so `gd` now opens the review view. `:Gitsigns diffthis` still
--- works if you ever want the narrow version.
---
--- The override has to happen inside gitsigns' `on_attach`, not next to the
--- other mappings: gitsigns sets its keys BUFFER-LOCALLY, and a buffer-local
--- mapping beats a global one every time. Setting `<Leader>gd` globally would
--- work everywhere except in a git file, which is the only place it matters.
---
--- ── REVERTING, AND WHY IT IS NOT `<Leader>gr` UNDERNEATH ────────────────────
---
--- `<Leader>gr` reverts a hunk inside the diff too, so the key means the same
--- thing there as it does in the gutter -- but it is NOT gitsigns' `reset_hunk`
--- in that window, and it cannot be. gitsigns always resets to the INDEX, while
--- the diff view may be showing you `main` or `HEAD~3`. Underneath it is Vim's
--- own `do`/`dp`, which revert to whatever is actually in the other pane; that
--- is the only answer that is right in every case. See `revert_hunk`.
---
--- Reverts are deliberately NOT written here. `user.diff_review` protects every
--- worktree buffer until q asks whether the whole review should be saved or
--- discarded.
-
 ---@param msg string
 ---@param level? integer
 local function notify(msg, level) require("astrocore").notify(msg, level or vim.log.levels.WARN, { title = "Git" }) end
 
---- Is this buffer the actual file on disk, as opposed to a rendering of some
---- revision of it?
----
---- Not `modifiable` -- MEASURED, and this is the whole reason `revert_hunk` is
---- more than three lines: diffview leaves its `diffview://.../:0:/foo.lua`
---- buffers modifiable with an empty `buftype`, so a naive "am I allowed to edit
---- here" check says yes in the pane showing the OLD version, `do` cheerfully
---- rewrites history-in-a-buffer, and the write that follows aims at a path with
---- a `://` in it. The scheme in the name is what actually distinguishes them --
---- `user/lsp_file_events.lua` sorts fugitive and remote buffers out the same
---- way.
 ---@param buf integer
 ---@return boolean
 local function is_worktree_buf(buf)
@@ -63,11 +9,6 @@ local function is_worktree_buf(buf)
   return vim.bo[buf].buftype == "" and name ~= "" and not name:find("://", 1, true)
 end
 
---- The buffer a revert should land in, and whether the cursor is already in it.
----
---- In a working-tree diff exactly one of the two panes is the file on disk;
---- everything else in the tabpage is a rendering of some revision. A revert
---- always changes that one buffer, whichever side you happen to be reading.
 ---@return integer? target, boolean from_worktree
 local function diff_target()
   local here = vim.api.nvim_get_current_buf()
@@ -78,12 +19,6 @@ local function diff_target()
   end
 end
 
----Run one of the `diffget`/`diffput` pair in the protected review buffer.
----
---- Which of the two depends on where the cursor is, and they are mirror
---- images: `get` pulls the old text into your file, `put` pushes it there. So
---- the caller says what to revert and this says which direction that is from
---- here -- the key never has to be "wrong window, move over and try again".
 ---@param worktree_cmd string what to run when the cursor is in your file
 ---@param other_cmd string what to run when it is in the old version
 ---@param what string what "nothing happened" should say you were aiming at
@@ -109,14 +44,6 @@ end
 --- `do` and `dp` are Vim's own hunk-sized pair: "diff obtain" and "diff put".
 local function revert_hunk() apply_revert("normal! do", "normal! dp", "change under the cursor") end
 
---- Revert exactly these lines of the change, rather than all of it.
----
---- The case this exists for is a large DELETION you want back a line at a
---- time. That only works from the left pane, and not by accident: lines you
---- deleted do not exist in your file, so there is nothing there to put a range
---- around -- diff mode draws them as filler, which is a picture, not text. In
---- the old-version pane they are real lines with real numbers, and
---- `:{range}diffput` inserts them back one at a time.
 ---@param first integer
 ---@param last integer
 local function revert_lines(first, last)
@@ -130,12 +57,6 @@ local function revert_line()
   revert_lines(lnum, lnum)
 end
 
----`u`: take back the last review edit -- from either pane.
----
---- Plain `u` would half-work. It undoes the buffer you are standing in, and a
---- revert always lands in the worktree one however you triggered it, so from
---- the left pane you would be undoing a rendering of an old commit and your
---- file would keep the change.
 local function undo_revert()
   local target = diff_target()
   if not target then return notify "Nothing editable in this diff -- both sides are old revisions" end
@@ -166,17 +87,6 @@ local function revert_selection()
   revert_lines(first, last)
 end
 
---- Say which pane is which, in the window bar.
----
---- A two-pane diff is only readable once you know which side is yours, and
---- there is nothing on screen that says so -- both panes hold your file's
---- text and both look editable. diffview can label them (`winbar_info`), but
---- in git's vocabulary: `INDEX - a1b2c3d4:foo.lua`. This says the same thing
---- in yours, coloured like the diff itself: green is the file you are
---- working on, red is the version it is being measured against.
----
---- `diff_buf_win_enter` is diffview's supported hook for this and fires once
---- per pane as an entry opens.
 ---@param bufnr integer
 ---@param winid integer
 ---@param ctx { symbol: string, layout_name: string }
@@ -194,22 +104,6 @@ local function label_pane(bufnr, winid, ctx)
   vim.wo[winid].winbar = ("%%#%s# %s "):format(hl, text)
 end
 
---- Make `q` work when the diff has nothing left to show.
----
---- Revert the last change in a review and the view empties: diffview loads a
---- shared scratch buffer, `diffview://null`, into both panes. That buffer
---- never receives the `view` keymaps -- MEASURED, and it is a bug upstream
---- rather than a setting. `File.load_null_buffer` calls `attach_buffer()` with
---- no arguments, and the keymap loop inside it is guarded by
---- `force or new_opt or not cur_state` where `cur_state` is
---- `File.attached[bufnr] or {}`: the fallback makes `not cur_state` false
---- forever, so with no `force` and no `opt` nothing is ever bound.
---- (diffview.nvim 4516612.)
----
---- The result is a blank window where `q` is Vim's start-recording-a-macro
---- again -- it consumes the keypress and does nothing visible, which reads
---- exactly like a freeze. Binding it back is the whole fix; the window bar
---- says what happened, since an empty view otherwise shows you nothing at all.
 ---@param buf integer
 local function dress_empty_view(buf)
   vim.keymap.set("n", "q", "<Cmd>DiffviewClose<CR>", {
@@ -225,11 +119,6 @@ local function dress_empty_view(buf)
   end
 end
 
---- Put the cursor on the first (or last) change in the file just opened.
----
---- `]c` from line 1 of a file whose line 1 is already changed jumps PAST it, so
---- stepping into a new file would silently skip its opening change. `diff_hlID`
---- is the check for "is this line part of a change", and answers it directly.
 ---@param reverse boolean
 local function goto_edge_change(reverse)
   vim.cmd("normal! " .. (reverse and "G" or "gg"))
@@ -237,23 +126,6 @@ local function goto_edge_change(reverse)
   if vim.fn.diff_hlID(lnum, 1) == 0 then pcall(vim.cmd, "normal! " .. (reverse and "[c" or "]c")) end
 end
 
---- Next / previous change, rolling over into the next file at the ends.
----
---- Bound to `n` and `N` -- one key, because a review of a real changeset is
---- hundreds of these presses and `æc` is three. Walking the changes IS the
---- next-thing key in a diff, which is what `n` means everywhere else.
----
---- The cost is search-repeat, and only inside this window: `/foo<CR>` still
---- finds the first match, `/<CR>` repeats it forwards and `g?<CR>` backwards
---- (`?` is the cheatsheet in this config -- see `danish-keys.lua`). The
---- mapping is buffer-local and normal-mode only, so `n` is untouched
---- everywhere else and `dn` still works here.
----
---- `]c`/`[c` -- and therefore `æc`/`øc` -- keep doing the same thing.
----
---- Plain `]c` stops at the end of the file and says nothing, which in a review
---- of eleven files means eleven manual `<Tab>`s. This is Rider's F7: one key
---- that walks every change in the changeset in order.
 ---@param reverse boolean
 ---@return function
 local function nav_change(reverse)
@@ -342,17 +214,7 @@ return {
             { "n", "R", revert_file, { desc = "Revert this file (pending)" } },
             { "n", "<Leader>gr", revert_hunk, { desc = "Revert this change" } },
             { "x", "<Leader>gr", revert_selection, { desc = "Revert the selected lines" } },
-            -- `gl` is gitsigns' blame-this-line everywhere else, and is taken
-            -- over here on purpose: in a diff of uncommitted work the left pane
-            -- IS the commit you would be blaming against, so blame has nothing
-            -- to say, while "just this one line of the block I deleted" is the
-            -- thing you actually reach for.
             { "n", "<Leader>gl", revert_line, { desc = "Revert this line only" } },
-            -- The whole file, from inside the diff. Diffview's normal `X` in
-            -- the panel writes immediately, so it is blocked below; R uses the
-            -- same in-memory transaction as r. The leader aliases preserve the
-            -- lower/upper scope convention from gitsigns (`gr` hunk / `gR`
-            -- buffer).
             { "n", "<Leader>gR", revert_file, { desc = "Revert the whole file (pending)" } },
           },
           file_panel = {
@@ -385,13 +247,8 @@ return {
         return function() require("user.git_stash")[fn](unpack(args)) end
       end
 
-      -- ── Diff ────────────────────────────────────────────────────────────
       maps.n["<Leader>gd"] = { "<Cmd>DiffviewOpen<CR>", desc = "Diff all changes" }
 
-      -- Against another branch. Plain `DiffviewOpen <ref>` compares your
-      -- working tree with that ref as it is now; `<ref>...HEAD` (typed by hand)
-      -- is the other useful question -- only what YOU changed since the two
-      -- branches parted.
       maps.n["<Leader>gD"] = {
         function()
           require("snacks").picker.git_branches {
@@ -420,7 +277,6 @@ return {
       }
       maps.n["<Leader>gH"] = { "<Cmd>DiffviewFileHistory<CR>", desc = "History of the repository" }
 
-      -- ── Stash ───────────────────────────────────────────────────────────
       -- Lower/upper is scope, the same way gitsigns' `gr`/`gR` and `gs`/`gS`
       -- already read in this config: the capital takes more with it.
       maps.n["<Leader>gz"] = { stash "push", desc = "Stash changes" }

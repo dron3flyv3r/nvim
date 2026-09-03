@@ -1,25 +1,3 @@
--- Making `<Leader>x` (the quickfix list) actually useful.
---
--- WHY `<Leader>xq` LOOKED BROKEN -- two separate reasons:
---
---   1. `uv.nvim` defaults its keymap prefix to `<Leader>x`, the same prefix
---      AstroNvim uses for the quickfix list. That is fixed in `uv.lua`, which
---      moves uv to `<Leader>v`.
---
---   2. `<Leader>xq` runs `:copen`, which opens the quickfix list -- and the
---      quickfix list starts *empty*. It is not a diagnostics view. Something
---      has to put results in it first: `:grep`, `:make`, a picker sent to
---      quickfix, or `vim.diagnostic.setqflist()`. Opening it before then
---      correctly shows nothing.
---
--- So `<Leader>xd` below fills it from the diagnostics you can already see.
--- That gives the "list every problem, walk them one at a time" workflow, with
--- `]q` / `[q` (or `æq` / `øq`) to step through.
---
--- NOTE: VS Code's "Quick Fix" (the lightbulb, Ctrl+.) is NOT this. That is a
--- code action, and it is `<Leader>la`. The `help: Organize imports` and
--- `help: Replace with ...` hints in the virtual text are code actions waiting
--- for `<Leader>la`.
 ---@type LazySpec
 return {
   "AstroNvim/astrocore",
@@ -51,13 +29,6 @@ return {
 
     maps.n["<Leader>xc"] = { "<Cmd>cclose | lclose<CR>", desc = "Close quickfix/location list" }
 
-    -- `<Leader>la` is the real "Quick Fix". Mirror it here for muscle memory
-    -- arriving from VS Code, where it lives on Ctrl+`.`.
-    --
-    -- Wrapped in `user.quick_fix` rather than calling `vim.lsp.buf.code_action`
-    -- directly, because in a C++ buffer the bare call only answers when the
-    -- cursor is within a few columns of the right token -- see that file for
-    -- the measurement and the fallback it adds.
     local code_action = require("user.quick_fix").code_action(vim.lsp.buf.code_action)
     maps.n["<Leader>xa"] = { code_action, desc = "Quick Fix (code action)" }
     maps.x["<Leader>xa"] = { code_action, desc = "Quick Fix (code action)" }

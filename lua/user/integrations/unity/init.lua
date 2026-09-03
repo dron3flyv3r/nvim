@@ -1,18 +1,3 @@
--- Recognising a Unity project, and finding the pieces of it that everything
--- else in the Unity support needs: the root, the solution, the editor version.
---
--- WHY THIS IS NOT `vim.fs.root`: a Unity project has no single marker file.
--- `Assets/` alone is not enough (asset pipelines, Godot projects and half the
--- game jams on disk have one) and `.sln` is worse -- see `solution()` below for
--- what a real project's root looks like. The pair that actually means "Unity"
--- is `Assets/` next to `ProjectSettings/ProjectVersion.txt`, because
--- ProjectVersion.txt is written by the editor itself and by nothing else.
---
--- Everything here is a pure lookup with no side effects, so it is safe to call
--- from an autocmd on every `BufEnter`. The results are cached per directory:
--- walking to the filesystem root and `stat`-ing two paths at each level is
--- cheap, but not cheap enough to do on every keystroke-adjacent event.
-
 local M = {}
 
 --- `dir` -> project root, or `false` for "walked to `/`, found nothing".
@@ -70,11 +55,6 @@ function M.root(start)
   return found
 end
 
---- `M.root`, or a notification and nil.
----
---- Every user-facing command in the Unity support starts with this: they are
---- all no-ops outside a project and the reason needs saying out loud, because
---- "nothing happened" is otherwise indistinguishable from a broken keymap.
 ---@return string|nil root
 function M.require_root()
   local root = M.root()
@@ -104,11 +84,6 @@ function M.editor_version(root)
   end
 end
 
---- The Unity binary that matches the project's version.
----
---- Hub installs land in `~/Unity/Hub/Editor/<version>/Editor/Unity` by default;
---- `$UNITY_EDITOR` overrides for anything else (a manual install, a second Hub
---- root, a version you are testing against).
 ---@param root string
 ---@return string|nil exe
 ---@return string|nil version
@@ -128,25 +103,6 @@ function M.editor_exe(root)
   return nil, version
 end
 
---- The solution file a language server should be told to open.
----
---- WHY THIS IS NOT "the first .sln in the root": a Unity project root
---- accumulates them. A real example from this machine, `~/git/display_master`:
----
----     display_master.sln   <- the current one, named after the project folder
----     display.sln          <- stale, from before the folder was renamed
----     GodotDisplay.sln     <- a different engine's project entirely
----
---- `nvim-lspconfig`'s `roslyn_ls` config takes whichever one `vim.fs.dir`
---- yields first, which is arbitrary. Loading `GodotDisplay.sln` gives you a
---- server that has never heard of `UnityEngine`, and the symptom is not an
---- error -- it is completion that silently only knows about `System`.
----
---- Unity names the solution after the project directory, so that is the first
---- guess. Failing that (a folder renamed since the last project regeneration),
---- look for the one that references `Assembly-CSharp.csproj` -- the assembly
---- Unity generates for loose scripts under `Assets/`, which no non-Unity
---- solution has.
 ---@param root string
 ---@return string|nil
 function M.solution(root)

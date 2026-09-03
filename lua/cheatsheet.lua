@@ -6,79 +6,120 @@ local NS = vim.api.nvim_create_namespace "user_cheatsheet"
 local win
 
 local STATIC = {
-  { "CONTEXT", {
-    { "<Leader>ra", "all actions valid here" },
-    { "<Leader>rr / rl", "run current context / repeat last run" },
-    { "<Leader>rt / rd", "test / debug current context" },
-    { "<Leader>rb", "build or refresh current context" },
-    { "<Leader>ro / rk", "show output / stop execution" },
-    { ":ContextStatus", "explain detected providers and missing tools" },
-  } },
-  { "DANISH ALIASES", {
-    { "ø / æ", "[ / ] prefixes" }, { "Ø / Æ", "{ / } motions" },
-    { "å / Å", "$ / ^ motions" }, { "æb / øb", "next / previous buffer" },
-    { "æd / ød", "next / previous diagnostic" }, { "æq / øq", "next / previous quickfix item" },
-  } },
-  { "CUSTOM SURFACES", {
-    { "<F1>", "this help" }, { "<Leader>ff / fw", "find files / search project" },
-    { "<Leader>xx / xX", "workspace / buffer diagnostics" }, { "<Leader>gd", "review repository diff" },
-    { "<Leader>sm / sw", "zoom split / pick window" }, { "<Leader>T…", "tab-page operations" },
-    { "<Leader>a…", "AI tools" }, { "<F7>", "toggle terminal" },
-    { "<Leader>uW", "toggle leave/focus autosave" },
-  } },
-  { "COLLABORATION", {
-    { "<Leader>Ch / Cj", "host this project / join with invitation code" },
-    { "<Leader>Cy", "copy the active invitation code" },
-    { "<Leader>Cp / Cf", "jump to / follow a peer cursor" },
-    { "<Leader>Cs / Ci", "stop sharing / connection information" },
-    { "<Leader>Cl", "Teamtype daemon log" },
-  } },
-  { "READING ERRORS & DOCS", {
-    { "gl / <Leader>ld", "full error on this line; press again to focus and scroll" },
-    { "<Leader>xx / xX", "browse project / current-buffer diagnostics with preview" },
-    { "æd / ød", "next / previous diagnostic" },
-    { "K", "documentation for symbol under cursor; press again to focus" },
-    { "q", "close a focused error or documentation popup" },
-  } },
-  { "AI EXPLANATIONS", {
-    { "<Leader>ae", "explain current line or visual selection" },
-    { "<Leader>aE", "teach current line or selection in depth" },
-    { "<Leader>at", "open the last explanation as a conversation" },
-    { "q / <Esc>", "close the explanation popup; the conversation is retained" },
-  } },
-  { "NATIVE FIRST", {
-    { "?", "backward search (unchanged)" }, { "<C-o> / <C-i>", "jumplist back / forward" },
-    { "[b / ]b", "previous / next buffer" }, { "grn / gra", "LSP rename / code action" },
-    { ":Tutor", "interactive Neovim fundamentals" }, { ":help <topic>", "the complete reference" },
-  } },
-  { "REPEATED EDITS (NO MULTICURSOR)", {
-    { ".", "repeat the last change" },
-    { "n. / N.", "next / previous match, then repeat change" },
-    { "* / #", "search word under cursor forward / backward" },
-    { "cgn{text}<Esc>", "change the next search match; press . for the rest" },
-    { "<C-v> … I/A", "block-select columns; insert/append on every selected line" },
-    { ":%s/old/new/gc", "replace throughout buffer, confirming each match" },
-    { ":'<,'>normal .", "repeat last change on every visually selected line" },
-  } },
-  { "MACROS", {
-    { "qa … q", "record keystrokes into register a; q stops recording" },
-    { "@a / @@", "play macro a / replay the last macro" },
-    { "10@a", "play macro a ten times" },
-    { "qA … q", "append more keystrokes to macro a" },
-    { ":reg a", "inspect register a and its recorded macro" },
-    { ":'<,'>normal @a", "run macro a once on every selected line" },
-    { ":g/pattern/normal @a", "run macro a on every matching line" },
-  } },
-  { "ADVANCED NATIVE TOOLS", {
-    { "operator + motion", "compose edits: d/c/y with w, %, }, ], f{char}, etc." },
-    { "ciw / ci\" / da{", "change word / quoted text; delete around braces" },
-    { "vi{ / va{", "select inside / around braces" },
-    { "ma / `a / 'a", "set mark a; jump exactly / jump to its line" },
-    { "q: / q/", "edit command history / search history as normal buffers" },
-    { ":cdo {cmd} | update", "apply a command to every quickfix entry" },
-    { ":argdo {cmd} | update", "apply a command to every argument-list file" },
-    { ":help repeat.txt", "reference for ., macros, substitutions and :global" },
-  } },
+  {
+    "PROJECT ACTIONS",
+    {
+      { "<Leader>ra", "actions valid in this project" },
+      { "<Leader>Up / Us / Ur", "Unity play / stop / restart" },
+      { "<Leader>Ub / Ut / Ua", "Unity refresh / test / attach" },
+      { "<Leader>Ue / Uw / Ul", "Unity errors / warnings / log" },
+      { "<Leader>Rr / Rt / Rd", "Rust run / test / debug" },
+      { "<Leader>Rb / Re / Rx", "Rust build / explain / expand macro" },
+      { ":ContextStatus", "explain detected providers and missing tools" },
+    },
+  },
+  {
+    "DANISH ALIASES",
+    {
+      { "ø / æ", "[ / ] prefixes" },
+      { "Ø / Æ", "{ / } motions" },
+      { "å / Å", "$ / ^ motions" },
+      { "æb / øb", "next / previous buffer" },
+      { "æd / ød", "next / previous diagnostic" },
+      { "æq / øq", "next / previous quickfix item" },
+    },
+  },
+  {
+    "CUSTOM SURFACES",
+    {
+      { "<F1>", "this help" },
+      { "<Leader>ff / fw", "find files / search project" },
+      { "<Leader>xx / xX", "workspace / buffer diagnostics" },
+      { "<Leader>gd", "review repository diff" },
+      { "<Leader>sm / sw", "zoom split / pick window" },
+      { "<Leader>T…", "tab-page operations" },
+      { "<Leader>a…", "AI tools" },
+      { "<F7>", "toggle terminal" },
+      { "<Leader>uW", "toggle leave/focus autosave" },
+    },
+  },
+  {
+    "COLLABORATION",
+    {
+      { "<Leader>Ch / Cj", "host this project / join with invitation code" },
+      { "<Leader>Cy", "copy the active invitation code" },
+      { "<Leader>Cp / Cf", "jump to / follow a peer cursor" },
+      { "<Leader>Cs / Ci", "stop sharing / connection information" },
+      { "<Leader>Cl", "Teamtype daemon log" },
+    },
+  },
+  {
+    "READING ERRORS & DOCS",
+    {
+      { "gl / <Leader>ld", "full error on this line; press again to focus and scroll" },
+      { "<Leader>xx / xX", "browse project / current-buffer diagnostics with preview" },
+      { "æd / ød", "next / previous diagnostic" },
+      { "K", "documentation for symbol under cursor; press again to focus" },
+      { "q", "close a focused error or documentation popup" },
+    },
+  },
+  {
+    "AI EXPLANATIONS",
+    {
+      { "<Leader>ae", "explain current line or visual selection" },
+      { "<Leader>aE", "teach current line or selection in depth" },
+      { "<Leader>at", "open the last explanation as a conversation" },
+      { "q / <Esc>", "close the explanation popup; the conversation is retained" },
+    },
+  },
+  {
+    "NATIVE FIRST",
+    {
+      { "?", "backward search (unchanged)" },
+      { "<C-o> / <C-i>", "jumplist back / forward" },
+      { "[b / ]b", "previous / next buffer" },
+      { "grn / gra", "LSP rename / code action" },
+      { ":Tutor", "interactive Neovim fundamentals" },
+      { ":help <topic>", "the complete reference" },
+    },
+  },
+  {
+    "REPEATED EDITS (NO MULTICURSOR)",
+    {
+      { ".", "repeat the last change" },
+      { "n. / N.", "next / previous match, then repeat change" },
+      { "* / #", "search word under cursor forward / backward" },
+      { "cgn{text}<Esc>", "change the next search match; press . for the rest" },
+      { "<C-v> … I/A", "block-select columns; insert/append on every selected line" },
+      { ":%s/old/new/gc", "replace throughout buffer, confirming each match" },
+      { ":'<,'>normal .", "repeat last change on every visually selected line" },
+    },
+  },
+  {
+    "MACROS",
+    {
+      { "qa … q", "record keystrokes into register a; q stops recording" },
+      { "@a / @@", "play macro a / replay the last macro" },
+      { "10@a", "play macro a ten times" },
+      { "qA … q", "append more keystrokes to macro a" },
+      { ":reg a", "inspect register a and its recorded macro" },
+      { ":'<,'>normal @a", "run macro a once on every selected line" },
+      { ":g/pattern/normal @a", "run macro a on every matching line" },
+    },
+  },
+  {
+    "ADVANCED NATIVE TOOLS",
+    {
+      { "operator + motion", "compose edits: d/c/y with w, %, }, ], f{char}, etc." },
+      { 'ciw / ci" / da{', "change word / quoted text; delete around braces" },
+      { "vi{ / va{", "select inside / around braces" },
+      { "ma / `a / 'a", "set mark a; jump exactly / jump to its line" },
+      { "q: / q/", "edit command history / search history as normal buffers" },
+      { ":cdo {cmd} | update", "apply a command to every quickfix entry" },
+      { ":argdo {cmd} | update", "apply a command to every argument-list file" },
+      { ":help repeat.txt", "reference for ., macros, substitutions and :global" },
+    },
+  },
 }
 
 local function lines()
@@ -124,10 +165,15 @@ function M.open()
   local width = math.min(94, math.max(58, vim.o.columns - 8))
   local height = math.min(#content, math.floor(vim.o.lines * 0.85))
   win = vim.api.nvim_open_win(buf, true, {
-    relative = "editor", width = width, height = height,
+    relative = "editor",
+    width = width,
+    height = height,
     row = math.floor((vim.o.lines - height) / 2) - 1,
     col = math.floor((vim.o.columns - width) / 2),
-    style = "minimal", border = "rounded", title = " Config help ", title_pos = "center",
+    style = "minimal",
+    border = "rounded",
+    title = " Config help ",
+    title_pos = "center",
   })
   vim.wo[win].wrap = false
   vim.wo[win].cursorline = true
@@ -138,7 +184,10 @@ function M.open()
   for _, key in ipairs { "q", "<Esc>", "<F1>" } do
     vim.keymap.set("n", key, M.close, { buffer = buf, nowait = true })
   end
-  vim.api.nvim_create_autocmd("WinClosed", { pattern = tostring(win), once = true, callback = function() win = nil end })
+  vim.api.nvim_create_autocmd(
+    "WinClosed",
+    { pattern = tostring(win), once = true, callback = function() win = nil end }
+  )
 end
 
 return M

@@ -10,13 +10,33 @@ end
 function M.actions()
   local tasks = require "user.workbench.tasks"
   return {
-    { id = "tasks.run", label = "Choose project task", category = "Run", verb = "run", run = tasks.run_picker, repeat_action = tasks.rerun_last },
-    { id = "tasks.output", label = "Show last task output", category = "Tasks", verb = "output", run = function() tasks.focus_output(false) end },
-    { id = "tasks.output_input", label = "Focus task output for input", category = "Tasks", run = function() tasks.focus_output(true) end },
-    { id = "tasks.stop", label = "Stop active task", category = "Tasks", verb = "stop", run = tasks.stop },
-    { id = "tasks.stop_all", label = "Stop all running and queued tasks", category = "Maintenance", run = tasks.stop_all },
+    { id = "tasks.run", label = "Choose project task", category = "Run", run = tasks.run_picker },
+    {
+      id = "tasks.output",
+      label = "Show last task output",
+      category = "Tasks",
+      run = function() tasks.focus_output(false) end,
+    },
+    {
+      id = "tasks.output_input",
+      label = "Focus task output for input",
+      category = "Tasks",
+      run = function() tasks.focus_output(true) end,
+    },
+    { id = "tasks.stop", label = "Stop active task", category = "Tasks", run = tasks.stop },
+    {
+      id = "tasks.stop_all",
+      label = "Stop all running and queued tasks",
+      category = "Maintenance",
+      run = tasks.stop_all,
+    },
     { id = "tasks.queue", label = "Queue project task", category = "Tasks", run = tasks.queue },
-    { id = "tasks.list", label = "Toggle task list", category = "Tasks", run = function() vim.cmd "OverseerToggle" end },
+    {
+      id = "tasks.list",
+      label = "Toggle task list",
+      category = "Tasks",
+      run = function() vim.cmd "OverseerToggle" end,
+    },
     { id = "tasks.shell", label = "Run shell command", category = "Run", run = function() vim.cmd "OverseerShell" end },
   }
 end

@@ -1,24 +1,3 @@
--- The window a task's output is shown in: one full-width strip along the
--- bottom, reused by every task that runs.
---
--- WHY NOT OVERSEER'S `dock`, which is what `<Leader>r` used before: the dock
--- splits the bottom strip in two, task list on the left and output on the
--- right. The list is not a thin gutter -- overseer floors it at
--- `min_width = { 40, 0.1 }` and then settles on the midpoint of min and max, so
--- it takes 40-odd columns on any screen and the output gets whatever is left.
--- For a run you are actually watching that is the wrong trade: a tqdm bar, a
--- traceback, a table of metrics all want width, while the list is spending it
--- on one line per task whose contents you already know. So the output takes the
--- whole strip, and the task list remains available on demand.
---
--- WHY NOT `direction = "horizontal"` on overseer's own `open_output`: it runs a
--- plain `:split` from wherever the cursor happens to be, so the output lands
--- mid-layout at half the height of the window you were in -- and every task
--- start stacks another one. This module keeps exactly one pane, always at the
--- bottom, always full width.
---
--- Used by the `user_output_pane` component (which opens it when a task starts)
--- and by the contextual task output actions.
 local M = {}
 
 --- How tall the strip is, in lines.
@@ -34,18 +13,6 @@ local WIN_OPTS = {
   -- one more column of disagreement between the window and the pty.
   foldcolumn = "0",
 
-  -- THE ONE THAT BIT US. AstroNvim runs `wrap = false` with
-  -- `sidescrolloff = 8` (`lua/plugins/astrocore.lua`), and overseer tails
-  -- output by parking the cursor at the END of the last line. A terminal line
-  -- is exactly as wide as the grid, so keeping 8 columns of context to the
-  -- right of that cursor scrolls the whole view sideways -- and the first
-  -- seven or eight columns of every line disappear off the left edge. A tqdm
-  -- bar loses its `100%|` and the process's exit line reads `s exited 0]`.
-  --
-  -- A terminal grid can never produce a line wider than the window it is drawn
-  -- in, so wrapping costs nothing here and removes horizontal scrolling
-  -- outright. `sidescrolloff` goes to 0 as well, for the moment after a resize
-  -- when lines drawn at the old width are still longer than the new one.
   wrap = true,
   sidescrolloff = 0,
 
@@ -57,10 +24,6 @@ local WIN_OPTS = {
   spell = false,
 }
 
---- Overseer tags every output buffer with the id of the task it belongs to,
---- which is the only reliable way to recognise one: it is a scratch terminal
---- buffer with no name and no distinguishing filetype until `Task:start()` sets
---- one, and this has to work before that point.
 ---@param bufnr integer
 ---@return boolean
 local function is_output_buf(bufnr) return vim.b[bufnr].overseer_task ~= nil end
@@ -90,10 +53,6 @@ function M.open(task, opts)
   local win = M.get_win()
   if not win then
     local return_to = vim.api.nvim_get_current_win()
-    -- Splitting from a floating window splits the float. A task can start with
-    -- one focused -- overseer's own parameter form, or a picker that has not
-    -- finished closing -- so step out to a normal window first. (Overseer
-    -- guards its terminal creation the same way, for the same reason.)
     if vim.api.nvim_win_get_config(0).relative ~= "" then
       for _, candidate in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
         if vim.api.nvim_win_get_config(candidate).relative == "" then
@@ -117,13 +76,6 @@ function M.open(task, opts)
     vim.api.nvim_set_option_value(opt, value, { scope = "local", win = win })
   end
 
-  -- Neovim sizes the terminal grid from the window, but only re-measures when
-  -- the WINDOW's size changes. Clearing 'number', 'signcolumn' and
-  -- 'foldcolumn' just now widened the text area by seven columns without
-  -- telling the terminal, so the grid would sit seven columns narrower than
-  -- the window it is drawn in -- and since `user.task_pty` sizes the pty to
-  -- the window, that is a progress bar wrapping again. A one-line nudge forces
-  -- the re-measure, and then grid, window and pty all agree.
   local height = vim.api.nvim_win_get_height(win)
   vim.api.nvim_win_set_height(win, height - 1)
   vim.api.nvim_win_set_height(win, height)
