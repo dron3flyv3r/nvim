@@ -11,6 +11,7 @@ function M.actions()
   local tasks = require "user.workbench.tasks"
   return {
     { id = "tasks.run", label = "Choose project task", category = "Run", run = tasks.run_picker },
+    { id = "tasks.repeat", label = "Repeat last task", category = "Run", run = tasks.rerun_last },
     {
       id = "tasks.output",
       label = "Show last task output",

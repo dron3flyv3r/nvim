@@ -7,25 +7,28 @@ tool integrations; they do not introduce a second editor model.
 
 ## Development actions
 
-Frequent Unity actions live under `<Leader>U`, and Rust actions under
-`<Leader>R`. `<Leader>ra` is the fallback picker for less frequent operations
-valid in the current project, including notebooks, CMake, Cargo manifests, and
-Unity maintenance actions. New integrations such as Godot can join that picker
-without requiring another universal run/test/debug abstraction.
+`<Leader>r` is the contextual entry point for operations valid in the current
+project, including run, test, build, notebooks, Cargo dependencies, CMake, and
+Unity maintenance. Language-specific engines contribute actions without
+claiming their own global key namespace. Native LSP keys remain the direct path
+for code intelligence.
 
 | Key | Meaning |
 | --- | --- |
-| `<Leader>ra` | actions valid in the current project |
+| `<Leader>r` | actions valid in the current project |
 | `<Leader>n…` | personal project notes (outside the repository) |
 | `<Leader>d…` | active debug-session controls and breakpoints |
 | `<Leader>ar…` | Claude review and investigation prompts |
 | `<Leader>gb/gB/gh` | toggle blame, inspect blame, line history |
+| `gra` | LSP code action, including unresolved Rust dependencies |
+| `K` / `gl` | hover documentation / diagnostic details |
 | `<Leader>Up/Us/Ur` | enter, stop, or restart Unity Play mode |
 | `<Leader>Ub/Ut/Ua` | refresh Unity, test at cursor, or attach debugger |
 | `<Leader>Ue/Uw/Ul` | Unity errors, warnings, or editor log |
-| `<Leader>Rr/Rt/Rd` | run, test, or debug the Rust cursor target |
-| `<Leader>Rb` | choose a Cargo build task |
-| `<Leader>Re/Rx/Ro` | explain error, expand macro, or open docs.rs |
+
+In a focused task-output pane, `h` hides the pane while leaving its task
+running; `q` stops that task and hides the pane. Reopen retained output from
+`<Leader>r` with **Show last task output**.
 
 Use `:ContextStatus` to see what was detected and `:checkhealth user` to check
 the assumptions owned by this configuration.
@@ -36,7 +39,7 @@ the assumptions owned by this configuration.
 `<Leader>no` and `<Leader>ns` open and search notes for the current project. Notes
 are stored under Neovim's data directory, never in the project repository.
 
-Open `.http` or `.rest` files to use HTTP actions from `<Leader>ra`. Kulala reads
+Open `.http` or `.rest` files to use HTTP actions from `<Leader>r`. Kulala reads
 JetBrains-compatible `http-client.env.json` environment files; keep local secrets
 in that file and exclude it through the repository's `.git/info/exclude`.
 

@@ -24,4 +24,4 @@ First run:
 1. Run `:NotebookBootstrap` and restart Neovim.
 2. Add `ipykernel` to the project environment.
 3. Run `:NotebookKernel` once for that project.
-4. Use `<Leader>ra` to choose the current-cell action.
+4. Use `<Leader>r` to choose the current-cell action.

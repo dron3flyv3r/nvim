@@ -28,6 +28,17 @@ local WIN_OPTS = {
 ---@return boolean
 local function is_output_buf(bufnr) return vim.b[bufnr].overseer_task ~= nil end
 
+---@param stop boolean
+local function close_output(stop)
+  local bufnr = vim.api.nvim_get_current_buf()
+  if stop then
+    local task = require("overseer.task_list").get(vim.b[bufnr].overseer_task)
+    local running = require("overseer.constants").STATUS.RUNNING
+    if task and task.status == running then task:stop() end
+  end
+  vim.cmd.close()
+end
+
 --- The output strip in this tab, if it is open.
 ---@return integer|nil winid
 function M.get_win()
@@ -83,9 +94,10 @@ function M.open(task, opts)
   -- Tail the output, the way the dock did.
   require("overseer.util").scroll_to_end(win)
 
-  -- `q` closes the strip, matching the task list's own `q`. Normal mode only,
-  -- so typing `q` at a prompt still goes to the process.
-  vim.keymap.set("n", "q", "<Cmd>close<CR>", { buffer = bufnr, desc = "Close task output" })
+  -- Normal mode owns pane controls; in Terminal mode both letters still go to
+  -- an interactive process as ordinary input.
+  vim.keymap.set("n", "h", function() close_output(false) end, { buffer = bufnr, desc = "Hide task output" })
+  vim.keymap.set("n", "q", function() close_output(true) end, { buffer = bufnr, desc = "Stop task and hide output" })
 
   if opts.enter then
     vim.api.nvim_set_current_win(win)

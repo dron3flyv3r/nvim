@@ -51,22 +51,27 @@ function M.code_action(present)
   return function()
     local bufnr, win = vim.api.nvim_get_current_buf(), vim.api.nvim_get_current_win()
 
-    -- Visual mode, or no server to ask: hand straight over. `present` does its
-    -- own "not supported" / "no actions" reporting, so the empty case still
-    -- says something.
-    local mode = vim.api.nvim_get_mode().mode
-    local clients = vim.lsp.get_clients { bufnr = bufnr, method = "textDocument/codeAction" }
-    if mode == "v" or mode == "V" or not next(clients) then return present {} end
+    local function lsp_action()
+      -- Visual mode, or no server to ask: hand straight over. `present` does its
+      -- own "not supported" / "no actions" reporting, so the empty case still
+      -- says something.
+      local mode = vim.api.nvim_get_mode().mode
+      local clients = vim.lsp.get_clients { bufnr = bufnr, method = "textDocument/codeAction" }
+      if mode == "v" or mode == "V" or not next(clients) then return present {} end
 
-    probe_cursor(bufnr, win, function(found)
-      if found then return present {} end
+      probe_cursor(bufnr, win, function(found)
+        if found then return present {} end
 
-      local lnum = vim.api.nvim_win_get_cursor(win)[1]
-      local text = vim.api.nvim_buf_get_lines(bufnr, lnum - 1, lnum, false)[1] or ""
-      -- `{row, col}` mark-indexed, i.e. 1-indexed row and a *byte* column;
-      -- `make_given_range_params` converts to the client's encoding for us.
-      present { range = { start = { lnum, 0 }, ["end"] = { lnum, #text } } }
-    end)
+        local lnum = vim.api.nvim_win_get_cursor(win)[1]
+        local text = vim.api.nvim_buf_get_lines(bufnr, lnum - 1, lnum, false)[1] or ""
+        -- `{row, col}` mark-indexed, i.e. 1-indexed row and a *byte* column;
+        -- `make_given_range_params` converts to the client's encoding for us.
+        present { range = { start = { lnum, 0 }, ["end"] = { lnum, #text } } }
+      end)
+    end
+
+    local dependencies = require "user.languages.rust.dependencies"
+    if not dependencies.offer_quick_fix(lsp_action) then lsp_action() end
   end
 end
 

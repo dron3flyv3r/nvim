@@ -46,7 +46,15 @@ function M.actions(ctx)
     }
   end
   local tasks = require "user.workbench.tasks"
+  local dependencies = require "user.languages.rust.dependencies"
   return {
+    {
+      id = "rust.search_crates",
+      label = "Search and add a crate",
+      category = "Crates",
+      run = function() dependencies.search() end,
+    },
+    { id = "rust.features", label = "Browse dependency features", category = "Crates", run = dependencies.features },
     { id = "rust.run", label = "Run cursor target", category = "Run", run = command "RustLsp runnables" },
     { id = "rust.test", label = "Test cursor target", category = "Run", run = command "RustLsp testables" },
     { id = "rust.debug", label = "Debug cursor target", category = "Run", run = command "RustLsp debuggables" },

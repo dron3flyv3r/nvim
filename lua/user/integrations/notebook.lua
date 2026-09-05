@@ -96,7 +96,7 @@ function M.with_kernel(fn)
   local kernels = available_kernels()
   if vim.tbl_isempty(kernels) then
     vim.notify(
-      "No Jupyter kernels installed -- <Leader>ra can register this project's venv",
+      "No Jupyter kernels installed -- <Leader>r can register this project's venv",
       vim.log.levels.WARN,
       { title = "Notebook" }
     )
@@ -145,7 +145,7 @@ function M.register_kernel()
     vim.schedule(function()
       if out.code == 0 then
         vim.notify(
-          ("Kernel `%s` registered -- run a cell from <Leader>ra"):format(name),
+          ("Kernel `%s` registered -- run a cell from <Leader>r"):format(name),
           vim.log.levels.INFO,
           { title = "Notebook" }
         )
@@ -247,7 +247,7 @@ function M.bootstrap()
         vim.g.python3_host_prog = M.host_python()
         vim.cmd "UpdateRemotePlugins"
         vim.notify(
-          "Molten host ready. Restart Neovim, then use <Leader>ra in a project.",
+          "Molten host ready. Restart Neovim, then use <Leader>r in a project.",
           vim.log.levels.INFO,
           { title = "Notebook" }
         )

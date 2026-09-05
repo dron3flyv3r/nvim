@@ -1,5 +1,5 @@
 -- Project execution is owned by Overseer. User-facing selection and control
--- live in the contextual action registry (`<Leader>ra`); this spec only keeps
+-- live in the contextual action registry (`<Leader>r`); this spec only keeps
 -- the shared task engine and its passive, full-width output surface configured.
 ---@type LazySpec
 return {

@@ -22,11 +22,7 @@ function M.run_picker() vim.cmd "OverseerRun" end
 function M.rerun_last()
   local tasks = M.started()
   if vim.tbl_isempty(tasks) then
-    vim.notify(
-      "No task has been run yet -- <Leader>ra lists runnable actions",
-      vim.log.levels.INFO,
-      { title = "Tasks" }
-    )
+    vim.notify("No task has been run yet -- <Leader>r lists runnable actions", vim.log.levels.INFO, { title = "Tasks" })
     return
   end
   require("overseer").run_action(tasks[1], "restart")

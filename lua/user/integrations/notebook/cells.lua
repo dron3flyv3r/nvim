@@ -46,7 +46,7 @@ end
 function M.goto_cell(dir)
   local starts = M.starts()
   if vim.tbl_isempty(starts) then
-    vim.notify("No `# %%` cells in this file -- <Leader>ra can add one", vim.log.levels.INFO, { title = "Notebook" })
+    vim.notify("No `# %%` cells in this file -- <Leader>r can add one", vim.log.levels.INFO, { title = "Notebook" })
     return
   end
 

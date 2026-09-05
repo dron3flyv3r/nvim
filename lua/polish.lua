@@ -30,6 +30,24 @@ return function()
     desc = "Move to end of current line",
   })
 
+  -- A completion placeholder should behave like an editable field. LuaSnip
+  -- normally uses Select mode for that, but if another mapping leaves the
+  -- field in Visual mode, a quote becomes Vim's register prefix instead of
+  -- replacing the field. Change the field first, then replay the quote in
+  -- Insert mode so nvim-autopairs can create its matching quote.
+  for _, quote in ipairs { '"', "'" } do
+    vim.keymap.set("x", quote, function()
+      if not luasnip.in_snippet() then return quote end
+      vim.schedule(function() vim.api.nvim_feedkeys(quote, "m", false) end)
+      return "c"
+    end, {
+      expr = true,
+      replace_keycodes = false,
+      silent = true,
+      desc = "Replace snippet field with a quoted value",
+    })
+  end
+
   require("luasnip.loaders.from_vscode").load {
     paths = { vim.fn.stdpath "config" .. "/snippets" },
   }

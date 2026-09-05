@@ -27,6 +27,8 @@ for _, name in ipairs {
   "ContextStatus",
   "NotebookBootstrap",
   "NotebookHealth",
+  "RustDependencyFeatures",
+  "RustDependencySearch",
   "TeamtypeHost",
   "TeamtypeJoin",
 } do
@@ -34,7 +36,7 @@ for _, name in ipairs {
 end
 
 for _, lhs in ipairs {
-  "<Leader>ra",
+  "<Leader>r",
   "<Leader>Up",
   "<Leader>Us",
   "<Leader>Ur",
@@ -48,9 +50,9 @@ for _, lhs in ipairs {
 end
 
 local rust_spec = table.concat(vim.fn.readfile "lua/plugins/rust-run.lua", "\n")
-for _, lhs in ipairs { "<Leader>Rr", "<Leader>Rt", "<Leader>Rd", "<Leader>Rb", "<Leader>Re", "<Leader>Ro" } do
-  check(rust_spec:find(lhs, 1, true) ~= nil, "missing Rust LSP mapping declaration " .. lhs)
-end
+check(not rust_spec:find("<Leader>R", 1, true), "Rust actions should use native keys or the contextual picker")
+local quickfix_spec = table.concat(vim.fn.readfile "lua/plugins/quickfix.lua", "\n")
+check(quickfix_spec:find('maps.n["gra"]', 1, true) ~= nil, "native gra must include the smart quick-fix wrapper")
 
 local lazy = require "lazy.core.config"
 check(lazy.plugins["codex.nvim"] == nil, "codex.nvim should not be registered")
@@ -73,4 +75,5 @@ check(#duplicates == 0, "duplicate local mappings:\n" .. table.concat(duplicates
 
 dofile "tests/notebook_cells_spec.lua"
 dofile "tests/inlay_hints_spec.lua"
+dofile "tests/rust_dependencies_spec.lua"
 print "CONFIG_SMOKE_OK"

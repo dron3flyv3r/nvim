@@ -9,12 +9,11 @@ local STATIC = {
   {
     "PROJECT ACTIONS",
     {
-      { "<Leader>ra", "actions valid in this project" },
+      { "<Leader>r", "actions valid in this project" },
       { "<Leader>Up / Us / Ur", "Unity play / stop / restart" },
       { "<Leader>Ub / Ut / Ua", "Unity refresh / test / attach" },
       { "<Leader>Ue / Uw / Ul", "Unity errors / warnings / log" },
-      { "<Leader>Rr / Rt / Rd", "Rust run / test / debug" },
-      { "<Leader>Rb / Re / Rx", "Rust build / explain / expand macro" },
+      { "h / q (task output)", "hide / stop and hide" },
       { ":ContextStatus", "explain detected providers and missing tools" },
     },
   },
@@ -79,7 +78,7 @@ local STATIC = {
       { "?", "backward search (unchanged)" },
       { "<C-o> / <C-i>", "jumplist back / forward" },
       { "[b / ]b", "previous / next buffer" },
-      { "grn / gra", "LSP rename / code action" },
+      { "grn / gra", "LSP rename / code action; gra can add a missing Rust crate" },
       { ":Tutor", "interactive Neovim fundamentals" },
       { ":help <topic>", "the complete reference" },
     },

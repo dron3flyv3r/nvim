@@ -30,6 +30,8 @@ return {
     maps.n["<Leader>xc"] = { "<Cmd>cclose | lclose<CR>", desc = "Close quickfix/location list" }
 
     local code_action = require("user.quick_fix").code_action(vim.lsp.buf.code_action)
+    maps.n["gra"] = { code_action, desc = "LSP code action" }
+    maps.x["gra"] = { code_action, desc = "LSP code action" }
     maps.n["<Leader>xa"] = { code_action, desc = "Quick Fix (code action)" }
     maps.x["<Leader>xa"] = { code_action, desc = "Quick Fix (code action)" }
   end,

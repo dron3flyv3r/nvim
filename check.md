@@ -17,17 +17,17 @@ Use this checklist on the large work project before depending on the setup for d
 
 - [ ] Open a C# file below the Unity project root (`Assets/` beside `ProjectSettings/ProjectVersion.txt`).
 - [ ] Run `:UnityStatus` and record anything shown as unavailable.
-- [ ] Press `<Leader>ra` and confirm the Unity actions appear.
+- [ ] Press `<Leader>r` and confirm the Unity actions appear.
 - [ ] Test Play with `<Leader>rr`.
 - [ ] Test Stop with `<Leader>rk`.
-- [ ] Select **Restart Play mode** from `<Leader>ra`.
+- [ ] Select **Restart Play mode** from `<Leader>r`.
 - [ ] After using Unity Play, confirm `<Leader>rl` repeats it as a restart.
 - [ ] Test Refresh/recompile with `<Leader>rb`.
-- [ ] Test Pause and Resume from `<Leader>ra`.
+- [ ] Test Pause and Resume from `<Leader>r`.
 - [ ] Test the EditMode test under the cursor with `<Leader>rt`.
-- [ ] Select both an EditMode and PlayMode test from `<Leader>ra`.
+- [ ] Select both an EditMode and PlayMode test from `<Leader>r`.
 - [ ] Follow the Unity editor log with `<Leader>ro`.
-- [ ] Load compiler errors and warnings from `<Leader>ra`.
+- [ ] Load compiler errors and warnings from `<Leader>r`.
 
 ## Roslyn and editing
 
