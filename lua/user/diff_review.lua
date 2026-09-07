@@ -8,6 +8,7 @@ local M = {}
 ---@field endofline boolean
 ---@field autosave boolean?
 ---@field autoformat boolean?
+---@field readonly boolean
 ---@field disk string
 ---@field tick integer
 
@@ -15,6 +16,7 @@ local M = {}
 ---@field view table
 ---@field buffers table<integer, DiffReviewSnapshot>
 ---@field finishing boolean
+---@field explained boolean? whether the hold has been explained once already
 
 ---@type table<table, DiffReviewSession>
 local sessions = setmetatable({}, { __mode = "k" })
@@ -124,16 +126,22 @@ function M.track(buf)
       endofline = vim.bo[buf].endofline,
       autosave = vim.b[buf].autosave,
       autoformat = vim.b[buf].autoformat,
+      readonly = vim.bo[buf].readonly,
       disk = disk_state(vim.api.nvim_buf_get_name(buf)),
       tick = vim.b[buf].changedtick,
     }
   end
 
-  -- This is buffer-local, so BufLeave, FocusLost and edits made through an LSP
-  -- cannot leak a pending review to disk. `finish_session` restores the exact
-  -- previous value, including nil (inherit the global default).
+  -- These are buffer-local, so BufLeave, FocusLost and edits made through an
+  -- LSP cannot leak a pending review to disk. `forget` restores the exact
+  -- previous values, including nil (inherit the global default).
   vim.b[buf].autosave = false
   vim.b[buf].autoformat = false
+  -- `readonly` is what actually holds a write back. An error thrown from
+  -- `BufWritePre` only aborts writes issued through the API; a `:w` typed on
+  -- the command line reports the error and writes the file anyway. E45 comes
+  -- from `:write` itself, before any autocommand, so it stops both.
+  vim.bo[buf].readonly = true
   protected[buf] = session
   return true
 end
@@ -150,13 +158,25 @@ function M.changed(buf)
   return snap ~= nil and snapshot_changed(snap)
 end
 
+---Was this buffer writable before the review put its hold on it? The hold
+---itself sets `readonly`, so the live option cannot answer this.
+---@param buf integer
+---@return boolean
+function M.writable(buf)
+  local session = protected[buf]
+  local snap = session and session.buffers[buf] or nil
+  if snap then return not snap.readonly end
+  return not vim.bo[buf].readonly
+end
+
 ---@param session DiffReviewSession
-local function restore_autosave(session)
+local function unprotect(session)
   for _, snap in pairs(session.buffers) do
     if protected[snap.buf] == session then
       if vim.api.nvim_buf_is_valid(snap.buf) then
         vim.b[snap.buf].autosave = snap.autosave
         vim.b[snap.buf].autoformat = snap.autoformat
+        vim.bo[snap.buf].readonly = snap.readonly
       end
       protected[snap.buf] = nil
     end
@@ -165,7 +185,7 @@ end
 
 ---@param session DiffReviewSession
 local function forget(session)
-  restore_autosave(session)
+  unprotect(session)
   sessions[session.view] = nil
   for i = #orphans, 1, -1 do
     if orphans[i] == session then table.remove(orphans, i) end
@@ -194,7 +214,11 @@ local function save(session)
 
   for _, snap in ipairs(changed) do
     writing = true
+    vim.bo[snap.buf].readonly = false
     local ok, err = pcall(vim.api.nvim_buf_call, snap.buf, function() vim.cmd "silent write" end)
+    -- Re-armed rather than left off: a failed save keeps the review open, and
+    -- the files it did write are still under review until the session ends.
+    vim.bo[snap.buf].readonly = true
     writing = false
     if not ok then
       notify(("Save failed; the review remains open: %s"):format(err), vim.log.levels.ERROR)
@@ -321,13 +345,40 @@ function M.block_history_restore()
 end
 
 local write_guard = vim.api.nvim_create_augroup("diff_review_write_guard", { clear = true })
-vim.api.nvim_create_autocmd("BufWritePre", {
+
+vim.api.nvim_create_autocmd("FileChangedRO", {
   group = write_guard,
-  desc = "Hold Diffview review edits until its Save/Discard prompt",
+  desc = "Say why a review buffer refuses to be written",
   callback = function(args)
-    if not protected[args.buf] or writing then return end
-    notify("Write held in memory -- press q and choose Save to finish the review", vim.log.levels.ERROR)
-    error "Diff review write blocked until Save"
+    local session = protected[args.buf]
+    -- Once per review: every revert in every file trips this, and the W10 that
+    -- Neovim prints after it is reminder enough from the second time on.
+    if not session or session.explained then return end
+    session.explained = true
+    notify "Edits here stay in memory -- press q and choose Save to write them. The W10 warning is that hold"
+  end,
+})
+
+vim.api.nvim_create_autocmd("BufWritePost", {
+  group = write_guard,
+  desc = "Account for a review file written past the hold with :w!",
+  callback = function(args)
+    local session = protected[args.buf]
+    local snap = session and session.buffers[args.buf] or nil
+    if not snap or writing then return end
+
+    -- `:w!` clears `readonly`, so the hold has to be put back for the rest of
+    -- the review, and this file counted as written rather than still pending.
+    vim.bo[args.buf].readonly = true
+    snap.lines = vim.api.nvim_buf_get_lines(args.buf, 0, -1, true)
+    snap.endofline = vim.bo[args.buf].endofline
+    snap.modified = false
+    snap.disk = disk_state(snap.name)
+    snap.tick = vim.b[args.buf].changedtick
+    notify(
+      ("%s is written; the rest of the review is still pending"):format(vim.fn.fnamemodify(snap.name, ":~:.")),
+      vim.log.levels.INFO
+    )
   end,
 })
 

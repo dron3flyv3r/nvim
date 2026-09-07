@@ -33,6 +33,22 @@ running; `q` stops that task and hides the pane. Reopen retained output from
 Use `:ContextStatus` to see what was detected and `:checkhealth user` to check
 the assumptions owned by this configuration.
 
+## Reviewing changes
+
+`<Leader>gd` opens the working tree as a two-pane review; `<Leader>gD` compares
+against another branch, and `<Leader>gh`/`<Leader>gH` walk history. Each pane
+states which side it is -- `BEFORE` against `YOURS` -- and the right pane also
+carries your position in the changeset, `file 2/5` and `change 3/8`, so `n` and
+`N` can be pressed without losing track. Whole files are shown rather than the
+changed lines alone; `zM` collapses to the changes and `zR` opens them again.
+
+A file that exists on only one side is shown in a single pane, labelled `NEW
+FILE` or `DELETED`, because there is no other version to compare it against.
+Nothing is written until `q`, which asks to save or discard the whole review.
+While a review holds a file, `:w` is refused with `E45` and Neovim's `W10`
+warning marks the hold; `:w!` writes that one file and reports that the rest of
+the review is still pending.
+
 ## Personal notes and HTTP requests
 
 `<Leader>nn` creates a personal Markdown note from the current line or selection;

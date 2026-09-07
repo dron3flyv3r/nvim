@@ -54,6 +54,20 @@ local STATIC = {
     },
   },
   {
+    "REVIEWING CHANGES",
+    {
+      { "<Leader>gd / gD", "review the working tree / against another branch" },
+      { "n / N", "next / previous change, rolling on into the next file" },
+      { "<Tab> / <S-Tab>", "next / previous file in the changeset" },
+      { "r / R", "revert this change / this whole file, pending" },
+      { "u", "undo the last revert" },
+      { "zM / zR", "collapse to the changes / show whole files again" },
+      { "q", "close the review and choose Save or Discard" },
+      { ":w / :w!", "refused while the review holds the file / write just this one" },
+      { "g?", "Diffview's own key list" },
+    },
+  },
+  {
     "READING ERRORS & DOCS",
     {
       { "gl / <Leader>ld", "full error on this line; press again to focus and scroll" },

@@ -23,15 +23,26 @@ end
 ---@param other_cmd string what to run when it is in the old version
 ---@param what string what "nothing happened" should say you were aiming at
 local function apply_revert(worktree_cmd, other_cmd, what)
+  -- A file that exists on only one side is shown in a single pane, so there is
+  -- no second version for Vim's diff commands to reach for.
+  local lone = require("user.diff_hud").lone_kind()
+  if lone == "new" then return notify "This file is new -- there is nothing to revert to. Delete the file instead" end
+  if lone == "gone" then return notify "This file is deleted -- restore it with git, not from the review" end
   if not vim.wo.diff then return notify "Not in a diff window" end
 
   local target, from_worktree = diff_target()
   if not target then return notify "Nothing editable in this diff -- both sides are old revisions" end
-  if not vim.bo[target].modifiable or vim.bo[target].readonly then return notify "That file is not modifiable" end
-  if not require("user.diff_review").track(target) then return notify "This is not a working-tree review" end
+  if not vim.bo[target].modifiable then return notify "That file is not modifiable" end
+  -- Not `readonly`: the review sets that itself to hold the file back from
+  -- disk, so only the value it found there says anything about the file.
+  local review = require "user.diff_review"
+  if not review.track(target) then return notify "This is not a working-tree review" end
+  if not review.writable(target) then return notify "That file is read-only on disk" end
 
   local before = vim.b[target].changedtick
-  local ok, err = pcall(vim.cmd, from_worktree and worktree_cmd or other_cmd)
+  -- `silent` because the review holds the file with `readonly`, and Neovim's
+  -- W10 warning about that arrives dressed as an error from inside `vim.cmd`.
+  local ok, err = pcall(vim.cmd, "silent " .. (from_worktree and worktree_cmd or other_cmd))
   if not ok then return notify(tostring(err), vim.log.levels.ERROR) end
   -- Off a change these commands are silent about it. Without this you press
   -- the key, nothing happens, and there is no telling that from a no-op.
@@ -87,23 +98,6 @@ local function revert_selection()
   revert_lines(first, last)
 end
 
----@param bufnr integer
----@param winid integer
----@param ctx { symbol: string, layout_name: string }
-local function label_pane(bufnr, winid, ctx)
-  local hl, text
-  if is_worktree_buf(bufnr) then
-    hl, text = "DiffAdd", "YOURS -- safe review buffer. Nothing is written until q -> Save."
-  elseif ctx.symbol == "a" then
-    -- The left side of a file-history diff is a commit too, not the index,
-    -- so this deliberately does not say "committed".
-    hl, text = "DiffDelete", "BEFORE -- what you are comparing against. Lines you deleted still exist here."
-  else
-    hl, text = "DiffChange", "AFTER -- a past version of the file, not the one you are editing."
-  end
-  vim.wo[winid].winbar = ("%%#%s# %s "):format(hl, text)
-end
-
 ---@param buf integer
 local function dress_empty_view(buf)
   vim.keymap.set("n", "q", "<Cmd>DiffviewClose<CR>", {
@@ -113,15 +107,16 @@ local function dress_empty_view(buf)
   })
   -- `BufWinEnter` does not say which window, and both panes show this buffer.
   for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-    if vim.api.nvim_win_get_buf(win) == buf then
-      vim.wo[win].winbar = "%#Comment# Nothing left to review -- press q to close "
-    end
+    if vim.api.nvim_win_get_buf(win) == buf then require("user.diff_hud").dress_empty(win) end
   end
 end
 
 ---@param reverse boolean
 local function goto_edge_change(reverse)
   vim.cmd("normal! " .. (reverse and "G" or "gg"))
+  -- A file shown in a single pane is entirely new or entirely gone: its edge
+  -- is the edge of the file, and `diff_hlID` has nothing to say about it.
+  if not vim.wo.diff then return end
   local lnum = vim.api.nvim_win_get_cursor(0)[1]
   if vim.fn.diff_hlID(lnum, 1) == 0 then pcall(vim.cmd, "normal! " .. (reverse and "[c" or "]c")) end
 end
@@ -142,7 +137,7 @@ local function nav_change(reverse)
     end
     -- Loading an entry is asynchronous -- the buffers, the diff and the window
     -- layout are not in place on the next tick. This waits for the window to
-    -- actually be showing a diff before jumping, rather than guessing a delay.
+    -- actually be showing the file before jumping, rather than guessing a delay.
     local tries = 0
     local timer = assert((vim.uv or vim.loop).new_timer())
     timer:start(
@@ -150,10 +145,11 @@ local function nav_change(reverse)
       20,
       vim.schedule_wrap(function()
         tries = tries + 1
-        if vim.wo.diff or tries > 25 then
+        local ready = vim.wo.diff or require("user.diff_hud").lone_kind() ~= nil
+        if ready or tries > 25 then
           timer:stop()
           timer:close()
-          if vim.wo.diff then goto_edge_change(reverse) end
+          if ready then goto_edge_change(reverse) end
         end
       end)
     )
@@ -174,6 +170,7 @@ return {
     },
     opts = function()
       local review = require "user.diff_review"
+      local hud = require "user.diff_hud"
       review.install_close_command()
       local close = review.close
       local blocked = review.block_index_change
@@ -184,10 +181,13 @@ return {
         enhanced_diff_hl = true,
         hooks = {
           diff_buf_win_enter = function(bufnr, winid, ctx)
-            label_pane(bufnr, winid, ctx)
+            hud.dress(bufnr, winid, ctx)
             review.track(bufnr)
           end,
-          view_closed = review.closed,
+          view_closed = function(view)
+            hud.closed()
+            review.closed(view)
+          end,
         },
         file_panel = {
           listing_style = "tree",
