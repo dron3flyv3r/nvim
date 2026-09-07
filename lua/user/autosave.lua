@@ -76,6 +76,13 @@ function M.skip_reason(buf)
   -- filetype is `python` by the time jupytext is done with it.
   if name:sub(-6) == ".ipynb" then return "notebooks are excluded on purpose (see the header)" end
 
+  -- Git is blocked on these -- a commit message, a rebase todo -- and writing
+  -- one is how you tell git to go ahead. That has to be a deliberate keypress.
+  local filetype = bo.filetype
+  if filetype == "gitcommit" or filetype == "gitrebase" then
+    return "git is waiting on this buffer; writing it is what finishes the operation"
+  end
+
   return nil
 end
 

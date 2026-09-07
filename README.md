@@ -20,6 +20,7 @@ for code intelligence.
 | `<Leader>d…` | active debug-session controls and breakpoints |
 | `<Leader>ar…` | Claude review and investigation prompts |
 | `<Leader>gb/gB/gh` | toggle blame, inspect blame, line history |
+| `<Leader>gg/gm` | Neogit status, and its merge popup |
 | `gra` | LSP code action, including unresolved Rust dependencies |
 | `K` / `gl` | hover documentation / diagnostic details |
 | `<Leader>Up/Us/Ur` | enter, stop, or restart Unity Play mode |
@@ -47,7 +48,40 @@ FILE` or `DELETED`, because there is no other version to compare it against.
 Nothing is written until `q`, which asks to save or discard the whole review.
 While a review holds a file, `:w` is refused with `E45` and Neovim's `W10`
 warning marks the hold; `:w!` writes that one file and reports that the rest of
-the review is still pending.
+the review is still pending. A one-line key strip sits along the bottom of the
+review, naming the keys for whichever mode you are in; `?` puts it away for the
+rest of the session and `F1` still lists everything.
+
+A merge conflict opens the same way and gets three panes: `OURS` on the left,
+`THEIRS` on the right, and in the middle the file that will be written, whose
+bar counts `conflict 2/3` and turns to `ALL RESOLVED` when the markers are
+gone. Both side panes name the branch they come from rather than just a side,
+which is what makes a rebase or a cherry-pick readable too. `H` takes the left
+version and `L` the right, `B` takes both and `X` drops both, with `gH`, `gL`
+and `gB` doing the same to the whole file; `<Leader>cb` takes the common
+ancestor, or shows it when git's conflict markers do not carry it. `n` and `N`
+walk conflicts here instead of changes, and the revert keys say so rather than
+failing, because Vim cannot pick a side with three panes open.
+
+A side can also be taken a line at a time. `<CR>` takes the line the cursor is
+on and `<CR>` over a selection takes those lines, from whichever of the three
+panes you are reading; the lines are copied into the resolution above the
+markers and the conflict is left standing, so takes add up -- two lines from
+OURS, then one from THEIRS -- until `X` drops the rest of it. Every resolution
+is tagged with what you took, `]r` and `[r` walk them, and a file whose last
+conflict is gone stays where it is and says so, with `<Tab>` moving on to the
+next file that still has conflicts.
+
+Nothing reaches disk until `q`, which in a merge offers **Save**, **Save and
+finish**, and **Discard**. Save writes each resolved file and stages it, since
+git counts an unstaged resolution as still unmerged; a file that still has
+markers is never written, and the review stays open when one does. Save and
+finish is offered only once every conflict is resolved. It then shows what is
+staged as an ordinary review, labelled `STAGED`, because until that point
+nothing has shown the merge as a change to your own branch -- the panes compare
+it to each side. Closing that hands the commit to Neogit, which opens git's own
+prepared merge message with the same diff beneath it; `<C-c><C-c>` commits and
+`<C-c><C-k>` backs out with the work still staged.
 
 ## Personal notes and HTTP requests
 

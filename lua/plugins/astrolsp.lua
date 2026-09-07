@@ -44,7 +44,9 @@ return {
       format_on_save = {
         enabled = true,
         allow_filetypes = {}, -- empty = all filetypes
-        ignore_filetypes = {},
+        -- Git's own scratch files. Reflowing a commit message on the way out
+        -- would rewrite what the commit says.
+        ignore_filetypes = { "gitcommit", "gitrebase" },
       },
       -- Servers that may NOT format, because none-ls already runs the same tool
       -- and two formatters on one buffer is how you get a fight on every save.

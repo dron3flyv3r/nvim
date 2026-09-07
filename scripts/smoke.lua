@@ -6,6 +6,9 @@ for _, module in ipairs {
   "user.autosave",
   "user.context",
   "user.diagnostics",
+  "user.diff_hud",
+  "user.diff_keys",
+  "user.diff_review",
   "user.integrations.notebook",
   "user.integrations.notebook.cells",
   "user.integrations.unity",
@@ -57,6 +60,32 @@ check(quickfix_spec:find('maps.n["gra"]', 1, true) ~= nil, "native gra must incl
 local lazy = require "lazy.core.config"
 check(lazy.plugins["codex.nvim"] == nil, "codex.nvim should not be registered")
 
+-- The review's key strip is written by hand, so it can only stay honest if the
+-- keys it advertises are the keys the Diffview spec actually binds.
+local git_spec = table.concat(vim.fn.readfile "lua/plugins/git.lua", "\n")
+local keys_spec = table.concat(vim.fn.readfile "lua/user/diff_keys.lua", "\n")
+for _, key in ipairs { "H", "L", "B", "X" } do
+  check(git_spec:find(('"n", "%s", take_side'):format(key), 1, true) ~= nil, "merge key " .. key .. " is not bound")
+  check(
+    keys_spec:find(('keys = "%s"'):format(key), 1, true) ~= nil,
+    "merge key " .. key .. " is missing from the strip"
+  )
+end
+-- The line-level take and the walk back over resolutions are the two keys the
+-- strip cannot be wrong about: one edits the file, the other claims a decision.
+check(git_spec:find('"n", "<CR>", take_lines(false)', 1, true) ~= nil, "taking one line is not bound")
+check(git_spec:find('"x", "<CR>", take_lines(true)', 1, true) ~= nil, "taking selected lines is not bound")
+check(keys_spec:find('keys = "<CR>"', 1, true) ~= nil, "taking lines is missing from the strip")
+check(git_spec:find('"n", "]r", nav_resolution', 1, true) ~= nil, "walking resolutions is not bound")
+check(keys_spec:find('keys = "]r/[r"', 1, true) ~= nil, "walking resolutions is missing from the strip")
+
+for _, key in ipairs { "gH", "gL", "gB" } do
+  check(
+    git_spec:find(('"n", "%s", take_side'):format(key), 1, true) ~= nil,
+    "whole-file key " .. key .. " is not bound"
+  )
+end
+
 -- Catch accidental duplicate declarations in this repository. Runtime maps
 -- cannot reveal that one declaration silently replaced another, so inspect the
 -- literal AstroCore declarations before they are merged.
@@ -73,6 +102,7 @@ for _, file in ipairs(vim.fn.glob(vim.fn.getcwd() .. "/lua/**/*.lua", false, tru
 end
 check(#duplicates == 0, "duplicate local mappings:\n" .. table.concat(duplicates, "\n"))
 
+dofile "tests/git_navigation_spec.lua"
 dofile "tests/notebook_cells_spec.lua"
 dofile "tests/inlay_hints_spec.lua"
 dofile "tests/rust_dependencies_spec.lua"

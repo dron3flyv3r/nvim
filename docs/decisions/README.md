@@ -8,5 +8,6 @@ Debugging history, rejected alternatives, measured failure modes, and setup
 guides belong here.
 
 - [Autosave boundaries](autosave.md)
+- [Diff review and merge conflicts](diff-review.md)
 - [Notebook runtime](notebooks.md)
 - [Rust diagnostics](rust-diagnostics.md)

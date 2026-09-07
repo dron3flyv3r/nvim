@@ -74,6 +74,42 @@ local function current_view()
   return ok and lib.get_current_view() or nil
 end
 
+---Read at call time rather than stored: Diffview only builds the merge context
+---once it has found a conflicted file, which can be after the first file of the
+---review is already being tracked.
+---@param session DiffReviewSession
+---@return boolean
+local function is_merge(session) return session.view ~= nil and session.view.merge_ctx ~= nil end
+
+---@param snap DiffReviewSnapshot
+---@return integer conflict regions still in the buffer
+local function markers(snap)
+  local ok, hud = pcall(require, "user.diff_hud")
+  return ok and hud.conflicts(snap.buf) or 0
+end
+
+---Run git and wait. Never a shell: a path can contain a space and argv has no
+---quoting to get wrong.
+---@param args string[]
+---@param cwd string
+---@return boolean ok, string output
+local function git(args, cwd)
+  local cmd = { "git" }
+  vim.list_extend(cmd, args)
+  local res = vim.system(cmd, { cwd = cwd, text = true }):wait()
+  return res.code == 0, vim.trim((res.stdout or "") .. (res.stderr or ""))
+end
+
+---@param session DiffReviewSession
+---@return string? repository root
+local function toplevel(session)
+  local adapter = session.view and session.view.adapter
+  local root = adapter and adapter.ctx and adapter.ctx.toplevel
+  if root and root ~= "" then return root end
+  local dot = vim.fs.find(".git", { path = vim.fn.getcwd(), upward = true })[1]
+  return dot and vim.fs.dirname(dot) or nil
+end
+
 ---@param view table
 ---@return DiffReviewSession?
 local function ensure_session(view)
@@ -192,10 +228,86 @@ local function forget(session)
   end
 end
 
+---Git counts a resolved file as still unmerged until it is staged, so writing
+---one during a merge is only half of finishing with it.
+---@param session DiffReviewSession
+---@param written DiffReviewSnapshot[]
+local function stage(session, written)
+  local root = toplevel(session)
+  if not root then return notify "Written, but the repository root is unknown -- stage the files in Neogit" end
+
+  local failed = {}
+  for _, snap in ipairs(written) do
+    local ok = git({ "add", "--", snap.name }, root)
+    if not ok then failed[#failed + 1] = vim.fn.fnamemodify(snap.name, ":~:.") end
+  end
+  if #failed > 0 then
+    notify(("Written, but not staged: %s"):format(table.concat(failed, ", ")), vim.log.levels.ERROR)
+  end
+end
+
+---The commit belongs to Neogit: it opens git's own prepared merge message in a
+---buffer to confirm, which is not something a diff view should invent.
+local function finish_merge()
+  local loaded, neogit = pcall(require, "neogit")
+  if not (loaded and type(neogit.action) == "function") then
+    return notify "Saved and staged. Neogit is not available, so commit the merge yourself"
+  end
+  local ran = pcall(neogit.action("merge", "commit", {}))
+  if not ran then notify "Saved and staged, but Neogit could not continue the merge -- try :Neogit" end
+end
+
+---A merge resolution is the one review where nothing on screen has said what
+---the result will look like as a change: the panes compare it to each side,
+---not to the branch. So what is staged is shown as an ordinary review, and
+---closing that is what hands the commit on.
+---@param session DiffReviewSession
+local function finish_pass(session)
+  local root = toplevel(session)
+  if not root then return finish_merge() end
+  -- Nothing staged is nothing to read, and no reason to hold up the commit.
+  local listed, out = git({ "diff", "--cached", "--name-only" }, root)
+  if not (listed and out ~= "") then return finish_merge() end
+
+  local opened = pcall(vim.cmd, "DiffviewOpen --cached")
+  if not opened then return finish_merge() end
+  notify "This is what the merge commit will contain -- q goes on to the commit message"
+
+  vim.api.nvim_create_autocmd("User", {
+    pattern = "DiffviewViewClosed",
+    group = vim.api.nvim_create_augroup("diff_review_finish", { clear = true }),
+    once = true,
+    desc = "Commit the merge once the staged changes have been read",
+    callback = function() vim.schedule(finish_merge) end,
+  })
+end
+
 ---@param session DiffReviewSession
 ---@return boolean
 local function save(session)
   local changed = pending(session)
+
+  -- A file with conflict markers still in it is not a resolution, and this is
+  -- the one place that decides what reaches disk.
+  local held = {}
+  if is_merge(session) then
+    local resolved = {}
+    for _, snap in ipairs(changed) do
+      local list = markers(snap) > 0 and held or resolved
+      list[#list + 1] = snap
+    end
+    changed = resolved
+    if #changed == 0 then
+      notify(
+        ("Nothing written: %d file%s still %s conflict markers. n and N jump to what is left"):format(
+          #held,
+          #held == 1 and "" or "s",
+          #held == 1 and "has" or "have"
+        )
+      )
+      return false
+    end
+  end
 
   -- Preflight every file before writing the first one. This is not a filesystem
   -- transaction, but it prevents the ordinary partial-save failure: an editor,
@@ -234,7 +346,32 @@ local function save(session)
     snap.tick = vim.b[snap.buf].changedtick
   end
 
+  if is_merge(session) then stage(session, changed) end
   notify(("Saved review changes in %d file%s"):format(#changed, #changed == 1 and "" or "s"), vim.log.levels.INFO)
+
+  if is_merge(session) then
+    local ok, hud = pcall(require, "user.diff_hud")
+    local left = ok and hud.unresolved(session.view) or 0
+    -- Files nobody edited are not at risk, so this is a reminder rather than a
+    -- reason to keep the review open.
+    if left > 0 and #held == 0 then
+      notify(("%d conflicted file%s left to resolve -- reopen with <Leader>gd"):format(left, left == 1 and "" or "s"))
+    end
+  end
+
+  -- Reporting false keeps the review open, which is the only safe answer: the
+  -- files that still have markers are unwritten, and closing would drop the
+  -- hold that is keeping them off disk.
+  if #held > 0 then
+    notify(
+      ("%d file%s still %s conflict markers and stayed in memory -- the review is still open"):format(
+        #held,
+        #held == 1 and "" or "s",
+        #held == 1 and "has" or "have"
+      )
+    )
+    return false
+  end
   return true
 end
 
@@ -263,20 +400,42 @@ local function prompt(session, allow_cancel)
     return true
   end
 
-  local buttons = allow_cancel and "&Save\n&Discard\n&Cancel" or "&Save\n&Discard\n&Keep pending"
-  local choice = vim.fn.confirm(
-    ("Diff review has pending changes in %d file%s.\nNothing has been written yet."):format(
-      count,
-      count == 1 and "" or "s"
-    ),
-    buttons,
-    3,
-    "Question"
+  local message = ("Diff review has pending changes in %d file%s.\nNothing has been written yet."):format(
+    count,
+    count == 1 and "" or "s"
   )
 
-  if choice == 1 then
+  -- Finishing the merge is only offered once every file is actually resolved,
+  -- because `git merge --continue` refuses while any path is unmerged -- and
+  -- that includes conflicted files this review never opened.
+  local left = 0
+  if is_merge(session) then
+    local ok, hud = pcall(require, "user.diff_hud")
+    left = ok and hud.unresolved(session.view) or 0
+    message = message
+      .. (
+        left > 0
+          and ("\n%d conflicted file%s still %s markers and will not be written."):format(
+            left,
+            left == 1 and "" or "s",
+            left == 1 and "has" or "have"
+          )
+        or "\nEvery conflict is resolved: saving stages the files as well."
+      )
+  end
+
+  local offer_finish = is_merge(session) and left == 0
+  local last = allow_cancel and "&Cancel" or "&Keep pending"
+  local buttons = offer_finish and ("&Save\nSave and &finish\n&Discard\n" .. last) or ("&Save\n&Discard\n" .. last)
+  local choice = vim.fn.confirm(message, buttons, offer_finish and 4 or 3, "Question")
+
+  local finish = offer_finish and choice == 2
+  if choice == 1 or finish then
     if not save(session) then return false end
-  elseif choice == 2 then
+    -- Scheduled so it runs after this view has closed: the staged review needs
+    -- the tab to itself, and Diffview only keeps one view per tab.
+    if finish then vim.schedule(function() finish_pass(session) end) end
+  elseif choice == (offer_finish and 3 or 2) then
     discard(session)
   else
     return false
@@ -335,6 +494,13 @@ function M.install_close_command()
 end
 
 function M.block_index_change()
+  local view = current_view()
+  local session = view and sessions[view] or nil
+  -- A merge review does stage, but on Save, so that writing and staging cannot
+  -- come apart -- an unstaged resolution is still an unmerged path to git.
+  if session and is_merge(session) then
+    return notify "Resolve the conflicts and press q -- Save writes and stages them together"
+  end
   notify "Staging is disabled during a safe review; save or discard it first, then stage normally"
 end
 
@@ -375,10 +541,11 @@ vim.api.nvim_create_autocmd("BufWritePost", {
     snap.modified = false
     snap.disk = disk_state(snap.name)
     snap.tick = vim.b[args.buf].changedtick
-    notify(
-      ("%s is written; the rest of the review is still pending"):format(vim.fn.fnamemodify(snap.name, ":~:.")),
-      vim.log.levels.INFO
-    )
+    local name = vim.fn.fnamemodify(snap.name, ":~:.")
+    if markers(snap) > 0 then
+      return notify(("%s is written WITH conflict markers still in it"):format(name), vim.log.levels.ERROR)
+    end
+    notify(("%s is written; the rest of the review is still pending"):format(name), vim.log.levels.INFO)
   end,
 })
 
