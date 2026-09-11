@@ -570,6 +570,13 @@ end
 ---@return integer
 function M.conflicts(bufnr) return #conflict_list(bufnr) end
 
+---Conflicts left in one entry of the changeset, whether or not the review has
+---opened it. Leaving a merge at a file has to ask this about the file it is
+---about to open, which is not always the one on screen.
+---@param entry table
+---@return integer
+function M.entry_conflicts(entry) return entry_conflicts(entry) end
+
 ---Conflicted files still holding markers, counted across the whole changeset
 ---rather than the panes on screen: a file the review has not opened yet is
 ---every bit as unresolved, and `git merge --continue` counts it too.

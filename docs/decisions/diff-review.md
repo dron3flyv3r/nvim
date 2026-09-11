@@ -136,6 +136,94 @@ including conflicted files the review never opened, since `git merge --continue`
 counts those too. Everything else about staging stays blocked during a review,
 because an index change cannot participate in an in-memory transaction.
 
+## Keeping lines instead of reverting them
+
+`r`, `R` and the ranged `<Leader>gr` all say what to roll back. A formatter
+inverts the question: the file is now almost entirely churn, and the few lines
+worth keeping are the small part. `<Leader>gk` keeps a selection and reverts
+every other change in the file; `<Leader>gw` keeps whatever altered the text and
+reverts the rest. They live in `lua/user/diff_revert.lua` rather than beside the
+others in `lua/plugins/git.lua` because they need a diff of their own.
+
+Ranged `:diffget` cannot express either one. It applies whatever Vim's diff
+finds inside a range, and both of these need the complement of a range --
+several disjoint hunks, applied without the earlier ones renumbering the later.
+So the hunks come from `vim.diff(old, new, { result_type = "indices" })`, which
+gives exact `{start_old, count_old, start_new, count_new}` quadruples, and are
+applied bottom-up with `nvim_buf_set_lines`. Measured, so the off-by-ones are
+not guesses: a hunk with a zero count on one side reports the line it sits
+*after* on that side, and `0` means before the first line.
+
+- A hunk the selection touches at all is kept whole. Splitting one would mean
+  claiming a line-for-line correspondence between the two sides, and a
+  formatter that reflowed the block you edited has destroyed exactly that.
+- A zero-count side is between two lines, so nothing on it can be selected and
+  it is never counted as touched. A line the formatter deleted from inside your
+  selection therefore comes back, which is what "revert everything else" says.
+- Keeping nothing is refused rather than performed. It is indistinguishable
+  from `R`, and a selection that simply missed the hunk is the likelier reading.
+- Selecting in the old pane is refused too. "Revert to these lines" is already
+  `<Leader>gr` there; "keep these lines" has no meaning in the pane that does
+  not hold your version.
+- The undo entries are joined, so one `u` puts back a revert of any size.
+
+## Why whitespace is compared joined, not stripped
+
+`<Leader>gw` calls a hunk the formatter's own work when its two sides are equal
+after joining each side's lines with a single space and collapsing runs of
+whitespace. Deleting whitespace instead would be simpler and wrong twice over:
+it makes `foo bar` and `foobar` compare equal, and rewrapping a call across
+three lines is the single most common thing a formatter does, so line breaks
+have to compare equal to the spaces they replaced. Joining does both.
+
+What it does not catch is a formatter that adds a trailing comma, reorders
+imports or changes quote style. Those are text changes and are left standing --
+under-claiming, so that `<Leader>gk` stays the answer when the automatic one is
+not clean.
+
+## Leaving the review at a file
+
+Diffview ships `gf`, `<C-w><C-f>` and `<C-w>gf` (`goto_file_edit`, `_split`,
+`_tab`). All three switch to the previous tabpage and open the file with the
+review still standing behind them, which walks straight past the hold on that
+exact buffer: `'readonly'` still set, `autosave` and `autoformat` still off,
+pending reverts still only in memory. You land in your own file, type, and `:w`
+answers `E45`. Leaving the review tab open also means a later `:tabclose` fires
+the orphan prompt out of context.
+
+The three keys are therefore taken over rather than left beside new ones -- the
+version that bypasses the transaction should not be reachable by accident. Each
+now settles the review through the ordinary `q` path first and opens the file
+only if that finished. `lua/user/diff_goto.lua`:
+
+- Everything the jump needs is read **before** the close: the entry, its
+  absolute path and the cursor are all destroyed with the view. The tabpage to
+  return to comes from Diffview's own `get_prev_non_view_tabpage`.
+- Cancel at the prompt means the review stands and nothing opens. `M.close`
+  therefore returns whether it closed, which it previously did not.
+- It also reports whether "Save and finish" scheduled a staged pass. That pass
+  wants this tab, and asking for it is the more specific request, so the jump
+  stands down rather than racing it.
+- A merge refuses on a file that still has markers. Saving would not write it,
+  so the jump would open the copy from disk and silently drop the resolution
+  built in the buffer. A resolved file in a merge jumps normally.
+- The file is reached by **buffer**, not by name, whenever it is still loaded.
+  `:edit` would re-read it from disk and throw away exactly what Save or
+  Discard had just settled there.
+- The cursor is clamped to the line count: Discard can leave the file shorter
+  than the version that was on screen when the line was read. Only the entry
+  actually on screen has a cursor worth carrying -- from the file panel the
+  file under the cursor is usually not the one in the panes, so it opens at the
+  top.
+- The line is read from the layout's main window, which is the working side.
+  Diffview keeps the panes aligned with `cursorbind`, so it is the line you
+  were reading whichever pane you stood in.
+
+`gf edit` sits in the strip after `<Tab>`, in the half of the line that
+survives a narrow window, because it is a move rather than an edit. It is
+listed in the diff and finish modes only: in a merge it is bound but guarded,
+and the merge line already carries more keys than it has room for.
+
 ## Test harness notes
 
 The conflict work was verified against scratch repositories driven through a
@@ -145,7 +233,10 @@ typed input and a real terminal:
 - `vim.fn.confirm` does not read fed keystrokes, so the `q` prompt is verified
   by stubbing `vim.fn.confirm` and asserting on its message and button list.
 - Notifications go through `vim.notify`, never `:messages`, so a probe has to
-  wrap `vim.notify` to see them.
+  wrap `vim.notify` to see them -- and re-wrap it after the first one. The
+  notification plugin is lazy-loaded and replaces `vim.notify` when it fires,
+  which silently discards the wrapper, so a probe installed at startup sees
+  exactly one message and looks like proof that the rest were never sent.
 - Always pass `-i NONE`. Without it a probe inherits the real shada file, and a
   stray `n` repeats a search from another project.
 - A hit-enter prompt blocks every `vim.defer_fn` in the queue, which looks

@@ -86,6 +86,11 @@ end
 ---Rider's whole-file rollback, but still only in memory until the exit prompt.
 local function revert_file() apply_revert("%diffget", "%diffput", "change in this file") end
 
+--- The inverse pair, in `user.diff_revert` because working out which hunks to
+--- roll back needs a diff of its own rather than Vim's ranged `diffget`.
+local function keep_selection() require("user.diff_revert").keep_selection() end
+local function unformat() require("user.diff_revert").unformat() end
+
 --- `<Leader>gr` from visual mode: the lines you selected, and no others.
 --- `'<`/`'>` are not set until the selection ends, so the bounds are read
 --- while it is still live -- `v` is the anchor, `.` is the cursor.
@@ -450,6 +455,16 @@ return {
       local close = review.close
       local blocked = review.block_index_change
 
+      -- Diffview's own gf opens the file and leaves the review standing over
+      -- the hold on that buffer -- see `user.diff_goto`. Its three keys are
+      -- taken over rather than left beside new ones so the version that walks
+      -- through the transaction cannot be reached by accident.
+      ---@param how "edit"|"split"|"tab"
+      ---@return function
+      local function leave(how)
+        return function() require("user.diff_goto").leave(how) end
+      end
+
       -- Attached only in the three- and four-pane merge layouts, and they win
       -- over the `view` maps below, which is what lets `n` mean conflicts here
       -- and changes everywhere else.
@@ -482,6 +497,9 @@ return {
         { "n", "<Leader>gr", merge_hint(false), { desc = "Reverting is H or L in a merge" } },
         { "n", "<Leader>gl", merge_hint(false), { desc = "Reverting is H or L in a merge" } },
         { "n", "<Leader>gR", merge_hint(true), { desc = "Reverting is gH or gL in a merge" } },
+        { "x", "<Leader>gr", merge_hint(false), { desc = "Reverting is H or L in a merge" } },
+        { "x", "<Leader>gk", merge_hint(false), { desc = "Keeping lines is <CR> in a merge" } },
+        { "n", "<Leader>gw", merge_hint(false), { desc = "There is no formatting to undo in a merge" } },
       }
 
       return {
@@ -517,6 +535,12 @@ return {
               { desc = "Show or hide the key legend" },
             },
 
+            -- Out of the review and into the file, settling the transaction on
+            -- the way. Bound in `view` so the merge layouts inherit them too.
+            { "n", "gf", leave "edit", { desc = "Leave the review and open this file here" } },
+            { "n", "<C-w><C-f>", leave "split", { desc = "Leave the review and open this file in a split" } },
+            { "n", "<C-w>gf", leave "tab", { desc = "Leave the review and open this file in a new tab" } },
+
             -- Walking the changeset -- see `nav_change` for why one key.
             { "n", "n", nav_change(false), { desc = "Next change (into the next file)" } },
             { "n", "N", nav_change(true), { desc = "Previous change (into the previous file)" } },
@@ -533,6 +557,11 @@ return {
             { "x", "<Leader>gr", revert_selection, { desc = "Revert the selected lines" } },
             { "n", "<Leader>gl", revert_line, { desc = "Revert this line only" } },
             { "n", "<Leader>gR", revert_file, { desc = "Revert the whole file (pending)" } },
+
+            -- The other way round, for when a formatter has rewritten the file
+            -- around the few lines you meant to change.
+            { "x", "<Leader>gk", keep_selection, { desc = "Keep the selected lines, revert the rest of the file" } },
+            { "n", "<Leader>gw", unformat, { desc = "Revert the whitespace-only changes in this file" } },
           },
           diff3 = merge,
           diff4 = merge,
@@ -544,6 +573,10 @@ return {
               function() require("user.diff_keys").toggle() end,
               { desc = "Show or hide the key legend" },
             },
+
+            { "n", "gf", leave "edit", { desc = "Leave the review and open this file here" } },
+            { "n", "<C-w><C-f>", leave "split", { desc = "Leave the review and open this file in a split" } },
+            { "n", "<C-w>gf", leave "tab", { desc = "Leave the review and open this file in a new tab" } },
 
             -- The panel is where the review opens, so these have to work from
             -- here. The conflict actions already act on the diff whatever has
@@ -565,6 +598,9 @@ return {
           },
           file_history_panel = {
             { "n", "q", close, { desc = "Close the history" } },
+            { "n", "gf", leave "edit", { desc = "Leave the history and open this file here" } },
+            { "n", "<C-w><C-f>", leave "split", { desc = "Leave the history and open this file in a split" } },
+            { "n", "<C-w>gf", leave "tab", { desc = "Leave the history and open this file in a new tab" } },
             { "n", "X", review.block_history_restore, { desc = "Restoring history is disabled during safe review" } },
           },
         },

@@ -392,7 +392,7 @@ end
 
 ---@param session DiffReviewSession
 ---@param allow_cancel boolean
----@return boolean finished
+---@return boolean finished, boolean? continuing into a staged pass
 local function prompt(session, allow_cancel)
   local count = #pending(session)
   if count == 0 then
@@ -442,18 +442,28 @@ local function prompt(session, allow_cancel)
   end
 
   forget(session)
-  return true
+  return true, finish
 end
 
 local function raw_close() require("diffview").close() end
 
 ---The only normal exit from a working-tree review. File-history views have no
 ---editable local side and therefore close without a transaction prompt.
+---
+---"Save and finish" schedules a staged review to open in this tab, so anything
+---waiting to act on the closed review has to know not to take the tab as well.
+---@return boolean closed, boolean? continuing into a staged pass
 function M.close()
   local view = current_view()
   local session = view and sessions[view] or nil
-  if session and not prompt(session, true) then return end
+  if session then
+    local closed, finishing = prompt(session, true)
+    if not closed then return false end
+    raw_close()
+    return true, finishing
+  end
   raw_close()
+  return true
 end
 
 ---Called after an unexpected close such as `:tabclose`. The ordinary `q` and

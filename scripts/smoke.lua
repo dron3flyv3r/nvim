@@ -79,6 +79,12 @@ check(keys_spec:find('keys = "<CR>"', 1, true) ~= nil, "taking lines is missing 
 check(git_spec:find('"n", "]r", nav_resolution', 1, true) ~= nil, "walking resolutions is not bound")
 check(keys_spec:find('keys = "]r/[r"', 1, true) ~= nil, "walking resolutions is missing from the strip")
 
+-- Leaving the review has to go through the transaction, so the bound key must
+-- be the wrapper and never Diffview's own goto_file action.
+check(git_spec:find('"n", "gf", leave "edit"', 1, true) ~= nil, "leaving the review at a file is not bound")
+check(keys_spec:find('keys = "gf"', 1, true) ~= nil, "leaving the review is missing from the strip")
+check(not git_spec:find("actions.goto_file", 1, true), "goto_file must not be bound directly")
+
 for _, key in ipairs { "gH", "gL", "gB" } do
   check(
     git_spec:find(('"n", "%s", take_side'):format(key), 1, true) ~= nil,
@@ -106,4 +112,5 @@ dofile "tests/git_navigation_spec.lua"
 dofile "tests/notebook_cells_spec.lua"
 dofile "tests/inlay_hints_spec.lua"
 dofile "tests/rust_dependencies_spec.lua"
+dofile "tests/diff_goto_spec.lua"
 print "CONFIG_SMOKE_OK"
