@@ -17,6 +17,9 @@ for _, module in ipairs {
   "user.inlay_hints.matcher",
   "user.inlay_hints.store",
   "user.inlay_hints.syntax",
+  "user.languages.rust.project",
+  "user.teamtype.panel",
+  "user.teamtype.peers",
   "user.workbench.tasks",
 } do
   local ok, err = pcall(require, module)
@@ -32,19 +35,19 @@ for _, name in ipairs {
   "NotebookHealth",
   "RustDependencyFeatures",
   "RustDependencySearch",
+  "RustProjectRefresh",
   "TeamtypeHost",
   "TeamtypeJoin",
+  "TeamtypeMirror",
+  "TeamtypeMirrorHere",
+  "TeamtypePeers",
 } do
   check(commands[name] ~= nil, "missing :" .. name)
 end
 
 for _, lhs in ipairs {
   "<Leader>r",
-  "<Leader>Up",
-  "<Leader>Us",
-  "<Leader>Ur",
-  "<Leader>Ut",
-  "<Leader>Ua",
+  "<Leader>R",
   "<Leader>ae",
   "<Leader>aE",
   "<Leader>aa",
@@ -113,4 +116,5 @@ dofile "tests/notebook_cells_spec.lua"
 dofile "tests/inlay_hints_spec.lua"
 dofile "tests/rust_dependencies_spec.lua"
 dofile "tests/diff_goto_spec.lua"
+dofile "tests/teamtype_peers_spec.lua"
 print "CONFIG_SMOKE_OK"

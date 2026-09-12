@@ -45,12 +45,30 @@ return {
           callback = function(args) python_env.check(args.buf) end,
         },
       }
+      local rust_project = require "user.languages.rust.project"
+      autocmds.rust_project_refresh = {
+        {
+          event = { "FocusGained", "TermLeave", "TermClose", "DirChanged" },
+          desc = "Notice crates added while Neovim was not looking",
+          callback = function() vim.schedule(rust_project.check_all) end,
+        },
+        {
+          event = { "BufEnter", "BufWritePost" },
+          pattern = { "*.rs", "Cargo.toml" },
+          desc = "Notice manifest changes since this buffer was last current",
+          callback = function(args) rust_project.check(args.buf) end,
+        },
+      }
       opts.autocmds = autocmds
 
       opts.commands = opts.commands or {}
       opts.commands.PythonEnvRefresh = {
         function() require("user.languages.python.environment").refresh() end,
         desc = "Re-scan this project's virtualenv for newly installed packages",
+      }
+      opts.commands.RustProjectRefresh = {
+        function() require("user.languages.rust.project").refresh() end,
+        desc = "Reload the Cargo project and recheck diagnostics",
       }
     end,
   },

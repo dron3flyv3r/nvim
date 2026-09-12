@@ -91,7 +91,6 @@ return {
     "AstroNvim/astrocore",
     ---@param opts AstroCoreOpts
     opts = function(_, opts)
-      local actions = require "user.integrations.unity.actions"
       opts.filetypes = require("astrocore").extend_tbl(opts.filetypes or {}, filetypes)
       local autocmds = opts.autocmds or {}
       autocmds.unity_roslyn = {
@@ -123,20 +122,9 @@ return {
       }
       opts.autocmds = autocmds
 
-      local maps = assert(opts.mappings)
-      maps.n["<Leader>U"] = { desc = "Unity" }
-      maps.n["<Leader>Up"] = { actions.play, desc = "Enter Play mode" }
-      maps.n["<Leader>Us"] = { actions.stop, desc = "Stop Play mode" }
-      maps.n["<Leader>Ur"] = { actions.restart, desc = "Restart Play mode" }
-      maps.n["<Leader>Ub"] = { actions.refresh, desc = "Refresh assets and recompile" }
-      maps.n["<Leader>Ut"] = { actions.test_cursor, desc = "Run test under cursor" }
-      maps.n["<Leader>UT"] = { actions.test_edit, desc = "Choose EditMode test" }
-      maps.n["<Leader>Ua"] = { actions.attach, desc = "Attach debugger" }
-      maps.n["<Leader>Ue"] = { actions.errors, desc = "Compiler errors" }
-      maps.n["<Leader>Uw"] = { actions.warnings, desc = "Compiler errors and warnings" }
-      maps.n["<Leader>Ul"] = { actions.log, desc = "Follow editor log" }
-      maps.n["<Leader>Ud"] = { actions.docs, desc = "Documentation for symbol" }
-      maps.n["<Leader>Ui"] = { actions.status, desc = "Integration status" }
+      -- No `<Leader>U` tree: every one of these actions is in the project
+      -- action menu on `<Leader>r` (see `user/context/providers/unity.lua`),
+      -- and only there, so the leader menu stays short in non-Unity projects.
 
       opts.commands = opts.commands or {}
       opts.commands.UnityShim = {

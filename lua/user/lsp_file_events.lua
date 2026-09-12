@@ -47,6 +47,10 @@ function M.created(path, clients) notify(path, FileChangeType.Created, clients) 
 ---@param clients vim.lsp.Client[]?
 function M.deleted(path, clients) notify(path, FileChangeType.Deleted, clients) end
 
+---@param path string
+---@param clients vim.lsp.Client[]?
+function M.changed(path, clients) notify(path, FileChangeType.Changed, clients) end
+
 ---@param from string
 ---@param to string
 function M.moved(from, to)

@@ -16,6 +16,7 @@ for code intelligence.
 | Key | Meaning |
 | --- | --- |
 | `<Leader>r` | actions valid in the current project |
+| `<Leader>R` | repeat the last task |
 | `<Leader>n…` | personal project notes (outside the repository) |
 | `<Leader>d…` | active debug-session controls and breakpoints |
 | `<Leader>ar…` | Claude review and investigation prompts |
@@ -23,9 +24,6 @@ for code intelligence.
 | `<Leader>gg/gm` | Neogit status, and its merge popup |
 | `gra` | LSP code action, including unresolved Rust dependencies |
 | `K` / `gl` | hover documentation / diagnostic details |
-| `<Leader>Up/Us/Ur` | enter, stop, or restart Unity Play mode |
-| `<Leader>Ub/Ut/Ua` | refresh Unity, test at cursor, or attach debugger |
-| `<Leader>Ue/Uw/Ul` | Unity errors, warnings, or editor log |
 
 In a focused task-output pane, `h` hides the pane while leaving its task
 running; `q` stops that task and hides the pane. Reopen retained output from
@@ -155,6 +153,32 @@ Guest:
 2. Open Neovim in that directory, press `<Leader>Cj`, and paste the join code.
 
 Both peers then open files normally with their own file explorers and pickers.
+
+### Seeing the other peers
+
+Each peer gets their own colour for the session. A resting cursor is a solid
+block in that colour, a visual selection is the same hue tinted into the
+background so the code stays readable underneath it, and the peer's name plus a
+sign-column initial mark the line they are on. Teamtype itself draws every peer
+with `TermCursor`, so this is applied by re-stamping the extmarks it creates;
+the colours live in `TeamtypePeer<n>Caret`, `Selection`, `Label` and `Sign`,
+rebuilt on every `ColorScheme`.
+
+`<Leader>Cw` toggles a peer panel on the right listing everyone, the file and
+line they are on, and whether they are selecting. `<CR>` jumps to the peer under
+the cursor, `m` mirrors them, and `q` closes the panel.
+
+Mirroring pins a window to one peer: it follows them across files, loading files
+you have never opened, and keeps their line centred without taking focus or
+moving your own cursor, which is the difference from `<Leader>Cf`.
+`<Leader>Cm` mirrors into a floating window at the bottom right. `<Leader>Cc`
+instead takes over the window you are standing in, so `<Leader>sv` and then
+`<Leader>Cc` in the new split turns that split into a live view of a peer; both
+ask which peer when more than one is connected. The borrowed split shows the
+peer's name in its winbar and is handed back to the buffer and cursor it had when
+you stop. Any number of windows can follow different peers at once, and
+`<Leader>CM` stops all of them.
+
 `<Leader>Cf` follows a peer, `<Leader>Cp` jumps to a peer cursor, `<Leader>Ci`
 shows connection information, `<Leader>Cl` shows daemon output, and
 `<Leader>Cs` stops the daemon started by this Neovim. Teamtype protects attached

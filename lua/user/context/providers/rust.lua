@@ -43,6 +43,12 @@ function M.actions(ctx)
       },
       { id = "crates.docs", label = "Open crate documentation", category = "Inspect", run = crates.open_documentation },
       { id = "crates.reload", label = "Reload crate data", category = "Maintenance", run = crates.reload },
+      {
+        id = "crates.project_refresh",
+        label = "Reload project after a dependency change",
+        category = "Maintenance",
+        run = function() require("user.languages.rust.project").refresh() end,
+      },
     }
   end
   local tasks = require "user.workbench.tasks"
@@ -83,6 +89,12 @@ function M.actions(ctx)
     },
     { id = "rust.move_down", label = "Move item down", category = "Refactor", run = command "RustLsp moveItem down" },
     { id = "rust.move_up", label = "Move item up", category = "Refactor", run = command "RustLsp moveItem up" },
+    {
+      id = "rust.refresh",
+      label = "Reload project after a dependency change",
+      category = "Maintenance",
+      run = function() require("user.languages.rust.project").refresh() end,
+    },
     {
       id = "rust.proc_macros",
       label = "Rebuild proc macros",

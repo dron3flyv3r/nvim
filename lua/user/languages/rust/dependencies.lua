@@ -173,6 +173,9 @@ local function run_add(opts)
   )
   if vim.fn.confirm(message, "&Add\n&Cancel", 2, "Question") ~= 1 then return end
   require("user.languages.rust.executor").executor.execute_command("cargo", args, vim.fs.dirname(opts.manifest), {})
+  -- The task owns the manifest write, so wait for it rather than refreshing
+  -- against the Cargo.toml this run is about to replace.
+  require("user.languages.rust.project").watch()
 end
 
 local function feature_picker(item, add_opts)

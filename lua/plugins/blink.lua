@@ -42,6 +42,27 @@ return {
     opts.keymap["<Up>"] = { "fallback" }
     opts.keymap["<Down>"] = { "fallback" }
 
+    -- `<Tab>` indents; it never walks a snippet. `<C-l>` / `<C-h>` own snippet
+    -- fields (see `polish.lua`), and having two keys jump the same fields meant
+    -- a `<Tab>` meant as indentation teleported the cursor into a field left
+    -- over from an earlier expansion.
+    opts.keymap["<Tab>"] = {
+      "select_next",
+      function(cmp)
+        local has_words_before = vim.api.nvim_get_mode().mode ~= "c"
+          and vim.api.nvim_get_current_line():sub(1, vim.api.nvim_win_get_cursor(0)[2]):match "[^%s]$" ~= nil
+        if has_words_before or vim.api.nvim_get_mode().mode == "c" then return cmp.show() end
+      end,
+      "fallback",
+    }
+    opts.keymap["<S-Tab>"] = {
+      "select_prev",
+      function(cmp)
+        if vim.api.nvim_get_mode().mode == "c" then return cmp.show() end
+      end,
+      "fallback",
+    }
+
     opts.sources = opts.sources or {}
     opts.sources.providers = opts.sources.providers or {}
     opts.sources.providers.lsp =
