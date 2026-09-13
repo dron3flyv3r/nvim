@@ -26,7 +26,7 @@ return {
       maps.n["<Leader>Cy"] = { teamtype.copy_code, desc = "Copy invitation code" }
       maps.n["<Leader>Cs"] = { teamtype.stop, desc = "Stop collaboration" }
       maps.n["<Leader>Cf"] = { "<Cmd>TeamtypeFollow<CR>", desc = "Follow a peer" }
-      maps.n["<Leader>Cp"] = { "<Cmd>TeamtypeJumpToCursor<CR>", desc = "Jump to a peer cursor" }
+      maps.n["<Leader>Cp"] = { function() panel.jump() end, desc = "Jump to a peer" }
       maps.n["<Leader>Cw"] = { panel.toggle, desc = "Toggle the peer panel" }
       maps.n["<Leader>Cc"] = { function() panel.mirror { here = true } end, desc = "Follow a peer in this window" }
       maps.n["<Leader>Cm"] = { function() panel.mirror() end, desc = "Mirror a peer in a float" }
@@ -41,6 +41,7 @@ return {
       opts.commands.TeamtypeStop = { teamtype.stop, desc = "Stop the Teamtype daemon started by Neovim" }
       opts.commands.TeamtypeLog = { teamtype.open_log, desc = "Show output from the Teamtype daemon" }
       opts.commands.TeamtypePeers = { panel.toggle, desc = "Toggle the panel listing where each peer is" }
+      opts.commands.TeamtypeJump = { function() panel.jump() end, desc = "Pick a connected peer and jump to them once" }
       opts.commands.TeamtypeMirror =
         { function() panel.mirror() end, desc = "Pin a floating window to a peer's position" }
       opts.commands.TeamtypeMirrorHere =

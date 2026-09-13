@@ -46,7 +46,7 @@ local STATIC = {
     {
       { "<Leader>Ch / Cj", "host this project / join with invitation code" },
       { "<Leader>Cy", "copy the active invitation code" },
-      { "<Leader>Cp / Cf", "jump to / follow a peer cursor" },
+      { "<Leader>Cp / Cf", "jump once to / follow a peer" },
       { "<Leader>Cw", "toggle the panel showing where each peer is" },
       { "<Leader>Cc", "make this window follow a peer" },
       { "<Leader>Cm / CM", "mirror a peer in a float / stop all mirrors" },

@@ -133,4 +133,17 @@ same(vim.api.nvim_win_get_buf(split), restore.buf, "the split was handed back")
 same(vim.api.nvim_win_get_cursor(split), restore.cursor, "the split's cursor was restored")
 vim.api.nvim_win_close(split, true)
 
+-- Jumping is a one-shot: it lands on the peer and then the cursor is yours again,
+-- so a later update from that peer must not drag it along.
+cursor.set_cursor(uri, "peer-a", "alice", { { start = position(1, 4), ["end"] = position(1, 4) } })
+panel.jump { id = "peer-a" }
+same(vim.api.nvim_win_get_buf(0), bufnr, "the jump opened the peer's file")
+same(vim.api.nvim_win_get_cursor(0), { 2, 4 }, "the jump landed on the peer")
+
+vim.api.nvim_win_set_cursor(0, { 1, 0 })
+cursor.set_cursor(uri, "peer-a", "alice", { { start = position(2, 0), ["end"] = position(2, 0) } })
+same(vim.api.nvim_win_get_cursor(0), { 1, 0 }, "jumping must not keep following the peer")
+
+panel.jump { id = "peer-gone" }
+
 vim.uv.fs_unlink(path)

@@ -28,6 +28,15 @@ local function location(peer)
   return ("%s:%d"):format(path, peer.line + 1)
 end
 
+---Where a peer is, plus what they are doing there.
+---@param peer user.teamtype.Peer
+---@return string
+local function detail(peer)
+  local where = location(peer)
+  if not peer.selecting then return where end
+  return where .. (peer.lines > 1 and (" · %d lines selected"):format(peer.lines) or " · selecting")
+end
+
 ---Keep the tail of an over-long path: the file name matters more than the root.
 ---@param text string
 ---@param limit integer
@@ -59,11 +68,7 @@ local function render()
     panel.lines[#lines] = peer
     marks[#marks + 1] = { #lines - 1, group(peer.slot, "Label") }
 
-    local detail = location(peer)
-    if peer.selecting then
-      detail = detail .. (peer.lines > 1 and (" · %d lines selected"):format(peer.lines) or " · selecting")
-    end
-    lines[#lines + 1] = "  " .. shorten(detail, width - 3)
+    lines[#lines + 1] = "  " .. shorten(detail(peer), width - 3)
     panel.lines[#lines] = peer
   end
 
@@ -84,24 +89,68 @@ local function peer_under_cursor()
   return peer
 end
 
+---A one-shot jump: your cursor lands where the peer is right now and then stays
+---yours, unlike mirroring or `:TeamtypeFollow`.
 ---@param peer user.teamtype.Peer
 local function jump_to(peer)
-  -- Never open the peer's file inside the sidebar itself.
-  local target
-  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-    if win ~= panel.win and vim.api.nvim_win_get_config(win).relative == "" then
-      target = win
-      break
+  -- Never open the peer's file inside the sidebar or a mirror -- the first is
+  -- not an editing window, the second would be snatched back by the next update.
+  local current = vim.api.nvim_get_current_win()
+  if current == panel.win or mirrors[current] then
+    local target
+    for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+      if win ~= panel.win and not mirrors[win] and vim.api.nvim_win_get_config(win).relative == "" then
+        target = win
+        break
+      end
+    end
+    if target then
+      vim.api.nvim_set_current_win(target)
+    else
+      vim.cmd "wincmd p"
     end
   end
-  if target then
-    vim.api.nvim_set_current_win(target)
-  else
-    vim.cmd "wincmd p"
-  end
+
+  -- Leave a jumplist entry so `<C-o>` brings you back to your own work.
+  vim.cmd "normal! m'"
   vim.cmd.edit(vim.fn.fnameescape(vim.uri_to_fname(peer.uri)))
   pcall(vim.api.nvim_win_set_cursor, 0, { peer.line + 1, peer.column })
   vim.cmd "normal! zz"
+end
+
+---@param peer user.teamtype.Peer
+---@return string
+local function describe(peer) return ("%s — %s"):format(peer.name, detail(peer)) end
+
+---@class user.teamtype.JumpOpts
+---@field id string? peer to jump to; prompts when omitted and more than one is connected
+
+---Show everyone connected and jump to the one you pick.
+---@param opts user.teamtype.JumpOpts?
+function M.jump(opts)
+  opts = opts or {}
+  local list = peers.list()
+  if #list == 0 then
+    notify("No peers connected", vim.log.levels.WARN)
+    return
+  end
+
+  if opts.id then
+    for _, peer in ipairs(list) do
+      if peer.id == opts.id then return jump_to(peer) end
+    end
+    notify("That peer is no longer connected", vim.log.levels.WARN)
+    return
+  end
+
+  if #list == 1 then return jump_to(list[1]) end
+  vim.ui.select(list, {
+    prompt = "Jump to which peer?",
+    format_item = describe,
+  }, function(peer)
+    -- The picker restores the window it was opened from, so jump afterwards.
+    if peer then vim.schedule(function() jump_to(peer) end) end
+  end)
 end
 
 local function close_panel()
@@ -340,7 +389,7 @@ function M.mirror(opts)
   if #list == 1 then return attach(list[1], opts.here or false) end
   vim.ui.select(list, {
     prompt = opts.here and "Follow which peer in this window?" or "Mirror which peer?",
-    format_item = function(peer) return ("%s — %s"):format(peer.name, location(peer)) end,
+    format_item = describe,
   }, function(peer)
     if peer then attach(peer, opts.here or false) end
   end)

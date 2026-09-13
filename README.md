@@ -179,7 +179,10 @@ peer's name in its winbar and is handed back to the buffer and cursor it had whe
 you stop. Any number of windows can follow different peers at once, and
 `<Leader>CM` stops all of them.
 
-`<Leader>Cf` follows a peer, `<Leader>Cp` jumps to a peer cursor, `<Leader>Ci`
+`<Leader>Cp` lists everyone connected -- each with their name, file, line and
+whether they are selecting -- and jumps your own cursor to the one you pick,
+once: nothing keeps following afterwards, and `<C-o>` returns you to where you
+were. `<Leader>Cf` follows a peer instead, `<Leader>Ci`
 shows connection information, `<Leader>Cl` shows daemon output, and
 `<Leader>Cs` stops the daemon started by this Neovim. Teamtype protects attached
 buffers after a connection closes, so restart Neovim before continuing normal
