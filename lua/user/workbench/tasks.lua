@@ -19,13 +19,31 @@ end
 
 function M.run_picker() vim.cmd "OverseerRun" end
 
+--- Repeat the last thing `<Leader>r` ran, whatever ran it.
+---
+--- Overseer owns project tasks, but most of what the action registry offers is
+--- not an Overseer task at all -- Unity play mode, Molten cells, kulala
+--- requests and `RustLsp runnables` all run through their own plugin and leave
+--- the task list empty. Restarting the newest Overseer task is therefore only
+--- half the answer, and on a Unity or notebook buffer it is none of it.
+---
+--- So both histories are consulted and the more recent wins. A task that an
+--- action started is repeated as a *task*: the registry entry behind it is
+--- "Choose project task", and re-opening a picker is not repeating a run.
+--- Ties go to the task for that reason -- `M.execute` stamps its action before
+--- running it, so a task it starts shares the same second.
 function M.rerun_last()
-  local tasks = M.started()
-  if vim.tbl_isempty(tasks) then
-    vim.notify("No task has been run yet -- <Leader>r lists runnable actions", vim.log.levels.INFO, { title = "Tasks" })
-    return
+  local context = require "user.context"
+  local action, action_time = context.last_run()
+  local task = M.started()[1]
+
+  if task and (not action or task.time_start >= action_time) then
+    require("overseer").run_action(task, "restart")
+  elseif action then
+    context.execute(action)
+  else
+    vim.notify("Nothing has been run yet -- <Leader>r lists runnable actions", vim.log.levels.INFO, { title = "Tasks" })
   end
-  require("overseer").run_action(tasks[1], "restart")
 end
 
 function M.focus_output(insert)

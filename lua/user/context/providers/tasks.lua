@@ -11,7 +11,15 @@ function M.actions()
   local tasks = require "user.workbench.tasks"
   return {
     { id = "tasks.run", label = "Choose project task", category = "Run", run = tasks.run_picker },
-    { id = "tasks.repeat", label = "Repeat last task", category = "Run", run = tasks.rerun_last },
+    -- `repeatable = false`: recording this one would make it the thing it
+    -- repeats, and every later press would only re-enter itself.
+    {
+      id = "tasks.repeat",
+      label = "Repeat last run",
+      category = "Run",
+      repeatable = false,
+      run = tasks.rerun_last,
+    },
     {
       id = "tasks.output",
       label = "Show last task output",

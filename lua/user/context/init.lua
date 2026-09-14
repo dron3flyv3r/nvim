@@ -13,6 +13,7 @@ local M = {}
 ---@field category? string
 ---@field priority? integer
 ---@field available? boolean|string|fun(ctx: user.Context): boolean|string
+---@field repeatable? boolean Set false to keep the action out of `<Leader>R`'s history
 ---@field run fun(ctx: user.Context)
 ---@field provider? user.ContextProvider
 
@@ -25,6 +26,14 @@ local M = {}
 ---@field status? fun(ctx: user.Context): string[]
 
 local providers = {}
+
+--- The last action run through `M.execute`, and the `os.time()` it started at.
+--- `<Leader>R` replays it -- see `user/workbench/tasks.lua`, which weighs it
+--- against the newest Overseer task so the more recent of the two wins.
+---@type user.ContextAction|nil
+local last_action = nil
+---@type integer
+local last_action_time = 0
 
 ---@param provider user.ContextProvider
 function M.register(provider)
@@ -110,12 +119,24 @@ function M.execute(action, ctx)
     vim.notify(reason or "Action unavailable", vim.log.levels.WARN, { title = action.label })
     return
   end
+  -- Stamped before the run, not after: an action that starts an Overseer task
+  -- does so within the same second, and `rerun_last` breaks that tie in the
+  -- task's favour.
+  local started_at = os.time()
   local ran, err = pcall(action.run, ctx)
   if not ran then
     vim.notify(err, vim.log.levels.ERROR, { title = action.label })
     return
   end
+  if action.repeatable ~= false then
+    last_action, last_action_time = action, started_at
+  end
 end
+
+--- The action `<Leader>R` would replay, if any.
+---@return user.ContextAction|nil action
+---@return integer time `os.time()` when it was last run
+function M.last_run() return last_action, last_action_time end
 
 function M.pick()
   local ctx = M.resolve()

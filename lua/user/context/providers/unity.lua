@@ -23,10 +23,10 @@ function M.actions()
     { id = "unity.test_edit", label = "Choose EditMode test", category = "Tests", run = actions.test_edit },
     { id = "unity.test_play", label = "Choose PlayMode test", category = "Tests", run = actions.test_play },
     { id = "unity.debug", label = "Attach debugger to Unity", category = "Debug", run = actions.attach },
-    { id = "unity.errors", label = "Load compiler errors", category = "Problems", run = actions.errors },
+    { id = "unity.errors", label = "Open compile errors", category = "Problems", run = actions.errors },
     {
       id = "unity.warnings",
-      label = "Load compiler errors and warnings",
+      label = "Open compile errors and warnings",
       category = "Problems",
       run = actions.warnings,
     },
@@ -39,12 +39,39 @@ function M.actions()
       category = "Maintenance",
       run = actions.install,
     },
+    {
+      id = "unity.bridge_install",
+      label = "Install/update Unity status bridge",
+      category = "Maintenance",
+      run = actions.bridge_install,
+    },
+    {
+      id = "unity.bridge_remove",
+      label = "Remove Unity status bridge",
+      category = "Maintenance",
+      run = actions.bridge_remove,
+    },
   }
 end
 
 function M.status(ctx)
   local root = require("user.integrations.unity").root(ctx.bufnr)
-  return root and { "  Unity root: " .. vim.fn.fnamemodify(root, ":~") } or {}
+  if not root then return {} end
+
+  local lines = { "  Unity root: " .. vim.fn.fnamemodify(root, ":~") }
+
+  local state = require("user.integrations.unity.state").get()
+  if state.root ~= root then
+    table.insert(lines, "  Editor: no status bridge installed (:UnityCompanion)")
+    return lines
+  end
+
+  table.insert(lines, "  Editor: " .. (state.running and state.state or "not running"))
+  if state.errors > 0 or state.warnings > 0 then
+    table.insert(lines, ("  Last compile: %d error(s), %d warning(s)"):format(state.errors, state.warnings))
+  end
+  if state.stale then table.insert(lines, "  Bridge is out of date -- re-run :UnityCompanion") end
+  return lines
 end
 
 return M

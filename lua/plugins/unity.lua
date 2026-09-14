@@ -71,6 +71,20 @@ return {
     end,
   },
 
+  -- The live editor state, from the bridge `:UnityCompanion` installs. The
+  -- component hides itself whole when there is no bridge reporting, so a
+  -- non-Unity session's statusline is exactly what it was before.
+  {
+    "rebelot/heirline.nvim",
+    optional = true,
+    opts = function(_, opts)
+      if type(opts.statusline) ~= "table" then return end
+      -- Second from the right, before the trailing mode block: alongside the
+      -- LSP progress spinner it turns in step with, rather than out on the end.
+      table.insert(opts.statusline, #opts.statusline, require("user.integrations.unity.statusline").component())
+    end,
+  },
+
   {
     "mfussenegger/nvim-dap",
     optional = true,
@@ -108,9 +122,12 @@ return {
           desc = "Listen for Unity's open-this-file requests in this project",
           callback = function(args)
             local root = require("user.integrations.unity").root(args.buf)
+            if not root then return end
             -- Cheap and idempotent: `register` returns early when another
             -- Neovim already owns the socket.
-            if root then require("user.integrations.unity.shim").register(root) end
+            require("user.integrations.unity.shim").register(root)
+            -- Equally idempotent, and a no-op in a project with no bridge.
+            require("user.integrations.unity.state").attach(args.buf)
           end,
         },
         {
@@ -145,9 +162,21 @@ return {
         nargs = "?",
         complete = function() return require("user.integrations.unity.tests").MODES end,
       }
+      opts.commands.UnityCompanion = {
+        function(args)
+          local companion = require "user.integrations.unity.companion"
+          if args.bang then
+            companion.uninstall()
+          else
+            companion.install()
+          end
+        end,
+        desc = "Install the editor bridge that reports Unity's state (! to remove it)",
+        bang = true,
+      }
       opts.commands.UnityErrors = {
         function(args) require("user.integrations.unity.log").errors(args.bang) end,
-        desc = "Unity's compiler diagnostics into the quickfix list (! for warnings too)",
+        desc = "Unity's compiler messages in a picker (! for warnings too)",
         bang = true,
       }
     end,

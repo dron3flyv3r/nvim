@@ -22,11 +22,12 @@ return {
       "AstroNvim/astrocore",
       opts = function(_, opts)
         local maps = assert(opts.mappings)
-        -- The sibling of `<Leader>r`: the picker chooses, this repeats. Not
-        -- `<Leader>rr`, which would make the picker wait out a timeout.
+        -- The sibling of `<Leader>r`: the picker chooses, this repeats
+        -- whatever it chose -- Overseer task or not. Not `<Leader>rr`, which
+        -- would make the picker wait out a timeout.
         maps.n["<Leader>R"] = {
           function() require("user.workbench.tasks").rerun_last() end,
-          desc = "Repeat last task",
+          desc = "Repeat last run",
         }
         maps.n["<leader>M"] = false
         for _, key in ipairs { "t", "c", "r", "a", "i" } do

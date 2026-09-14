@@ -25,8 +25,13 @@ return {
       dapui.setup(opts)
       dap.listeners.before.attach.user_dapui = dapui.open
       dap.listeners.before.launch.user_dapui = dapui.open
-      dap.listeners.before.event_terminated.user_dapui = dapui.close
-      dap.listeners.before.event_exited.user_dapui = dapui.close
+      dap.listeners.before.event_terminated.user_dapui = function() dapui.close() end
+      dap.listeners.before.event_exited.user_dapui = function() dapui.close() end
+      -- Those two only fire when the adapter volunteers the event; netcoredbg
+      -- closes the connection instead and leaves the panels stranded. These
+      -- fire on the requests nvim-dap issues itself, so a stop is a stop.
+      dap.listeners.after.terminate.user_dapui = function() dapui.close() end
+      dap.listeners.after.disconnect.user_dapui = function() dapui.close() end
     end,
   },
   {
@@ -58,7 +63,12 @@ return {
       maps.n["<Leader>di"] = { function() require("dap").step_into() end, desc = "Step into" }
       maps.n["<Leader>do"] = { function() require("dap").step_out() end, desc = "Step out" }
       maps.n["<Leader>dr"] = { function() require("user.debug").restart() end, desc = "Restart session" }
-      maps.n["<Leader>dt"] = { function() require("dap").terminate() end, desc = "Terminate session" }
+      maps.n["<Leader>dt"] = { function() require("user.debug").terminate() end, desc = "Terminate session" }
+      maps.n["<Leader>dU"] = { function() require("user.debug").toggle_ui() end, desc = "Toggle debug UI" }
+      -- AstroNvim's own stop mappings bypass the listeners above: `dap.close()`
+      -- dispatches nothing, so without these the panels survive the session.
+      maps.n["<Leader>dq"] = { function() require("user.debug").close() end, desc = "Close session" }
+      maps.n["<Leader>dQ"] = { function() require("user.debug").terminate() end, desc = "Terminate session" }
       maps.n["<Leader>du"] = { function() require("dap").run_to_cursor() end, desc = "Run to cursor" }
       maps.n["<Leader>db"] = { function() require("dap").toggle_breakpoint() end, desc = "Toggle breakpoint" }
       maps.n["<Leader>dB"] =

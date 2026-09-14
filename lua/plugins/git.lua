@@ -706,12 +706,77 @@ return {
   {
     "lewis6991/gitsigns.nvim",
     opts = function(_, opts)
+      -- The old lines in an inline preview are drawn in a float over your own,
+      -- and gitsigns builds that float's buffer with `nvim_create_buf`, copying
+      -- only `filetype` onto it. Indent width is not part of a filetype: it is
+      -- guessed per file by `guess-indent`, off `BufReadPost`, which a scratch
+      -- buffer never fires. So a tab-indented file read at `tabstop=4` gets its
+      -- old lines redrawn at whatever the ftplugin left behind -- `2` for C# --
+      -- and every old line lands `(4 - 2) * depth` columns left of the new line
+      -- directly above it. The drift grows with nesting, which is what gives it
+      -- away. Copy the width across once the float is up. `vartabstop` too: it
+      -- overrides `tabstop` wherever it is set, so leaving it behind would
+      -- reintroduce the same skew on a file that uses it.
+      ---@param src_win integer the window the preview was asked for
+      ---@param src_buf integer the file being previewed
+      ---@return boolean found whether the float was up yet
+      local function align_preview_float(src_win, src_buf)
+        for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+          local cfg = vim.api.nvim_win_get_config(win)
+          -- gitsigns anchors this float to the window it previewed, which is
+          -- specific enough to never catch a notification or a which-key popup.
+          if cfg.relative == "win" and cfg.win == src_win then
+            local buf = vim.api.nvim_win_get_buf(win)
+            vim.bo[buf].tabstop = vim.bo[src_buf].tabstop
+            vim.bo[buf].vartabstop = vim.bo[src_buf].vartabstop
+            return true
+          end
+        end
+        return false
+      end
+
       local astronvim_on_attach = opts.on_attach
       opts.on_attach = function(bufnr)
         if astronvim_on_attach then astronvim_on_attach(bufnr) end
         require("astrocore").set_mappings({
           n = {
             ["<Leader>gd"] = { "<Cmd>DiffviewOpen<CR>", desc = "Diff all changes" },
+
+            -- AstroNvim's own `<Leader>gp`, with the float straightened out
+            -- afterwards. `preview_hunk_inline` is async and the float is never
+            -- up when it returns -- measured at 2-6ms behind it -- so the fixup
+            -- has to wait for the window rather than run straight after the
+            -- call. The wait is in milliseconds on a timer, not `vim.schedule`:
+            -- scheduled callbacks run on consecutive event-loop turns, so a
+            -- chain of them is spent inside a microsecond and gives up long
+            -- before the float exists. 250ms of headroom over a 6ms wait costs
+            -- nothing, since the timer stops the moment it finds the window.
+            ["<Leader>gp"] = {
+              function()
+                local src_win, src_buf = vim.api.nvim_get_current_win(), vim.api.nvim_get_current_buf()
+                require("gitsigns").preview_hunk_inline()
+                local tries = 0
+                local function wait_for_float()
+                  tries = tries + 1
+                  if not align_preview_float(src_win, src_buf) and tries < 25 then
+                    vim.defer_fn(wait_for_float, 10)
+                  end
+                end
+                wait_for_float()
+              end,
+              desc = "Preview Git hunk",
+            },
+
+            -- The same hunk as `<Leader>gp`, read the other way. Inline keeps
+            -- the change where it lives and is the better read for a line or
+            -- two; this is a bordered popup with the hunk as a unified diff and
+            -- a "Hunk 2 of 5" title, which stays legible when the hunk is long
+            -- enough that inline stops fitting on screen. Lower/upper is scope
+            -- elsewhere in this file; here it is the same scope, more room.
+            ["<Leader>gP"] = {
+              function() require("gitsigns").preview_hunk() end,
+              desc = "Preview Git hunk in a popup",
+            },
           },
         }, { buffer = bufnr })
       end

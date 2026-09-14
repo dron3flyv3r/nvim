@@ -42,5 +42,7 @@ function M.log() require("user.integrations.unity.log").tail() end
 function M.docs() require("user.integrations.unity.docs").open() end
 function M.status() require("user.integrations.unity.shim").status() end
 function M.install() require("user.integrations.unity.shim").install() end
+function M.bridge_install() require("user.integrations.unity.companion").install() end
+function M.bridge_remove() require("user.integrations.unity.companion").uninstall() end
 
 return M

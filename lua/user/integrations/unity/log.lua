@@ -6,7 +6,7 @@ local PATTERN = "^([%w_%-%./ ]+%.cs)%((%d+),(%d+)%):%s+(%a+)%s+(%u+%d+):%s*(.*)$
 
 ---@param root string
 ---@param include_warnings? boolean
----@return table[] items Quickfix items, in the order Unity printed them.
+---@return table[] items Messages, in the order Unity printed them.
 function M.diagnostics(root, include_warnings)
   local log = require("user.integrations.unity").log_file()
   local file = io.open(log, "r")
@@ -30,15 +30,15 @@ function M.diagnostics(root, include_warnings)
       if not seen[key] then
         seen[key] = true
         table.insert(block, {
-          -- The path is relative to the project root, and a quickfix entry is
+          -- The path is relative to the project root, and a list entry is
           -- resolved against the cwd -- which is not necessarily the same
           -- place. Absolute, so the entry is jumpable from anywhere.
           filename = vim.startswith(path, "/") and path or (root .. "/" .. path),
           lnum = tonumber(lnum),
           col = tonumber(col),
           type = severity == "error" and "E" or "W",
-          text = ("%s: %s"):format(code, message),
-          severity = severity,
+          code = code,
+          text = message,
         })
       end
     end
@@ -46,33 +46,75 @@ function M.diagnostics(root, include_warnings)
   file:close()
 
   if include_warnings then return block end
-  return vim.tbl_filter(function(item) return item.severity == "error" end, block)
+  return vim.tbl_filter(function(item) return item.type == "E" end, block)
 end
 
---- Load Unity's compiler diagnostics into the quickfix list.
+--- Unity's messages in the shape snacks' own diagnostics picker uses, so the
+--- list reads the way `<Leader>xx` does -- severity icon, message, code, file.
+---@param items table[]
+---@return table[]
+local function picker_items(items)
+  local out = {}
+  for _, item in ipairs(items) do
+    local severity = item.type == "W" and vim.diagnostic.severity.WARN or vim.diagnostic.severity.ERROR
+    out[#out + 1] = {
+      -- What typing in the picker matches against: the filename as you would
+      -- think of it, the code, and the message.
+      text = table.concat({ vim.fn.fnamemodify(item.filename, ":t"), item.code or "", item.text }, " "),
+      file = item.filename,
+      -- The picker wants a 1-indexed line and a 0-indexed column; Unity counts
+      -- both from one.
+      pos = { item.lnum, math.max(0, item.col - 1) },
+      severity = severity,
+      -- The `diagnostic` formatter reads this as a `vim.Diagnostic` would be.
+      item = { message = item.text, source = "Unity", code = item.code },
+    }
+  end
+  return out
+end
+
+--- Open Unity's compiler messages in a picker. Deliberately a list and not a
+--- jump: these are as old as the last compile, so the first thing you want is
+--- to see what there is, not to be thrown into the first one of them.
 ---@param include_warnings? boolean
 function M.errors(include_warnings)
-  local root = require("user.integrations.unity").require_root()
+  local unity = require "user.integrations.unity"
+  local watched = require("user.integrations.unity.state").get().root
+  -- The picker's own buffers have no path, so asking the buffer which project
+  -- it belongs to fails the moment this is re-run from inside the list. The
+  -- project being watched is the right answer whenever the buffer has none;
+  -- `require_root` is left to do the complaining.
+  local root = unity.root() or watched or unity.require_root()
   if not root then return end
 
   local kind = include_warnings and "diagnostic" or "error"
-  local items = M.diagnostics(root, include_warnings)
+
+  -- The bridge has the compiler's own messages, with the file, the line and the
+  -- column as the compiler reported them. Scraping a 50MB editor log for the
+  -- same thing is the fallback for a project that has no bridge installed.
+  local items
+  if watched == root then
+    items = require("user.integrations.unity.diagnostics").list(include_warnings)
+  else
+    items = M.diagnostics(root, include_warnings)
+  end
 
   if vim.tbl_isempty(items) then
     -- Empty means Unity's last compile was clean, not that the scrape failed --
     -- worth saying, because it is the answer you are usually hoping for.
     vim.notify(("Unity's last compile had no %ss"):format(kind), vim.log.levels.INFO, { title = "Unity" })
-    vim.fn.setqflist({}, " ", { title = "Unity compile", items = {} })
     return
   end
 
-  vim.fn.setqflist({}, " ", { title = "Unity compile", items = items })
-  vim.notify(
-    ("%d Unity %s%s in the quickfix list (æq / øq)"):format(#items, kind, #items == 1 and "" or "s"),
-    vim.log.levels.WARN,
-    { title = "Unity" }
-  )
-  vim.cmd.cfirst()
+  require("snacks").picker {
+    title = include_warnings and "Unity compile errors and warnings" or "Unity compile errors",
+    items = picker_items(items),
+    format = "diagnostic",
+    -- Errors before warnings, and then the order they were built in: by file,
+    -- and down the file. `sort_empty` is what makes that hold before you type.
+    sort = { fields = { "severity", "idx" } },
+    matcher = { sort_empty = true },
+  }
 end
 
 function M.tail()

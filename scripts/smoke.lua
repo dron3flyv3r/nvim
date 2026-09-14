@@ -13,6 +13,10 @@ for _, module in ipairs {
   "user.integrations.notebook.cells",
   "user.integrations.unity",
   "user.integrations.unity.actions",
+  "user.integrations.unity.companion",
+  "user.integrations.unity.diagnostics",
+  "user.integrations.unity.state",
+  "user.integrations.unity.statusline",
   "user.inlay_hints.handler",
   "user.inlay_hints.matcher",
   "user.inlay_hints.store",
@@ -41,6 +45,8 @@ for _, name in ipairs {
   "TeamtypeMirror",
   "TeamtypeMirrorHere",
   "TeamtypePeers",
+  "UnityCompanion",
+  "UnityErrors",
 } do
   check(commands[name] ~= nil, "missing :" .. name)
 end
@@ -117,4 +123,5 @@ dofile "tests/inlay_hints_spec.lua"
 dofile "tests/rust_dependencies_spec.lua"
 dofile "tests/diff_goto_spec.lua"
 dofile "tests/teamtype_peers_spec.lua"
+dofile "tests/unity_bridge_spec.lua"
 print "CONFIG_SMOKE_OK"
