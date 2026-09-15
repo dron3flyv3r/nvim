@@ -86,7 +86,9 @@ function M.setup()
         -- diagnostic refresh, not throw from inside a notification handler.
         local refresh = vim.lsp.diagnostic._refresh
         if not refresh then return end
-        for _, buf in ipairs(vim.lsp.get_buffers_by_client_id(ctx.client_id)) do
+        local client = vim.lsp.get_client_by_id(ctx.client_id)
+        if not client then return end
+        for buf in pairs(client.attached_buffers) do
           pcall(refresh, buf, ctx.client_id)
         end
       end,

@@ -38,11 +38,33 @@ local docked = {}
 ---@return boolean
 function M.shows(id) return docked[id] == true end
 
+--- Teach dap-ui to survive a value the adapter never sent.
+---
+--- It hands an `evaluate` response straight to `format_value`, which splits it
+--- with `vim.gsplit` -- and `vim.gsplit` raises on a nil. The DAP spec makes
+--- `result` required, but the Unity adapter answers a hover it will not
+--- stringify with a body carrying a `variablesReference` and no `result` at all.
+--- The render then throws inside an nio task with no error handler, so what
+--- lands in the message area is a twenty-line traceback instead of a value, and
+--- the float comes up empty. Hover, watches and scopes all render through this
+--- one function, so one guard covers all three.
+local function harden_values()
+  local util = require "dapui.util"
+  if util.user_nil_value_guard then return end
+  util.user_nil_value_guard = true
+
+  local format_value = util.format_value
+  ---@param value string|nil
+  function util.format_value(value_start, value) return format_value(value_start, value or "<unavailable>") end
+end
+
 --- Register the dock and tie it to the session lifecycle.
 ---@param opts table|nil dapui options from the plugin spec
 function M.setup(opts)
   local dap, dapui = require "dap", require "dapui"
   local debug = require "user.debug"
+
+  harden_values()
 
   local layouts = M.layout()
   docked = {}

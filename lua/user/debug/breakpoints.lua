@@ -6,11 +6,46 @@ local M = {}
 --- muting is remembering the set, sending an empty one, and restoring later.
 local muted = nil
 
-local function sync()
-  local points = require("dap.breakpoints").get()
-  for _, session in pairs(require("dap").sessions()) do
-    session:set_breakpoints(points)
+---@param sessions table<integer, table>
+---@param fn fun(session: table)
+local function broadcast(sessions, fn)
+  for _, session in pairs(sessions) do
+    fn(session)
+    broadcast(session.children, fn)
   end
+end
+
+--- Hand every session the set it should be holding, naming the buffers whose
+--- breakpoints are gone so that emptying one is an update rather than a silence.
+---
+--- `dap.breakpoints.get` drops a buffer from its result the moment the last
+--- breakpoint in it is gone, and `Session:set_breakpoints` returns without
+--- sending anything when it is handed a table with no entries at all. Between
+--- them, "there are none left anywhere" -- which is exactly what muting and
+--- deleting produce -- never reaches the adapter: the signs disappear, the
+--- adapter keeps every breakpoint it was given, and the program goes on stopping
+--- at breakpoints that are no longer on screen.
+---@param emptied table<integer, boolean>|nil buffers that held breakpoints before the change
+local function sync(emptied)
+  local points = require("dap.breakpoints").get()
+  for bufnr in pairs(emptied or {}) do
+    -- A wiped buffer has no name to send the adapter, and nothing left to stop
+    -- on either.
+    if not points[bufnr] and vim.api.nvim_buf_is_valid(bufnr) then points[bufnr] = {} end
+  end
+  if not next(points) then return end
+
+  broadcast(require("dap").sessions(), function(session) session:set_breakpoints(points) end)
+end
+
+---@param points table<integer, table[]>
+---@return table<integer, boolean>
+local function buffers(points)
+  local held = {}
+  for bufnr in pairs(points) do
+    held[bufnr] = true
+  end
+  return held
 end
 
 ---@param points table<integer, table[]>
@@ -50,6 +85,7 @@ function M.toggle_mute()
       end
     end
     muted = nil
+    sync()
     say(("%d breakpoints are live again"):format(restored))
   else
     local points = breakpoints.get()
@@ -58,21 +94,29 @@ function M.toggle_mute()
 
     muted = points
     breakpoints.clear()
+    sync(buffers(points))
     say(("%d breakpoints muted -- the same key brings them back"):format(total), vim.log.levels.WARN)
   end
-
-  sync()
 end
 
 --- Gone for good.
 function M.clear()
-  local total = count(require("dap.breakpoints").get())
-  if total == 0 and not muted then return say "There are no breakpoints to delete" end
+  local breakpoints = require "dap.breakpoints"
+  local points = breakpoints.get()
+  local total = count(points) + count(muted or {})
+  if total == 0 then return say "There are no breakpoints to delete" end
 
-  require("dap").clear_breakpoints()
+  local emptied = buffers(points)
   -- Deleting while muted has to forget the muted set too, or the next unmute
-  -- would resurrect everything that was just thrown away.
+  -- would resurrect everything that was just thrown away -- and the adapter is
+  -- still holding those, since muting is the one thing that never told it.
+  for bufnr in pairs(muted or {}) do
+    emptied[bufnr] = true
+  end
   muted = nil
+
+  breakpoints.clear()
+  sync(emptied)
   say(("%d breakpoints deleted"):format(total))
 end
 

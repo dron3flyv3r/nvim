@@ -53,6 +53,31 @@ return {
     },
   },
   {
+    "stevearc/resession.nvim",
+    optional = true,
+    opts = {
+      -- resession's default list, minus `cmdheight`. Nvim grows the cmdline on
+      -- its own to fit a long message and does not always shrink it back, so
+      -- whatever it happened to be when the session was written got restored on
+      -- every open -- a statusline stranded rows above the bottom -- and saved
+      -- again on exit, keeping the mistake alive. Nothing here ever sets it
+      -- deliberately, so it has no business in a session.
+      options = {
+        "binary",
+        "bufhidden",
+        "buflisted",
+        "diff",
+        "filetype",
+        "modifiable",
+        "previewwindow",
+        "readonly",
+        "scrollbind",
+        "winfixheight",
+        "winfixwidth",
+      },
+    },
+  },
+  {
     "nvim-neo-tree/neo-tree.nvim",
     optional = true,
     opts = function(_, opts)
