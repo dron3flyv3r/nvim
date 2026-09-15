@@ -21,17 +21,8 @@ return {
     dependencies = { "mfussenegger/nvim-dap", "nvim-neotest/nvim-nio" },
     opts = {},
     config = function(_, opts)
-      local dap, dapui = require "dap", require "dapui"
-      dapui.setup(opts)
-      dap.listeners.before.attach.user_dapui = dapui.open
-      dap.listeners.before.launch.user_dapui = dapui.open
-      dap.listeners.before.event_terminated.user_dapui = function() dapui.close() end
-      dap.listeners.before.event_exited.user_dapui = function() dapui.close() end
-      -- Those two only fire when the adapter volunteers the event; netcoredbg
-      -- closes the connection instead and leaves the panels stranded. These
-      -- fire on the requests nvim-dap issues itself, so a stop is a stop.
-      dap.listeners.after.terminate.user_dapui = function() dapui.close() end
-      dap.listeners.after.disconnect.user_dapui = function() dapui.close() end
+      require("user.debug.adapters").setup()
+      require("user.debug.ui").setup(opts)
     end,
   },
   {
@@ -57,24 +48,43 @@ return {
       maps.x["<Leader>arc"] = { function() require("user.ai_review").selection() end, desc = "Review selection" }
       maps.x["<Leader>ari"] = { function() require("user.ai_review").investigate() end, desc = "Investigate selection" }
 
+      -- AstroNvim's own debug mappings are dropped wholesale rather than partly
+      -- overwritten, so the group lists one way to do each thing instead of
+      -- three ways to stop a session.
+      for _, suffix in ipairs { "C", "h", "O", "p", "q", "Q" } do
+        maps.n["<Leader>d" .. suffix] = false
+      end
+
       maps.n["<Leader>d"] = { desc = "Debug" }
-      maps.n["<Leader>dc"] = { function() require("dap").continue() end, desc = "Continue / start" }
+      maps.n["<Leader>dd"] = { function() require("user.debug").start() end, desc = "Debug here" }
+      maps.n["<Leader>dc"] = { function() require("dap").continue() end, desc = "Continue" }
       maps.n["<Leader>dn"] = { function() require("dap").step_over() end, desc = "Step over" }
       maps.n["<Leader>di"] = { function() require("dap").step_into() end, desc = "Step into" }
       maps.n["<Leader>do"] = { function() require("dap").step_out() end, desc = "Step out" }
-      maps.n["<Leader>dr"] = { function() require("user.debug").restart() end, desc = "Restart session" }
-      maps.n["<Leader>dt"] = { function() require("user.debug").terminate() end, desc = "Terminate session" }
-      maps.n["<Leader>dU"] = { function() require("user.debug").toggle_ui() end, desc = "Toggle debug UI" }
-      -- AstroNvim's own stop mappings bypass the listeners above: `dap.close()`
-      -- dispatches nothing, so without these the panels survive the session.
-      maps.n["<Leader>dq"] = { function() require("user.debug").close() end, desc = "Close session" }
-      maps.n["<Leader>dQ"] = { function() require("user.debug").terminate() end, desc = "Terminate session" }
-      maps.n["<Leader>du"] = { function() require("dap").run_to_cursor() end, desc = "Run to cursor" }
+      maps.n["<Leader>ds"] = { function() require("dap").run_to_cursor() end, desc = "Run to cursor" }
       maps.n["<Leader>db"] = { function() require("dap").toggle_breakpoint() end, desc = "Toggle breakpoint" }
       maps.n["<Leader>dB"] =
         { function() require("user.debug").conditional_breakpoint() end, desc = "Conditional breakpoint" }
+      maps.n["<Leader>dL"] = { function() require("user.debug").logpoint() end, desc = "Logpoint (print, do not stop)" }
       maps.n["<Leader>dl"] = { function() require("user.debug").breakpoints() end, desc = "List breakpoints" }
-      maps.n["<Leader>de"] = { function() require("user.debug").exceptions() end, desc = "Exception breakpoints" }
+      maps.n["<Leader>dm"] =
+        { function() require("user.debug").mute_breakpoints() end, desc = "Mute / unmute all breakpoints" }
+      maps.n["<Leader>dx"] =
+        { function() require("user.debug").clear_breakpoints() end, desc = "Delete all breakpoints" }
+      maps.n["<Leader>de"] = { function() require("user.debug").exceptions() end, desc = "Exception filters" }
+      maps.n["<Leader>dw"] = { function() require("user.debug").watch() end, desc = "Add watch expression" }
+      maps.n["<Leader>dE"] = { function() require("user.debug").evaluate() end, desc = "Evaluate expression" }
+      maps.n["<Leader>du"] = { function() require("user.debug").toggle_ui() end, desc = "Toggle debug dock" }
+      maps.n["<Leader>dR"] = { function() require("dap").repl.toggle() end, desc = "Toggle REPL" }
+      maps.n["<Leader>dr"] = { function() require("user.debug").restart() end, desc = "Restart session" }
+      -- The only key that ends a session. `dap.terminate()` asks the adapter to
+      -- stop and `dap.close()` hangs up; having had one key each meant a session
+      -- could be left half stopped with the dock still open.
+      maps.n["<Leader>dt"] = { function() require("user.debug").stop() end, desc = "Stop session" }
+
+      maps.v = maps.v or {}
+      maps.v["<Leader>d"] = { desc = "Debug" }
+      maps.v["<Leader>dE"] = { function() require("dapui").eval() end, desc = "Evaluate selection" }
     end,
   },
 }

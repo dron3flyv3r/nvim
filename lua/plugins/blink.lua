@@ -63,8 +63,30 @@ return {
       "fallback",
     }
 
+    -- blink switches itself off in `buftype=prompt` buffers, and nvim-dap's
+    -- REPL is one -- which is half of why typing there never suggested anything
+    -- (`user.debug.completion` explains the other half). Everything else about
+    -- the default test is kept.
+    opts.enabled = function()
+      if vim.bo.filetype == "dap-repl" then return vim.b.completion ~= false end
+      return vim.bo.buftype ~= "prompt" and vim.b.completion ~= false
+    end
+
     opts.sources = opts.sources or {}
     opts.sources.providers = opts.sources.providers or {}
+
+    opts.sources.providers.dap_repl = {
+      name = "Runtime",
+      module = "user.debug.completion",
+      -- Every item costs a round trip to the debug adapter, which is talking to
+      -- a paused game; blocking the keystroke on that would be felt.
+      async = true,
+    }
+    opts.sources.per_filetype = vim.tbl_deep_extend("force", opts.sources.per_filetype or {}, {
+      -- Not the LSP: there is no language server attached to the REPL buffer,
+      -- and the frame's real values beat a static index anyway.
+      ["dap-repl"] = { "dap_repl", "buffer", "snippets" },
+    })
     opts.sources.providers.lsp =
       vim.tbl_deep_extend("force", opts.sources.providers.lsp or {}, { transform_items = dedupe_python_lsp })
 
