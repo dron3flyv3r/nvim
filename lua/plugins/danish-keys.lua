@@ -10,10 +10,12 @@ return {
     -- Motion keys, applied in normal + visual + operator-pending so they work
     -- standalone (`åx`), after an operator (`då`) and inside a selection.
     local motions = {
-      ["ø"] = { "[", "`[` prefix (Danish)", true },
-      ["æ"] = { "]", "`]` prefix (Danish)", true },
-      ["Ø"] = { "{", "Previous paragraph/block", false },
-      ["Æ"] = { "}", "Next paragraph/block", false },
+      -- Laid out so the physical order `æ ø å` reads left-to-right as
+      -- backward -> forward -> end of line.
+      ["æ"] = { "[", "`[` prefix (Danish)", true },
+      ["ø"] = { "]", "`]` prefix (Danish)", true },
+      ["Æ"] = { "{", "Previous paragraph/block", false },
+      ["Ø"] = { "}", "Next paragraph/block", false },
       ["å"] = { "$", "End of line", false },
       ["Å"] = { "^", "First non-blank character", false },
     }

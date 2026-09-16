@@ -72,7 +72,7 @@ return {
 
     mappings = {
       n = {
-        -- Buffer navigation by pair-jump. `æb` / `øb` on a Danish layout.
+        -- Buffer navigation by pair-jump. `øb` / `æb` on a Danish layout.
         ["]b"] = { function() require("astrocore.buffer").nav(vim.v.count1) end, desc = "Next buffer" },
         ["[b"] = { function() require("astrocore.buffer").nav(-vim.v.count1) end, desc = "Previous buffer" },
 

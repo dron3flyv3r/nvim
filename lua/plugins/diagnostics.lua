@@ -25,7 +25,7 @@ return {
 
     maps.n["<Leader>ue"] = { function() diagnostics.toggle() end, desc = "Toggle errors-only diagnostics" }
 
-    -- `]d` / `[d` -- and therefore `æd` / `ød`, which remap onto them -- skip
+    -- `]d` / `[d` -- and therefore `ød` / `æd`, which remap onto them -- skip
     -- whatever the filter is hiding. A filter you can still walk into has not
     -- hidden anything.
     maps.n["]d"] = { function() diagnostics.jump(vim.v.count1) end, desc = "Next diagnostic" }

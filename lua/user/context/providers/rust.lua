@@ -53,6 +53,7 @@ function M.actions(ctx)
   end
   local tasks = require "user.workbench.tasks"
   local dependencies = require "user.languages.rust.dependencies"
+  local watching = require("user.languages.rust.watch").status_here()
   return {
     {
       id = "rust.search_crates",
@@ -65,6 +66,21 @@ function M.actions(ctx)
     { id = "rust.test", label = "Test cursor target", category = "Run", run = command "RustLsp testables" },
     { id = "rust.debug", label = "Debug cursor target", category = "Run", run = command "RustLsp debuggables" },
     { id = "rust.build", label = "Choose Cargo build task", category = "Build", run = tasks.run_picker },
+    {
+      id = "rust.watch",
+      label = watching and ("Stop continuous build (%s)"):format(watching) or "Start continuous build",
+      category = "Build",
+      -- Toggling is a state change, not something `<Leader>R` should replay.
+      repeatable = false,
+      run = function() require("user.languages.rust.watch").toggle() end,
+    },
+    {
+      id = "rust.watch_configure",
+      label = "Configure the continuous build",
+      category = "Build",
+      repeatable = false,
+      run = function() require("user.languages.rust.watch").configure() end,
+    },
     {
       id = "rust.diagnostic",
       label = "Render full rustc diagnostic",

@@ -112,7 +112,7 @@ function M.picker(scope)
 end
 
 --- Jump to the next/previous diagnostic the filter is not hiding.
----@param count integer Negative goes backwards. `vim.v.count1` for `3æd`.
+---@param count integer Negative goes backwards. `vim.v.count1` for `3ød`.
 function M.jump(count)
   local target = vim.diagnostic.jump { count = count, severity = M.severity_filter(), float = false }
   if not target then

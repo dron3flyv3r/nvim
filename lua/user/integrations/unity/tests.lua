@@ -70,10 +70,10 @@ local function report(root)
 
   if #failures > 0 then
     vim.fn.setqflist({}, " ", { title = "Unity " .. run.mode .. " tests", items = failures })
-    -- Not `copen`: `æq` / `øq` (`]q` / `[q`) walk the list without a window in
+    -- Not `copen`: `øq` / `æq` (`]q` / `[q`) walk the list without a window in
     -- the way, which is how the rest of this config treats compiler output.
     vim.notify(
-      summary .. "\n" .. "Failures are in the quickfix list (æq / øq).",
+      summary .. "\n" .. "Failures are in the quickfix list (øq / æq).",
       vim.log.levels.ERROR,
       { title = "Unity" }
     )

@@ -55,7 +55,7 @@ M.executor = {
             open = false,
             open_on_match = false,
             -- Without this every line cargo prints becomes an entry with no
-            -- file and no line, and `æq` walks you through "Compiling
+            -- file and no line, and `øq` walks you through "Compiling
             -- serde v1.0.219" on the way to the actual error.
             items_only = true,
             set_diagnostics = false,

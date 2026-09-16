@@ -11,6 +11,7 @@ local STATIC = {
     {
       { "<Leader>r", "actions valid in this project" },
       { "<Leader>R", "repeat the last task" },
+      { "<Leader>W", "toggle the continuous Cargo build (Rust)" },
       { "h / q (task output)", "hide / stop and hide" },
       { ":ContextStatus", "explain detected providers and missing tools" },
     },
@@ -18,12 +19,12 @@ local STATIC = {
   {
     "DANISH ALIASES",
     {
-      { "ø / æ", "[ / ] prefixes" },
-      { "Ø / Æ", "{ / } motions" },
+      { "æ / ø", "[ / ] prefixes" },
+      { "Æ / Ø", "{ / } motions" },
       { "å / Å", "$ / ^ motions" },
-      { "æb / øb", "next / previous buffer" },
-      { "æd / ød", "next / previous diagnostic" },
-      { "æq / øq", "next / previous quickfix item" },
+      { "øb / æb", "next / previous buffer" },
+      { "ød / æd", "next / previous diagnostic" },
+      { "øq / æq", "next / previous quickfix item" },
     },
   },
   {
@@ -90,7 +91,7 @@ local STATIC = {
     {
       { "gl / <Leader>ld", "full error on this line; press again to focus and scroll" },
       { "<Leader>xx / xX", "browse project / current-buffer diagnostics with preview" },
-      { "æd / ød", "next / previous diagnostic" },
+      { "ød / æd", "next / previous diagnostic" },
       { "K", "documentation for symbol under cursor; press again to focus" },
       { "q", "close a focused error or documentation popup" },
     },
