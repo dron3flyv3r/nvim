@@ -28,7 +28,14 @@ return {
   ---@type AstroLSPOpts
   opts = {
     features = {
-      codelens = true,
+      -- NOT `true`. AstroNvim v5 pins astrolsp to `^3`, whose `on_attach` calls
+      -- `vim.lsp.codelens.refresh { bufnr = bufnr }` -- deprecated in Nvim 0.12,
+      -- gone in 0.13. astrolsp 4.x guards that call, but 4.0 moved wholesale to
+      -- `vim.lsp.config` and is a breaking change AstroNvim v5 is not built for,
+      -- so bumping it is not an option. Turning the feature off stops astrolsp
+      -- from making the call at all; the `on_attach` below does the same job
+      -- through the API that replaced it. Revisit on AstroNvim v6.
+      codelens = false,
 
       -- Inlay hints: the greyed-in `param:` labels and inferred types that VS
       -- Code shows between your own tokens. basedpyright and clangd both
@@ -70,6 +77,13 @@ return {
     handlers = {},
 
     autocmds = {},
+
+    -- The replacement for the codelens refresh `features.codelens` used to do.
+    -- `enable` fetches the lenses now *and* keeps refreshing them as the buffer
+    -- changes, so unlike the old `refresh` there is nothing to re-run later.
+    on_attach = function(client, bufnr)
+      if client:supports_method "textDocument/codeLens" then vim.lsp.codelens.enable(true, { bufnr = bufnr }) end
+    end,
 
     mappings = {
       n = {

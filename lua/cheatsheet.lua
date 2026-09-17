@@ -93,6 +93,7 @@ local STATIC = {
       { "<Leader>xx / xX", "browse project / current-buffer diagnostics with preview" },
       { "ød / æd", "next / previous diagnostic" },
       { "K", "documentation for symbol under cursor; press again to focus" },
+      { "<CR>", "in a docs popup: reopen it in a split you can search and yank" },
       { "q", "close a focused error or documentation popup" },
     },
   },

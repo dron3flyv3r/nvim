@@ -72,5 +72,23 @@ return {
       style = "hydrogen",
       output_extension = "auto",
     },
+    -- `jupytext.setup()` validates its options with the table form of
+    -- `vim.validate`, which Neovim 0.12 deprecates (removal in 1.0). There is no
+    -- fix upstream -- `main` is the commit we are already on -- and because this
+    -- plugin is `lazy = false` the notice lands during startup, where a printed
+    -- message forces the message area open under `cmdheight = 0` and shoves the
+    -- statusline up the screen.
+    --
+    -- Silencing `vim.deprecate` for the duration of the call leaves the
+    -- validation itself running, so bad options are still caught; only the
+    -- notice about *how* they are checked goes away. Delete this once the plugin
+    -- moves to the `vim.validate(name, value, ...)` form.
+    config = function(_, opts)
+      local deprecate = vim.deprecate
+      vim.deprecate = function() end
+      local ok, err = pcall(require("jupytext").setup, opts)
+      vim.deprecate = deprecate
+      if not ok then error(err) end
+    end,
   },
 }

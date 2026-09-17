@@ -69,6 +69,15 @@ end
 
 local rust_spec = table.concat(vim.fn.readfile "lua/plugins/rust-run.lua", "\n")
 check(not rust_spec:find("<Leader>R", 1, true), "Rust actions should use native keys or the contextual picker")
+
+-- There is one `mappings.n.K` slot in the shared AstroLSP opts. A language spec
+-- that claims it replaces the general hover rather than adding to it, and a
+-- language-conditional replacement leaves every other filetype with no mapping
+-- at all -- at which point Neovim quietly installs its own default and
+-- `user.hover` never runs again. Dispatch from inside `user.hover` instead.
+check(not rust_spec:find("maps.n.K", 1, true), "rust must not claim the shared K mapping")
+local astrolsp_spec = table.concat(vim.fn.readfile "lua/plugins/astrolsp.lua", "\n")
+check(astrolsp_spec:find('require("user.hover").open()', 1, true) ~= nil, "K must route through user.hover")
 local quickfix_spec = table.concat(vim.fn.readfile "lua/plugins/quickfix.lua", "\n")
 check(quickfix_spec:find('maps.n["gra"]', 1, true) ~= nil, "native gra must include the smart quick-fix wrapper")
 
@@ -134,4 +143,5 @@ dofile "tests/unity_bridge_spec.lua"
 dofile "tests/debug_completion_spec.lua"
 dofile "tests/debug_condition_spec.lua"
 dofile "tests/debug_breakpoints_spec.lua"
+dofile "tests/hover_docs_spec.lua"
 print "CONFIG_SMOKE_OK"

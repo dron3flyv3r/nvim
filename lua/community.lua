@@ -19,4 +19,9 @@ return {
   { import = "astrocommunity.code-runner.overseer-nvim" },
 
   { import = "astrocommunity.colorscheme.onedarkpro-nvim" },
+
+  -- Not for editing markdown files, but for reading them: LSP hover floats are
+  -- markdown buffers, and this is what makes `K` look like documentation
+  -- instead of like a raw doc comment. Tuned in `plugins/render-markdown.lua`.
+  { import = "astrocommunity.markdown-and-latex.render-markdown-nvim" },
 }

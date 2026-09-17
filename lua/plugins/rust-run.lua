@@ -11,22 +11,22 @@ return {
       opts.tools.executor = executor
       opts.tools.test_executor = executor
       opts.tools.crate_test_executor = executor
+
+      -- `hover actions` opens its own float and never touches `vim.lsp.buf.hover`,
+      -- so without this a Rust hover is the one window in the config that
+      -- ignores every border, title and size decision `user.hover` makes.
+      -- `float_win_config` is handed straight to `open_floating_preview`.
+      opts.tools.float_win_config =
+        vim.tbl_deep_extend("force", opts.tools.float_win_config or {}, require("user.hover").float_opts())
       return opts
     end,
   },
-  {
-    "AstroNvim/astrolsp",
-    opts = function(_, opts)
-      local maps = assert(opts.mappings)
-      local function rust(client) return client.name == "rust-analyzer" end
-      maps.n.K = {
-        "<Cmd>RustLsp hover actions<CR>",
-        desc = "Hover (with actions)",
-        cond = rust,
-      }
-      return opts
-    end,
-  },
+  -- `K` is deliberately not rebound here. There is one `mappings.n.K` slot in
+  -- the shared AstroLSP opts, so setting it from this spec silently replaced the
+  -- general hover from `plugins/astrolsp.lua` -- and because the replacement was
+  -- conditional on rust-analyzer, every other language ended up with no mapping
+  -- at all and fell through to Neovim's built-in default. `user.hover` dispatches
+  -- to `RustLsp hover actions` itself instead.
   {
     "AstroNvim/astrocore",
     ---@param opts AstroCoreOpts
