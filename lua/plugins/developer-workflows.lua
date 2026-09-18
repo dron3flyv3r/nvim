@@ -74,7 +74,7 @@ return {
       maps.n["<Leader>de"] = { function() require("user.debug").exceptions() end, desc = "Exception filters" }
       maps.n["<Leader>dw"] = { function() require("user.debug").watch() end, desc = "Add watch expression" }
       maps.n["<Leader>dE"] = { function() require("user.debug").evaluate() end, desc = "Evaluate expression" }
-      maps.n["<Leader>du"] = { function() require("user.debug").toggle_ui() end, desc = "Toggle debug dock" }
+      maps.n["<Leader>du"] = { function() require("user.debug").toggle_ui() end, desc = "Toggle debug panel and dock" }
       maps.n["<Leader>dR"] = { function() require("dap").repl.toggle() end, desc = "Toggle REPL" }
       maps.n["<Leader>dr"] = { function() require("user.debug").restart() end, desc = "Restart session" }
       -- The only key that ends a session. `dap.terminate()` asks the adapter to

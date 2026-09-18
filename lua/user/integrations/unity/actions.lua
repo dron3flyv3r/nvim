@@ -36,6 +36,10 @@ function M.test_cursor() require("user.integrations.unity.tests").run_at_cursor 
 function M.test_edit() require("user.integrations.unity.tests").pick "EditMode" end
 function M.test_play() require("user.integrations.unity.tests").pick "PlayMode" end
 function M.attach() require("user.integrations.unity.dap").attach() end
+function M.android_attach() require("user.integrations.unity.android").attach() end
+function M.android_status() require("user.integrations.unity.android").status() end
+function M.android_log() require("user.integrations.unity.android").log() end
+function M.android_frames() require("user.integrations.unity.android").frames() end
 function M.errors() require("user.integrations.unity.log").errors() end
 function M.warnings() require("user.integrations.unity.log").errors(true) end
 function M.log() require("user.integrations.unity.log").tail() end

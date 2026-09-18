@@ -156,6 +156,22 @@ return {
         function() require("user.integrations.unity.dap").attach() end,
         desc = "Attach the debugger to a running Unity editor",
       }
+      opts.commands.UnityDeviceAttach = {
+        function() require("user.integrations.unity.android").attach() end,
+        desc = "Attach the debugger to the Unity build running on an Android device",
+      }
+      opts.commands.UnityDeviceStatus = {
+        function() require("user.integrations.unity.android").status() end,
+        desc = "Report what adb sees and whether the player is debuggable",
+      }
+      opts.commands.UnityDeviceLog = {
+        function() require("user.integrations.unity.android").log() end,
+        desc = "Follow the Android device log, or stop following it",
+      }
+      opts.commands.UnityDeviceFrames = {
+        function() require("user.integrations.unity.android").frames() end,
+        desc = "Pick a stack frame out of the Android device log",
+      }
       opts.commands.UnityTests = {
         function(args) require("user.integrations.unity.tests").pick(args.args ~= "" and args.args or "EditMode") end,
         desc = "Pick and run a Unity test",

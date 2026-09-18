@@ -23,6 +23,18 @@ function M.actions()
     { id = "unity.test_edit", label = "Choose EditMode test", category = "Tests", run = actions.test_edit },
     { id = "unity.test_play", label = "Choose PlayMode test", category = "Tests", run = actions.test_play },
     { id = "unity.debug", label = "Attach debugger to Unity", category = "Debug", run = actions.attach },
+    {
+      id = "unity.android_debug",
+      label = "Attach debugger to Android device",
+      category = "Debug",
+      run = actions.android_attach,
+    },
+    {
+      id = "unity.android_status",
+      label = "Show Android device and player status",
+      category = "Status",
+      run = actions.android_status,
+    },
     { id = "unity.errors", label = "Open compile errors", category = "Problems", run = actions.errors },
     {
       id = "unity.warnings",
@@ -31,6 +43,18 @@ function M.actions()
       run = actions.warnings,
     },
     { id = "unity.log", label = "Follow Unity editor log", category = "Output", run = actions.log },
+    {
+      id = "unity.android_log",
+      label = "Follow / stop Android device log",
+      category = "Output",
+      run = actions.android_log,
+    },
+    {
+      id = "unity.android_frames",
+      label = "Open stack frames from the device log",
+      category = "Problems",
+      run = actions.android_frames,
+    },
     { id = "unity.docs", label = "Open Unity docs for symbol", category = "Inspect", run = actions.docs },
     { id = "unity.status", label = "Show Unity integration status", category = "Status", run = actions.status },
     {

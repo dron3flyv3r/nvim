@@ -13,6 +13,11 @@ for _, module in ipairs {
   "user.integrations.notebook.cells",
   "user.integrations.unity",
   "user.integrations.unity.actions",
+  "user.integrations.unity.android",
+  "user.integrations.unity.android.device",
+  "user.integrations.unity.android.logcat",
+  "user.integrations.unity.android.monitor",
+  "user.integrations.unity.android.player",
   "user.integrations.unity.companion",
   "user.integrations.unity.diagnostics",
   "user.integrations.unity.state",
@@ -24,6 +29,8 @@ for _, module in ipairs {
   "user.languages.rust.cargo",
   "user.languages.rust.project",
   "user.languages.rust.watch",
+  "user.points",
+  "user.points.prompt",
   "user.teamtype.panel",
   "user.teamtype.peers",
   "user.workbench.tasks",
@@ -140,6 +147,7 @@ dofile "tests/rust_watch_spec.lua"
 dofile "tests/diff_goto_spec.lua"
 dofile "tests/teamtype_peers_spec.lua"
 dofile "tests/unity_bridge_spec.lua"
+dofile "tests/unity_android_spec.lua"
 dofile "tests/debug_completion_spec.lua"
 dofile "tests/debug_condition_spec.lua"
 dofile "tests/debug_breakpoints_spec.lua"

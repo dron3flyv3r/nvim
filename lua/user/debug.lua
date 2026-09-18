@@ -8,21 +8,27 @@ local exception_filters = {}
 local function dap() return require "dap" end
 local function dapui() return require "dapui" end
 
--- The panels are meant to mirror the session lifecycle, but nvim-dap only
--- dispatches `event_terminated`/`event_exited` when the *adapter* chooses to
--- send them, and `dap.close()` sends nothing at all. Every stop path therefore
--- closes the UI itself rather than trusting an event that may never arrive.
-function M.close_ui() dapui().close() end
+function M.toggle_ui() require("user.debug.ui").toggle() end
 
-function M.toggle_ui() dapui().toggle() end
-
---- The one way out. `terminate` asks the adapter to end the session, `close`
---- hangs up on it; the difference only mattered when both had a key, and a
---- debugger that is sometimes only half stopped is worse than either.
+--- The one way out, and the one that says so: the dock goes away with it.
+---
+--- `dap.terminate` is asynchronous -- it sends a request and only closes the
+--- session once the adapter answers, or a timeout passes. Calling `dap.close()`
+--- on the next line hung up before that could land, which is why stopping did
+--- not always stop. The dock is taken down from the callback instead.
 function M.stop()
-  if dap().session() then dap().terminate() end
-  dap().close()
-  M.close_ui()
+  local session = dap().session()
+  if not session then return require("user.debug.ui").hide() end
+
+  -- Detaching is not killing. An attach session sits beside a process someone
+  -- else started -- a Unity editor, an app on a tablet in your hand -- and
+  -- nvim-dap's disconnect fallback would otherwise ask for it to be terminated
+  -- along with the session.
+  local attached = (session.config or {}).request == "attach"
+  dap().terminate {
+    disconnect_args = { terminateDebuggee = not attached },
+    on_done = vim.schedule_wrap(function() require("user.debug.ui").hide() end),
+  }
 end
 
 function M.restart()

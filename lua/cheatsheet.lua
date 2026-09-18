@@ -28,6 +28,18 @@ local STATIC = {
     },
   },
   {
+    "POINTS (MARKS YOU CAN REACH)",
+    {
+      { "m<letter>", "store a point here" },
+      { "'<letter>", "jump back to it, from any file" },
+      { "m / ' alone", "prompt at the cursor, listing the letters in use" },
+      { "<Esc> at the prompt", "store nothing, go nowhere" },
+      { "ø' / æ'", "walk to the next / previous point" },
+      { "d'q / y'q", "operators still compose against a point" },
+      { ":marks", "list them; :delmarks clears them" },
+    },
+  },
+  {
     "CUSTOM SURFACES",
     {
       { "<F1>", "this help" },
@@ -147,7 +159,7 @@ local STATIC = {
       { "operator + motion", "compose edits: d/c/y with w, %, }, ], f{char}, etc." },
       { 'ciw / ci" / da{', "change word / quoted text; delete around braces" },
       { "vi{ / va{", "select inside / around braces" },
-      { "ma / `a / 'a", "set mark a; jump exactly / jump to its line" },
+      { "ma / 'a", "set / jump to a point -- see POINTS; letters are global here" },
       { "q: / q/", "edit command history / search history as normal buffers" },
       { ":cdo {cmd} | update", "apply a command to every quickfix entry" },
       { ":argdo {cmd} | update", "apply a command to every argument-list file" },
@@ -159,7 +171,8 @@ local STATIC = {
 local function lines()
   local out = {
     "  Config additions plus native patterns for efficient repeated edits.",
-    "  Nothing below changes Neovim's motions, operators, registers or macros.",
+    "  Nothing below changes Neovim's operators, registers or macros. Marks are",
+    "  the one exception; POINTS says what changed and why.",
   }
   local function section(name, entries)
     vim.list_extend(out, { "", "  " .. name, "" })

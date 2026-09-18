@@ -117,10 +117,36 @@ The configuration intentionally has no permanent IDE-style workbench panel.
 Overseer output, DAP UI, quickfix, and pickers appear when needed and then get
 out of the way.
 
+## Points
+
+`m<letter>` stores a point and `'<letter>` returns to it from any file, which
+is Neovim's own mark spelling. Vim documents the jump as `` `<letter> ``, but on
+a Danish layout that key is Shift on the dead `´` key, so Shift+`´` then `a`
+composes `à` instead of jumping; `'` sits unshifted beside `ø` and is live, so
+it carries the jumps here. `ø'` and `æ'` walk to the next and previous point.
+
+Pressing `m` or `'` opens a one-line prompt at the cursor naming the letters
+already in use, so a point is never stored blind and a jump never guesses; the
+prompt is a float because `cmdheight = 0` makes any echo force the message area
+open and shove the statusline. Storing confirms in the same place -- `point q
+set`, or `point q moved here` when the letter already held one -- and clears
+itself. `<Esc>` at the prompt does nothing. Visual and operator-pending get no
+prompt: a float cannot be opened from an expression mapping, which is the only
+shape an operator can consume a motion from.
+
+These are ordinary marks. `:marks` lists them, `:delmarks` clears them, and the
+jump stays a native key, so operators compose against a point as against any
+other motion -- `d'q` deletes to it, `y'q` yanks to it. The one change is that
+every letter is promoted to its uppercase, global twin: `ma` names one point
+for the session rather than one per buffer, which is what makes a point set in
+one file reachable from another. Points are cleared at startup, so they last a
+single session and do not follow you between projects.
+
 ## Native behavior
 
 `<Tab>`/`<C-i>`, `?`, normal buffers, and normal tab pages retain their Neovim
-meaning. The Danish-layout motion aliases are additive. Press `<F1>` for the
+meaning. The Danish-layout motion aliases are additive. Marks are the one
+native behavior this configuration redefines, described under Points above. Press `<F1>` for the
 small configuration-specific cheatsheet; built-in help remains the reference
 for Neovim itself.
 
