@@ -1,0 +1,145 @@
+appname := "nvim/experimental"
+versions_dir := env_var('HOME') / ".local/share/nvim-versions"
+current := versions_dir / "current"
+bashrc := env_var('HOME') / ".bashrc"
+
+default:
+    @just --list
+
+# Syntax, comment budget, stylua, selene, and a headless smoke start.
+check:
+    @bash scripts/check.sh
+
+# Download the latest nightly, install it, link it, and register the `nv` alias.
+setup-update-nightly: install-nightly setup-alias
+    @echo
+    @echo "Done. Open a new shell and run: nv"
+    @echo "(fish picks up the new function immediately -- no reload needed)"
+
+# Fetch the latest nightly tarball into a versioned dir and point `current` at it.
+install-nightly:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    case "$(uname -m)" in
+      x86_64) asset="nvim-linux-x86_64" ;;
+      aarch64|arm64) asset="nvim-linux-arm64" ;;
+      *) echo "unsupported arch: $(uname -m)" >&2; exit 1 ;;
+    esac
+
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' EXIT
+
+    echo "==> downloading ${asset}.tar.gz (nightly)"
+    curl -fsSL --retry 3 \
+      "https://github.com/neovim/neovim/releases/download/nightly/${asset}.tar.gz" \
+      -o "$tmp/nvim.tar.gz"
+    tar -xzf "$tmp/nvim.tar.gz" -C "$tmp"
+
+    version=$("$tmp/$asset/bin/nvim" --version | head -1 | cut -d' ' -f2)
+    target="{{ versions_dir }}/$version"
+
+    mkdir -p "{{ versions_dir }}"
+    if [[ -d $target ]]; then
+      echo "==> $version already installed"
+    else
+      mv "$tmp/$asset" "$target"
+      echo "==> installed $version"
+    fi
+
+    ln -sfn "$target" "{{ current }}"
+    echo "==> current -> $version"
+
+# Register `nv` in every shell that is set up on this machine.
+# $SHELL reports the login shell, which is not necessarily the one in use, so
+# detection is by config-file presence instead.
+setup-alias:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    nvim_bin="\$HOME/.local/share/nvim-versions/current/bin/nvim"
+    found=0
+
+    # fish: an autoloaded function file, matching the other functions in there.
+    fish_dir="$HOME/.config/fish"
+    if [[ -d $fish_dir ]]; then
+      found=1
+      mkdir -p "$fish_dir/functions"
+      cat > "$fish_dir/functions/nv.fish" <<'EOF'
+    function nv --description 'Neovim nightly with the experimental config'
+        set -lx NVIM_APPNAME nvim/experimental
+        set -l nvim_bin $HOME/.local/share/nvim-versions/current/bin/nvim
+        if functions -q fullscreen
+            fullscreen $nvim_bin $argv
+        else
+            command $nvim_bin $argv
+        end
+    end
+    EOF
+      echo "==> wrote $fish_dir/functions/nv.fish"
+    fi
+
+    # bash / zsh: an alias appended once, guarded by a marker.
+    for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
+      [[ -f $rc ]] || continue
+      found=1
+      if grep -qF "NVIM_APPNAME={{ appname }}" "$rc"; then
+        echo "==> ${rc/#$HOME/\~} already has nv (leaving it alone)"
+      else
+        printf '\n# experimental Neovim config (%s on nightly)\nalias nv='"'"'NVIM_APPNAME=%s %s'"'"'\n' \
+          "{{ appname }}" "{{ appname }}" "$nvim_bin" >> "$rc"
+        echo "==> added alias nv to ${rc/#$HOME/\~}"
+      fi
+    done
+
+    if [[ $found == 0 ]]; then
+      echo "!! no shell config found (~/.config/fish, ~/.bashrc, ~/.zshrc)" >&2
+      exit 1
+    fi
+
+# Install the codelldb debug adapter (Rust, C, C++) from its latest release.
+install-codelldb:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    case "$(uname -m)" in
+      x86_64) asset="codelldb-linux-x64.vsix" ;;
+      aarch64|arm64) asset="codelldb-linux-arm64.vsix" ;;
+      armv7l) asset="codelldb-linux-armhf.vsix" ;;
+      *) echo "unsupported arch: $(uname -m)" >&2; exit 1 ;;
+    esac
+
+    target="$HOME/.local/share/nvim-dap/codelldb"
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' EXIT
+
+    echo "==> downloading $asset"
+    curl -fsSL --retry 3 \
+      "https://github.com/vadimcn/codelldb/releases/latest/download/$asset" \
+      -o "$tmp/codelldb.zip"
+
+    # The .vsix is a zip with everything under extension/, which is the layout
+    # the adapter expects to find its own liblldb in.
+    rm -rf "$target"
+    mkdir -p "$target"
+    unzip -q "$tmp/codelldb.zip" -d "$target" 'extension/*'
+    chmod +x "$target/extension/adapter/codelldb" "$target"/extension/lldb/bin/* 2>/dev/null || true
+
+    "$target/extension/adapter/codelldb" --help >/dev/null
+    echo "==> installed to $target"
+
+# Show which nightly versions are installed and which one is linked.
+versions:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ls -1 "{{ versions_dir }}" 2>/dev/null | grep -v '^current$' || echo "(none installed)"
+    echo "current -> $(readlink -f "{{ current }}" 2>/dev/null || echo 'not linked')"
+
+# Point `current` at a previously installed version, e.g. `just use v0.13.0-dev-1681+ga73243faa5`.
+use version:
+    @ln -sfn "{{ versions_dir }}/{{ version }}" "{{ current }}"
+    @echo "current -> {{ version }}"
+
+# Wipe this config's plugins/state without touching the main nvim config.
+clean:
+    rm -rf "$HOME/.local/share/{{ appname }}" "$HOME/.local/state/{{ appname }}" "$HOME/.cache/{{ appname }}"
