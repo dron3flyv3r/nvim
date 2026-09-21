@@ -34,6 +34,36 @@ local SECTIONS = {
     },
   },
   {
+    "GIT  (<Leader>g…)",
+    {
+      { "gg / gm", "Neogit: stage, commit, push, branch, stash · merge" },
+      { "gd / gD", "review every change · review against a branch" },
+      { "gh / gH", "history of this line or selection · of the repository" },
+      { "øg / æg", "next / previous hunk" },
+      { "gp / gP", "preview this hunk inline · in a popup" },
+      { "gs / gS / gu", "stage this hunk · the file · undo the last stage" },
+      { "gr / gR", "reset this hunk or selection · the whole file" },
+      { "gb / gB", "toggle line blame · full blame for this line" },
+    },
+  },
+  {
+    "DIFF REVIEW  (inside <Leader>gd)",
+    {
+      { "?", "the key legend along the bottom; nothing is written until q" },
+      { "n / N", "next / previous change, walking into the next file" },
+      { "r / R  ·  u", "revert this change · the file · undo a revert" },
+      { "<Leader>gl  ·  x <Leader>gr", "revert this line · the selected lines" },
+      { "x <Leader>gk  ·  <Leader>gw", "keep these lines, revert the rest · undo a formatter" },
+      { "gf", "leave the review at this file, settling it first" },
+      { "q", "Save, Discard or Cancel the whole review" },
+      { "H / L / B / X  (merge)", "take ours · theirs · both · drop both" },
+      { "<CR>  (merge)", "take this line or selection into the resolution" },
+      { "gH / gL / gB  (merge)", "the same, for the whole file" },
+      { "<Leader>cb  (merge)", "show BASE for this conflict; <CR> there takes lines" },
+      { "]r / [r  ·  <Tab>  (merge)", "check a resolution · next conflicted file" },
+    },
+  },
+  {
     "FILES YOU RETURN TO",
     {
       { "<Leader>m", "tag or untag this file" },
@@ -66,8 +96,11 @@ local SECTIONS = {
       { "K / gO", "hover documentation / symbols in this document" },
       { "ød / æd", "next / previous diagnostic" },
       { "<Leader>sd / sD", "project / buffer diagnostics, with preview" },
+      { "<Leader>uv", "expand every diagnostic inline, not only the cursor line" },
       { "]] / [[", "next / previous use of the symbol under the cursor" },
       { "<Leader>uh", "inlay hints on or off" },
+      { "<Leader>uc", "reference and implementation counts on or off" },
+      { "grx", "run the code lens under the cursor" },
     },
   },
   {
@@ -94,6 +127,7 @@ local SECTIONS = {
     "WINDOWS & BUFFERS",
     {
       { "<C-h/j/k/l>", "move between windows, terminal included" },
+      { "<C-Up/Down/Left/Right>", "resize this window, terminal included" },
       { "<Leader>wv / wh", "split vertically / horizontally" },
       { "<Leader>wc / wo", "close this window / close the others" },
       { "<Leader>bd", "delete this buffer" },
@@ -106,6 +140,8 @@ local SECTIONS = {
     "TOGGLES  (<Leader>u…)",
     {
       { "uh / ud", "inlay hints / diagnostics" },
+      { "uv", "inline diagnostics: cursor line or every line" },
+      { "uc", "code lens counts" },
       { "uw / us", "wrap / spelling" },
       { "ul / uL", "line numbers / relative numbers" },
       { "ug / uT", "indent guides / treesitter" },

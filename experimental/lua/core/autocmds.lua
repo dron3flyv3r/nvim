@@ -47,6 +47,47 @@ vim.api.nvim_create_autocmd("LspAttach", {
   end,
 })
 
+local codelens_group = augroup "codelens"
+
+vim.api.nvim_create_autocmd("LspAttach", {
+  group = codelens_group,
+  callback = function(args)
+    local client = vim.lsp.get_client_by_id(args.data.client_id)
+    if client and client:supports_method "textDocument/codeLens" then
+      vim.lsp.codelens.enable(true, { bufnr = args.buf })
+    end
+  end,
+})
+
+---@param bufnr integer
+---@return boolean
+local function lens_unresolved(bufnr)
+  for _, entry in ipairs(vim.lsp.codelens.get { bufnr = bufnr }) do
+    if not entry.lens.command then return true end
+  end
+  return false
+end
+
+-- A `codeLens/resolve` answered -32801 ContentModified while the server is still
+-- loading is logged and dropped, and the row is already marked current, so nothing
+-- re-requests it: the lens stays blank until an edit bumps the document version.
+-- Toggling is the supported way to force a fresh request, and the unresolved check
+-- is what keeps this to the one server that answered too early.
+vim.api.nvim_create_autocmd("LspProgress", {
+  group = codelens_group,
+  pattern = "end",
+  callback = function(args)
+    local client = vim.lsp.get_client_by_id(args.data.client_id)
+    if not client then return end
+    for bufnr in pairs(client.attached_buffers) do
+      if vim.api.nvim_buf_is_loaded(bufnr) and lens_unresolved(bufnr) then
+        vim.lsp.codelens.enable(false, { bufnr = bufnr })
+        vim.lsp.codelens.enable(true, { bufnr = bufnr })
+      end
+    end
+  end,
+})
+
 local statusline_group = augroup "statusline"
 
 vim.api.nvim_create_autocmd("LspProgress", {

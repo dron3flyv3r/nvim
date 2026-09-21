@@ -11,6 +11,7 @@ vim.g.mapleader = " "
 vim.g.maplocalleader = ","
 
 require "core.options"
+require("core.diagnostics").setup()
 require "core.autocmds"
 require("core.utf8_guard").setup()
 require("core.statusline").setup()

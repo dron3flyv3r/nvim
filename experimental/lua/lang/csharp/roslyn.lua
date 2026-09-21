@@ -126,6 +126,12 @@ function M.config()
           dotnet_analyzer_diagnostics_scope = "openFiles",
           dotnet_compiler_diagnostics_scope = "openFiles",
         },
+        -- A reference count is only as good as the analysis behind it, and
+        -- background_analysis is scoped to open files above, so in a Unity
+        -- solution expect these to lag or undercount.
+        ["csharp|code_lens"] = {
+          dotnet_enable_references_code_lens = true,
+        },
         ["csharp|inlay_hints"] = {
           csharp_enable_inlay_hints_for_implicit_object_creation = true,
           csharp_enable_inlay_hints_for_implicit_variable_types = true,

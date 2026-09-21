@@ -31,12 +31,25 @@ map("n", "<Esc>", function()
   vim.api.nvim_buf_clear_namespace(0, vim.api.nvim_create_namespace "nvim.multicursor", 0, -1)
 end, { desc = "Clear search highlight and multicursors" })
 
+map("n", "<Leader>uv", function() require("core.diagnostics").toggle_all() end, { desc = "Inline diagnostics scope" })
+
 map("t", "<Esc><Esc>", "<C-\\><C-n>", { desc = "Leave terminal mode" })
 map("n", "<Leader>t", function() require("core.terminal").toggle() end, { desc = "Toggle terminal" })
 
 for key, direction in pairs { h = "h", j = "j", k = "k", l = "l" } do
   map("n", "<C-" .. key .. ">", "<C-w>" .. direction, { desc = "Window " .. direction })
   map("t", "<C-" .. key .. ">", "<C-\\><C-n><C-w>" .. direction, { desc = "Window " .. direction })
+end
+
+-- <Cmd> rather than <C-w>+ and friends: it works unchanged from terminal mode,
+-- where <C-w> is input to the process, and it reaches a winfixheight pane.
+for key, cmd in pairs {
+  Up = "resize +2",
+  Down = "resize -2",
+  Left = "vertical resize -2",
+  Right = "vertical resize +2",
+} do
+  map({ "n", "t" }, "<C-" .. key .. ">", "<Cmd>" .. cmd .. "<CR>", { desc = "Resize window " .. key:lower() })
 end
 
 map("x", "<", "<gv", { desc = "Outdent and keep selection" })

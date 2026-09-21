@@ -43,6 +43,7 @@ AGENTS.md             this file (CLAUDE.md is a symlink to it)
 lua/
   core/               the configuration itself, no plugins involved
     options.lua       vim.o / vim.opt
+    diagnostics.lua   vim.diagnostic.config and the inline-scope toggle
     keymaps.lua       keymaps that do not belong to a plugin
     autocmds.lua      autocommands
     actions.lua       the <Leader>r provider/action registry
@@ -99,14 +100,15 @@ scratch buffer with no plugin involved; the one dynamic section reads
 
 One file per plugin or per tightly-coupled group, returning a `LazySpec`.
 Filenames are kebab-case and named after the *concern*, not the vendor:
-`git.lua`, not `gitsigns.lua`, so swapping the implementation does not rename
+`git/`, not `gitsigns.lua`, so swapping the implementation does not rename
 the file. Lazy imports the directory; no index file lists them.
 
-snacks.nvim is the base layer and replaces what would otherwise be eight
-separate plugins (picker, explorer, dashboard, notifier, statuscolumn, lazygit,
-terminal, buffer delete). Before adding a plugin, check whether snacks already
-does it. If it does, use snacks even if the dedicated plugin is marginally
-better — see the consistency rule above.
+snacks.nvim is the base layer and replaces what would otherwise be seven
+separate plugins (picker, explorer, dashboard, notifier, statuscolumn, terminal,
+buffer delete). Before adding a plugin, check whether snacks already does it. If
+it does, use snacks even if the dedicated plugin is marginally better — see the
+consistency rule above. Git is the one place that answer was overruled, and the
+Git section says why.
 
 No spec is added "to try out"; this config is the result of deleting one that
 grew that way. The filename states what the plugin is for, which is why the
@@ -386,12 +388,40 @@ stop, clear queue) and the commands `:TaskOutput`, `:TaskStop`, `:TaskRestart`.
 ### Sessions and the terminal
 
 `core.session` stores one native session per Git repository, falling back to the
-startup directory outside Git. A start with no file arguments restores it; an
-explicit file, stdin or diff start does not. `VimLeavePre` saves file-backed
-buffers, tabs, splits, sizes, folds and local options under `stdpath("state")`.
-Temporary panes, terminals and help windows are excluded. `:SessionSave`,
-`:SessionRestore` and `:SessionDelete` provide manual control. Deleting a session
-also suppresses the automatic save for that exit.
+startup directory outside Git. `VimLeavePre` saves file-backed buffers, tabs,
+splits, sizes, folds and local options under `stdpath("state")`. Temporary panes,
+terminals and help windows are excluded. `:SessionSave`, `:SessionRestore` and
+`:SessionDelete` provide manual control.
+
+**A buffer whose name is a URI never survives a session.** `mksession` writes
+`edit diffview://…` for a review that was on screen at exit, and sourcing that
+back creates an ordinary *empty* file buffer holding the name. Diffview's
+`File.create_buffer` then does `find_named_buffer(fullname)` and returns the
+buffer it found without filling it — so quitting once with a review open left
+every diff in that project with a blank old side, for good, and the `vim.diff`
+that `<Leader>gw`/`<Leader>gk` run compared against nothing. `drop_uri_buffers`
+closes and wipes them after a restore, and the save drops the ones no window is
+showing; a window still on one belongs to something live, so the exit records it
+and the next restore is what throws it away. This is core's business rather than
+the git layer's — the rule is about URIs, not about Diffview, and `core` may not
+name a plugin.
+
+**A single directory argument means the project, not a directory to browse.**
+`nv .` and `nv ~/code/thing` `cd` there, drop the argument and restore that
+project's session. The directory *buffer* has to go with it: it is created before
+`init.lua` is sourced, and the explorer claims it on the first `BufEnter` and
+takes the window the session is about to restore into — so `setup()` wipes it,
+which is also why that step runs from `setup()` and not from the `VimEnter`
+autocommand. With no stored session the result is the ordinary empty start, the
+dashboard rather than the explorer.
+
+**An exit only overwrites a session it is responsible for.** Autosave requires
+the session to be *attached* — restored or started clean, or claimed by an
+explicit `:SessionSave`/`:SessionRestore` — and requires at least one listed
+file-backed buffer to still exist. So `nv one-file.rs` in a project leaves the
+stored layout alone, and so does closing a project buffer by buffer before `:q`.
+Stdin and diff starts never attach, and `:SessionDelete` detaches, which is what
+suppresses the save for that exit.
 
 `<Leader>t` and `:Terminal` toggle one interactive shell in `core.pane`. It is a
 normal pane occupant: `h` hides it without stopping the shell, `q` stops it, and
@@ -505,6 +535,279 @@ config's `debug/condition.lua` and `debug/completion.lua` are reference material
 for the day a silently-never-firing conditional breakpoint becomes annoying
 enough.
 
+## Git
+
+Three plugins in `lua/plugins/git/`, and the division between them is the whole
+design: **gitsigns** is the gutter and the hunk, **Diffview** is where changes
+are *read*, **Neogit** is where the repository is *moved*. Anything that
+changes a ref, the index outside a hunk, a stash or a remote is Neogit's, and
+there is no second spelling for it here — Neogit's own status buffer is one
+letter per action, and duplicating those under `<Leader>g` would be the
+fragmentation this rewrite removed. snacks' git pickers and lazygit are both
+deliberately unused: the three above are buffer-and-window plugins, which is
+what makes the layer feel like the editor rather than a TUI in a float.
+
+A directory rather than a file, for the same reason as `plugins/debug/`: lazy's
+`lsmod` is non-recursive, so the siblings are only reachable through
+`init.lua` and are never mistaken for specs.
+
+```
+plugins/git/
+  init.lua       the three specs, every global key, the Diffview options
+  signs.lua      gitsigns: signs, hunk nav, preview, stage, blame
+  review.lua     the hold, the snapshot, the q prompt
+  hud.lua        the winbar, conflict counting, resolution marks
+  revert.lua     revert at four sizes, keep-these-lines, undo-a-formatter
+  conflicts.lua  the merge keys
+  nav.lua        walking changes and conflicts, including from the file panel
+  goto.lua       gf, settling the review before it opens the file
+  status.lua     the branch and +~- counts in the statusline
+  keys.lua       the legend along the bottom of a review
+  health.lua     :checkhealth plugins.git
+```
+
+`status.lua` is the first user of `core.statusline.register`, which is what
+that hook was built for: the branch comes from gitsigns' own
+`b:gitsigns_status_dict`, so `core` still names no plugin.
+
+### The review is a transaction
+
+`<Leader>gd` opens a review in which **nothing reaches disk until you say so**.
+Reverts apply to the buffer immediately — you see them, `u` undoes them — and
+`q` asks Save, Discard or Cancel for the review as a whole. That is the point
+of the layer: a revert you regret costs one keypress, not a lost afternoon.
+
+**`'readonly'` is what holds a file back, and nothing else works.** An error
+thrown from `BufWritePre` only aborts writes issued through the API — `:w`
+typed on the command line prints the error and writes the file anyway. `:write`
+refuses a readonly buffer itself, before any autocommand. Consequences, all
+handled in `review.lua`:
+
+- Neovim prints `W10: Warning: Changing a readonly file` on the first change to
+  each held buffer, and a `FileChangedRO` handler explains it once per review.
+  Diffview's own conflict actions surface it as `Error in command line`; only
+  our own `diffget`/`diffput` are `silent`.
+- **After that warning Neovim sleeps for about a second so it can be read**, once
+  per buffer and only with a UI attached — which is why no amount of headless
+  verification found it, and why the first `H`, `r` or `R` in every held file
+  looked like a hang. Measured 1007.8 ms against 1.0 ms. So every mutation this
+  layer makes goes through `review.mutate`, which drops `readonly` for the
+  duration and puts it back before returning; re-arming does not re-arm the
+  warning, because `b_did_warn` is already set. The hold is about `:write` and is
+  unaffected. **A new key that changes a held buffer has to use it** — that is the
+  whole reason it exists rather than each caller toggling the option. Its `defer`
+  argument is for `conflict_choose_all`, which is `async.void` and can finish on a
+  later turn.
+- **`confirm = true` is set in `core/options.lua`, so a plain `:w` on a held
+  buffer is a dialog rather than `E45`.** Answering yes writes it. That is a
+  weaker barrier than the old config had, and it is survivable only because of
+  the next point.
+- A write that gets past the hold — `:w!`, or a confirmed `:w` — is *accounted
+  for*: a `BufWritePost` handler re-arms `readonly`, re-baselines the snapshot
+  so `q` no longer counts the file as pending, and says the rest of the review
+  is still waiting. If the file still has conflict markers it says that instead.
+- Anything asking "was this file writable?" must ask the snapshot, not the live
+  option, which is why `M.writable` exists. The revert keys once read
+  `vim.bo.readonly` directly and refused every file in a held review.
+
+The snapshot no longer carries `autosave` or `autoformat`: this config has
+neither, which is most of why `review.lua` is shorter than the module it came
+from. **Whoever adds a formatter or an autosave has to suspend it here**, the
+same way the old config did, or a held file will be written behind the review's
+back.
+
+`disk_state` is dev, inode, size and mtime to the nanosecond, because an
+outside writer changing equally-sized text in the same second must still stop
+the review from overwriting it. Every file is preflighted before the first one
+is written, so a checkout or a pull mid-review stops the save instead of
+half-applying it.
+
+**Staging cannot take part of an in-memory transaction**, so it is blocked
+while a review holds a buffer — both in Diffview's file panel (`-` `s` `S` `U`)
+and in gitsigns, where `<Leader>gs` and the reset keys check
+`review.holds(bufnr)` and explain rather than failing. The one exception is a
+merge, which stages *on Save*, so writing and staging cannot come apart: git
+counts a resolved-but-unstaged file as still unmerged.
+
+### Reverting, at four sizes and two shapes
+
+`r` is the change under the cursor, `R` the file, `<Leader>gl` the line,
+visual `<Leader>gr` the selection — all of them Vim's own `do`/`dp`/`diffget`,
+which means they are pending until `q`. They report when nothing happened,
+because off a change those commands are silent and there is otherwise no
+telling that from a key that did nothing.
+
+The other shape is the formatter's: the file is now almost entirely churn and
+the few lines worth keeping are the small part. `<Leader>gk` keeps a selection
+and reverts every *other* change in the file; `<Leader>gw` reverts only what
+did not alter the text. Ranged `:diffget` cannot express either — both need the
+**complement** of a range, several disjoint hunks applied without the earlier
+ones renumbering the later — so the hunks come from `vim.diff(…, {result_type =
+"indices"})` and are applied bottom-up. The measured off-by-ones: a hunk with a
+zero count on one side reports the line it sits *after* on that side, and `0`
+means before the first line. A hunk the selection touches at all is kept whole,
+because splitting one would claim a line-for-line correspondence that a reflow
+has destroyed. Whitespace is compared by joining each side with a single space
+and collapsing runs, so a call rewrapped across three lines compares equal while
+`foo bar` and `foobar` do not.
+
+### Merge conflicts
+
+`diff3_horizontal` — OURS, RESULT, THEIRS — chosen over `diff4_mixed` so the
+pane you edit keeps full height. BASE is therefore not on screen, which is what
+`<Leader>cb` is for, and it is a **preview, not a take**. The key once did both —
+it replaced the region when `merge.conflictStyle` was `diff3` and otherwise showed
+the file — which made it mean two different things depending on a git setting.
+Now it always reads stage 1 (`git show :1:`) into a **float**, because a new
+window inside the layout is a window Diffview tries to fold into the diff, and
+taking from it is `<CR>`: the same accumulating take the side panes have, so
+there is no second spelling of "replace this region".
+
+**The float is scoped to the conflict under the cursor**, since the whole ancestor
+file from line 1 does not answer "what did *this* start as". The region's own
+`ours` content is verbatim from stage 2, so it is located there by text — nearest
+occurrence to the region's line, because a block can appear twice — and a
+`vim.diff` of stage 1 against stage 2 maps that range back onto the ancestor,
+which is then signed and centred. `theirs`/stage 3 is the fallback for a region
+whose own side deleted everything. **The stages are read from git, not from the
+OURS and THEIRS panes**: Diffview loads those lazily, and a pane that has not been
+entered yet holds a single empty line, which is what made the first version of
+this find nothing. `to_ancestor` inherits `revert.lua`'s off-by-ones — a hunk with
+a zero count on one side reports the line it sits *after*. An add/add conflict has
+no stage 1 and says so rather than opening an empty float.
+
+`H`/`L`/`B`/`X` replace a whole region with one side, which is all Diffview
+offers. `<CR>` works the other way: the selected lines are copied in **above**
+`<<<<<<<` and the region is left standing, so several takes accumulate and `X`
+— already "drop both sides" — ends the region. Lines are taken as *text* from
+whichever buffer is focused, so the side panes work without mapping their line
+numbers onto the file being written, and marker lines are filtered by line
+number rather than by looking like markers: a row of `=======` is a heading in
+Markdown and a separator only inside a region.
+
+**Resolution marks are extmarks, not signs.** A resolved region has no markers
+left, so without them there is nothing to navigate back to and nothing to
+check. They carry `virt_text` plus `number_hl_group` for two measured reasons: a
+diff background outranks `CursorLine`, an extmark `line_hl_group` and a
+char-range `hl_group` at priority 300, so only the sign column, the line-number
+highlight and virtual text survive on a changed line — and the sign column
+already has git's own signs in it. Extmarks also move with later edits.
+`gH`/`gL`/`gB` leave no marks: `conflict_choose_all` is asynchronous and the
+positions are gone by the time it returns, and a whole-file take is one
+decision that the counter already reports.
+
+**A resolved file stops instead of advancing.** The last conflict going away is
+the one moment the resolutions are on screen to be read, so the hud says how
+many files are left and waits for `<Tab>`, which walks forward with wrapping —
+the next file needing work can be one already walked past. Counting those files
+reads the ones the review has not opened, so it happens when a file is opened or
+finished and is cached in a buffer variable, never from the winbar, which is
+evaluated on every redraw. For the same reason it looks for a loaded buffer **by
+name** first: a file resolved earlier is still loaded but its layout has moved
+on, and the copy on disk still has the markers.
+
+**The finish shows the staged diff.** The merge panes compare the resolution to
+each side, so nothing in the review has shown the merge as a change to your own
+branch. "Save and finish" stages, reopens `DiffviewOpen --cached` labelled
+`STAGED`, and hands the commit to Neogit only when *that* closes — scheduled,
+because Diffview keeps one view per tab and the prompt runs while the merge view
+is still open. Neogit's commit editor then shows the same diff under the
+message, which is the escape hatch: `<C-c><C-k>` abandons the commit with the
+resolutions still staged. It is offered only when nothing is unresolved,
+including conflicted files the review never opened, because `git merge
+--continue` counts those too.
+
+### Leaving a review at a file
+
+Diffview's `gf`, `<C-w><C-f>` and `<C-w>gf` switch tabs and open the file with
+the review still standing behind them, walking straight past the hold on that
+exact buffer — you land in your own file, type, and `:w` argues with you. All
+three are **taken over** rather than left beside new keys, so the version that
+bypasses the transaction is not reachable by accident. `goto.lua` settles the
+review through the ordinary `q` path first and opens the file only if that
+finished. Everything the jump needs — the entry, its path, the cursor — is read
+**before** the close, because all of it is destroyed with the view; the file is
+reached by **buffer** whenever it is still loaded, since `:edit` would re-read
+from disk and throw away what Save or Discard just settled; the line comes from
+the layout's main window, which is the working side; and a merge refuses on a
+file that still has markers, because saving would not write it and the jump
+would open the copy from disk. "Save and finish" wants this tab, so the jump
+stands down rather than racing it.
+
+### The legend, and the rest
+
+`?` toggles a one-row float above the statusline listing the keys for the mode
+you are in — diff, merge, or the staged finish. A float rather than a window,
+because a real window there is one Diffview folds into the layout; entries drop
+from the end as the screen narrows, so what survives is the half that moves you
+around. It is closed on `VimLeavePre`: a float stored in a session comes back as
+an ordinary window in the wrong place.
+
+`enhanced_diff_hl` is **off**. It exists to highlight the changed words inside a
+changed line, and `diffopt` already carries `inline:char` on this nightly, which
+is the same thing done natively. `linematch:40`, `indent-heuristic` and
+`internal` are also defaults here — `health.lua` checks they are still present
+rather than setting them, since a local override is the only way they go
+missing.
+
+The file panel is left, 35 columns, tree, with `flatten_dirs` and
+`folder_statuses = "only_folded"`, because a Rust or Unity tree is deep and
+mostly single-child directories. `winbar_info` is off in all three layouts: the
+hud is the single writer of that row, the same rule as one adapter, one owner.
+
+**Diffview deletes every buffer-local keymap it set when it detaches a file**,
+and two of them — `<Leader>gr` and `<Leader>gR` — are keys gitsigns had already
+put on that buffer. So a file you had reviewed once came back with no reset
+keys at all for the rest of the session. `signs.remap()` re-applies them from
+the `view_closed` hook, `vim.schedule`d because the detach has not happened yet
+when the hook runs. Any *new* buffer-local key that collides with one of
+Diffview's `view` maps inherits this problem and has to be re-applied there too.
+
+A review lives in its own tabpage, so a failing task **will** open `core.pane`
+inside it and take height from the panes. That is deliberate and unsuppressed —
+the contract that a failing build shows itself outranks the layout — and if it
+turns out to be annoying, the fix is to route the pane to the previous
+tabpage, not to silence it.
+
+Two commands, both about a review that went sideways: `:DiffviewClose` is
+replaced so a typed close gets the same prompt as `q`, and `:ReviewFinish`
+settles a review whose tab was closed directly. There are no other `:Git*`
+commands.
+
+Deliberately not ported: the old `git_stash.lua` (Neogit owns stashing),
+`diff_keys`' persistence of the legend's hidden state, and gitsigns'
+`<Leader>gd` buffer-local override, which existed only to beat an AstroNvim
+mapping that no longer exists. Kept from the old stack because each one encodes
+a bug already paid for: the `'readonly'` hold, the bottom-up hunk application,
+the extmark marks, the `gf` takeover, and the inline-preview `tabstop` fixup —
+gitsigns builds that float with `nvim_create_buf` and copies only `filetype`,
+while editorconfig sets indent width per file off `BufReadPost`, which a scratch
+buffer never fires, so every old line lands `(difference × depth)` columns off.
+
+## Diagnostics
+
+`core/diagnostics.lua` is the one `vim.diagnostic.config` call, made from
+`init.lua` before anything can report a diagnostic. It is core because it names
+no plugin and no language: a server-specific opinion is server settings, and a
+picker over the list is snacks' business.
+
+**Errors render inline, and only on the cursor's line.** `virtual_lines =
+{ current_line = true }` with `virtual_text = false`. The reason is message
+length: rustc and roslyn both write several lines with a caret diagram, which
+end-of-line virtual text truncates to uselessness and full-file virtual lines
+turn into a file where the code is a minority of the screen. Cursor-scoped
+expansion is the middle that keeps both. The update is native and happens on
+`CursorHold`, so it is paced by `'updatetime'` — 250 here. There is no
+`CursorMoved` autocommand to add; `vim/diagnostic/_handlers.lua` owns it.
+
+`<Leader>uv` widens the same handler to every line for the times the whole
+file's errors are the question, and says which mode it landed in. It is a
+scope toggle, not an on/off — hiding diagnostics entirely is still
+`<Leader>ud`.
+
+Signs carry the same two glyphs the statusline counts with, so the gutter and
+the status row agree. `severity_sort` is on, `update_in_insert` is off.
+
 ## Completion and inlay hints
 
 Completion is **blink.cmp**, and it is explicitly **temporary**. It is the one
@@ -549,24 +852,90 @@ server settings, not core's business: rust-analyzer's live in
 closing-brace and lifetime-elision hints off, because those two are what turn
 a dense file into noise.
 
+Code lens is **on by default**, the same shape one autocommand down:
+`core_codelens` guarded on `textDocument/codeLens`, `<Leader>uc` to toggle.
+0.13's `vim.lsp.codelens.enable` is the `vim.lsp._capability` machinery that
+`inlay_hint.enable` uses, so refresh is viewport-driven and resolution is on
+demand — the `CursorHold`/`InsertLeave` refresh autocommand every guide tells
+you to write is obsolete here. Do not add one. Running a lens is `grx`, a 0.13
+default, which is one more reason not to bind bare `gr`.
+
+There is **one** retry, and it is not a refresh loop. A `codeLens/resolve` that
+the server answers `-32801 ContentModified` — which rust-analyzer does for the
+first lenses in a file while it is still loading the workspace — is logged and
+dropped by `codelens.lua`, and the row has already been marked current, so
+nothing ever asks again: the lens is a blank placeholder until an edit bumps the
+document version. That is the "the lens only appears once I start typing"
+symptom. `core_codelens` therefore also watches `LspProgress` with `pattern =
+"end"` and, **only** for a buffer that still holds an unresolved lens, toggles
+`vim.lsp.codelens.enable` off and on for it, which is the supported way to force
+a fresh request. The unresolved check is what keeps this from being the refresh
+autocommand the paragraph above forbids: it fires for the server that answered
+too early and for nothing else.
+
+What the lenses are for is **counts**: references and implementations, the
+questions `grr`/`gri` answer but that a count answers without leaving the line.
+rust-analyzer's `lens.run`/`lens.debug` are therefore **off**, but only as a
+matter of taste: `<Leader>r` carries both, and a lens above every `fn` costs a
+screen line each. They work if turned on — rustaceanvim's `ftplugin/rust.lua`
+registers `rust-analyzer.runSingle` and routes it through `runnables.run_command`,
+which is the executor slot that already lands in `core.task`.
+
+What does need saying is `rust-analyzer.showReferences`: rustaceanvim's handler
+for it is `vim.lsp.buf.implementation()` regardless of which lens was run, so a
+"3 references" lens navigates to implementations and bypasses the picker. The
+lens carries its own locations in `arguments[3]`, so `lang/rust/lens.lua`
+replaces the handler and shows those, `focus = "list"`, like the rest of the `gr`
+family. It installs from a `FileType rust` autocommand inside a `vim.schedule`,
+because rustaceanvim registers its version from an ftplugin on that same event —
+scheduling is what puts the override after it instead of under it.
+
+Roslyn's `dotnet_enable_references_code_lens` is on with the caveat written
+beside it: `background_analysis` is scoped to `openFiles`, and a reference count
+is only as good as the analysis behind it, so a Unity solution will undercount.
+That is the honest trade against whole-solution analysis never settling.
+
+Deliberately not built yet: **per-symbol suppression** — hiding the lens or the
+hints for one function, one class, or one parameter, stored per project. There
+is no seam for it in either API (`enable` filters by buffer and client, nothing
+finer), and the two features are not equally cooperative if it is ever wanted:
+`inlay_hint.lua` requests with a `nil` handler, so
+`vim.lsp.handlers['textDocument/inlayHint']` is a documented place to filter,
+while `codelens.lua` passes its own closure and never consults the handler
+table. Filtering lenses means patching a private internal or rendering them
+ourselves. `plugins/debug/breakpoints.lua` is the precedent for the per-project
+store if that day comes.
+
 LSP progress is shown in the global statusline. While idle it lists the clients
 attached to the current buffer; while a client is working its current progress
 replaces that list. Routine indexing does not produce notifications.
 
 The statusline is native and lives in `core/statusline.lua`. `cmdheight=0`
 lets `:`, `/`, `?`, messages and prompts temporarily cover that same final row.
-Plugin-owned information is added with `core.statusline.register`, so the future
-git layer can place its branch and `+`/`~`/`-` counts beside the filename without
-making `core` depend on a plugin.
+Plugin-owned information is added with `core.statusline.register`, which is how
+`plugins/git/status.lua` places the branch and `+`/`~`/`-` counts beside the
+filename without making `core` depend on a plugin. A component's text is escaped
+unless it sets `raw`, which is what lets the git counts carry their own
+highlight groups; a `raw` component is responsible for its own `%%`.
 
 ## Keys
 
-Prefixes in use: `<Leader>f` find, `<Leader>s` search, `<Leader>u` toggles,
+Prefixes in use: `<Leader>a` assistants, `<Leader>f` find, `<Leader>s` search, `<Leader>u` toggles,
 `<Leader>w` windows, `<Leader>b` buffers, `<Leader>r`/`<Leader>R` actions,
 `<Leader>d` the debugger, `<Leader>t` the terminal. `<Leader>m`/`<Leader>M` and
 `<Leader>1`–`<Leader>4`
-are grapple. `<Leader>g` is reserved for the rebuilt git layer and is otherwise
-unclaimed.
+are grapple. `<Leader>g` is git.
+
+`<Leader>g` carries two layers that mean the same thing by different mechanisms,
+which is deliberate: outside a review `<Leader>gr`/`gR` are gitsigns resetting
+against the index, and inside one they are a **pending** revert that `q` decides
+the fate of. Both roll back; the scope rule (lower is the hunk, upper is the
+file) is the same in both. The in-review spellings are Diffview layout keymaps
+and are therefore buffer-local to the diff, which is what keeps them from
+leaking into ordinary buffers. `<Leader>cb` is the one key outside the documented
+prefixes: it exists only in the `diff3`/`diff4` merge layouts, so it claims no
+global prefix. `]g`/`[g` walk hunks and fall back to the native `]c`/`[c` inside
+a real diff.
 
 `<F5>` `<F10>` `<F11>` `<F12>` are continue and the three steps, duplicating
 `<Leader>dc` `dn` `di` `do`. That is the second deliberate duplicate in this
@@ -722,7 +1091,7 @@ stack traceback in the output. A change is not finished until it passes.
 `:checkhealth` is expected to be clean. Assumptions this config owns — external
 tools, paths, versions — get a health check rather than a comment.
 
-Not built yet: the git layer. The user loader tolerates `lua/user` being absent.
+The user loader tolerates `lua/user` being absent.
 
 `stylua` and `selene` are not installed on every machine; `check.sh` reports SKIP
 rather than failing, which means a SKIP line is a gate that did **not** run. Do
@@ -742,14 +1111,17 @@ exception, justified per module.
   `ui.lua`'s panel sizing came across because each one encodes a bug already paid
   for. Deliberately left behind: `condition.lua`, `completion.lua`, `names.lua`
   and `repl.lua`. See Debugging above.
-- **Rebuild, do not port**: git, and the task/execution layer. Both were
-  decided deliberately. The old git stack (`diff_review`, `diff_hud`,
-  `diff_keys`, `diff_goto`, `diff_revert`, `git_stash`, neogit) and the old
-  execution stack (Overseer plus `task_output`, `task_pty`, `task_queue`,
-  `workbench/tasks`, the templates and components) are reference material for
-  behaviour, not code to move. snacks' git pickers are deliberately **not**
-  used; its git keymaps were removed for this reason. The execution layer is
-  done — see Execution above. Git is still outstanding.
+- **Rebuild, do not port**: the task/execution layer. The old stack (Overseer
+  plus `task_output`, `task_pty`, `task_queue`, `workbench/tasks`, the templates
+  and components) is reference material for behaviour, not code to move. It is
+  done — see Execution above.
+- **Done**: git, as `lua/plugins/git/`, rebuilt from the old stack
+  (`diff_review`, `diff_hud`, `diff_keys`, `diff_goto`, `diff_revert`,
+  `git_stash`, `plugins/git.lua`, `plugins/neogit.lua`) with the
+  `docs/decisions/diff-review.md` findings moved into the Git section above,
+  which is now the record. snacks' git pickers and lazygit are deliberately
+  **not** used; its git keymaps were removed for this reason. Deliberately left
+  behind: `git_stash.lua`, since Neogit owns stashing.
 - **Done**: Rust, as `lua/lang/rust/`. rustaceanvim owns the rust-analyzer
   client, so the module has no `lsp` key — a second client from `vim.lsp.enable`
   would fight it. All three rustaceanvim executor slots route into `core.task`.

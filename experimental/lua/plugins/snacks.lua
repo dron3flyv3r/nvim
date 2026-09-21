@@ -113,6 +113,14 @@ return {
         Snacks.toggle.line_number():map "<Leader>ul"
         Snacks.toggle.treesitter():map "<Leader>uT"
         Snacks.toggle.inlay_hints():map "<Leader>uh"
+        Snacks.toggle
+          .new({
+            id = "codelens",
+            name = "Code Lens",
+            get = function() return vim.lsp.codelens.is_enabled { bufnr = 0 } end,
+            set = function(state) vim.lsp.codelens.enable(state, { bufnr = 0 }) end,
+          })
+          :map "<Leader>uc"
         Snacks.toggle.indent():map "<Leader>ug"
         Snacks.toggle.dim():map "<Leader>uD"
         Snacks.toggle.scroll():map "<Leader>uS"

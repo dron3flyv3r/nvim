@@ -128,6 +128,51 @@ install-codelldb:
     "$target/extension/adapter/codelldb" --help >/dev/null
     echo "==> installed to $target"
 
+# Install pinned ACP bridges with an isolated Node 22 runtime.
+install-codecompanion-agents:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    case "$(uname -m)" in
+      x86_64) node_arch="x64" ;;
+      aarch64|arm64) node_arch="arm64" ;;
+      *) echo "unsupported arch: $(uname -m)" >&2; exit 1 ;;
+    esac
+
+    target="$HOME/.local/share/{{ appname }}/codecompanion-agents"
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' EXIT
+
+    curl -fsSL --retry 3 https://nodejs.org/dist/latest-v22.x/SHASUMS256.txt -o "$tmp/SHASUMS256.txt"
+    asset=$(awk -v suffix="linux-${node_arch}.tar.xz" '$2 ~ suffix "$" { print $2; exit }' "$tmp/SHASUMS256.txt")
+    [[ -n $asset ]] || { echo "could not find a Node 22 archive for $node_arch" >&2; exit 1; }
+    version=${asset#node-}
+    version=${version%-linux-*}
+    node_target="$target/node-versions/$version"
+
+    if [[ ! -x $node_target/bin/node ]]; then
+      archive="$tmp/$asset"
+      checksum=$(awk -v asset="$asset" '$2 == asset { print $1 }' "$tmp/SHASUMS256.txt")
+      curl -fsSL --retry 3 "https://nodejs.org/dist/$version/$asset" -o "$archive"
+      printf '%s  %s\n' "$checksum" "$archive" | sha256sum -c -
+      mkdir -p "$node_target"
+      tar -xJf "$archive" --strip-components=1 -C "$node_target"
+    fi
+
+    ln -sfn "$node_target" "$target/node"
+    PATH="$target/node/bin:$PATH" "$target/node/bin/npm" install --global --prefix "$target" \
+      @agentclientprotocol/codex-acp@1.12.0 \
+      @agentclientprotocol/claude-agent-acp@0.79.0
+    install -m 0755 scripts/claude-agent-acp-keyring "$target/bin/claude-agent-acp-keyring"
+
+    "$target/node/bin/node" "$target/lib/node_modules/@agentclientprotocol/codex-acp/dist/index.js" --version
+    "$target/node/bin/node" --version
+    echo "==> installed CodeCompanion agents to $target"
+
+# Store the token printed by `claude setup-token` in the desktop keyring.
+store-codecompanion-claude-token:
+    @secret-tool store --label="CodeCompanion Claude OAuth" service codecompanion account claude-code-oauth
+
 # Show which nightly versions are installed and which one is linked.
 versions:
     #!/usr/bin/env bash

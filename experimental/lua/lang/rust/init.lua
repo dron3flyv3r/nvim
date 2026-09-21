@@ -9,6 +9,7 @@ return {
       "mrcjkb/rustaceanvim",
       lazy = false,
       init = function()
+        require("lang.rust.lens").setup()
         local cargo = require "lang.rust.cargo"
         local executor = {
           execute_command = function(cmd, args, cwd, opts)
@@ -46,6 +47,22 @@ return {
                   chainingHints = { enable = true },
                   closingBraceHints = { enable = false },
                   lifetimeElisionHints = { enable = "never" },
+                },
+                -- Run and debug are off because <Leader>r already carries both;
+                -- they work if turned on, since rustaceanvim's ftplugin routes
+                -- runSingle through the executor above.
+                lens = {
+                  enable = true,
+                  implementations = { enable = true },
+                  references = {
+                    adt = { enable = true },
+                    enumVariant = { enable = true },
+                    method = { enable = true },
+                    trait = { enable = true },
+                  },
+                  run = { enable = false },
+                  debug = { enable = false },
+                  updateTest = { enable = false },
                 },
               },
             },

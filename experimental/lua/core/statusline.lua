@@ -9,6 +9,7 @@ local M = {}
 ---@field side? "left"|"right"
 ---@field order? integer
 ---@field min_width? integer
+---@field raw? boolean text already carries statusline markup and is not escaped
 ---@field text fun(ctx: core.statusline.Context): string?
 
 ---@type table<string, core.statusline.Component>
@@ -78,7 +79,9 @@ local function extra_components(ctx, side)
   local result = {}
   for _, item in ipairs(selected) do
     local ok, text = pcall(item.component.text, ctx)
-    if ok and text and text ~= "" then result[#result + 1] = escape(text) end
+    if ok and text and text ~= "" then
+      result[#result + 1] = item.component.raw and text or escape(text)
+    end
   end
   return result
 end
