@@ -57,6 +57,47 @@ local function send(ctx, type_name, notification)
   )
 end
 
+---@param ctx core.Context
+---@return boolean|string
+local function tests_ready(ctx)
+  local running = editor_running(ctx)
+  if running ~= true then return running end
+  return not require("lang.unity.tests").running() or "A test run is already in flight"
+end
+
+---@param ctx core.Context
+---@return boolean|string
+local function test_at_cursor(ctx)
+  local ready = tests_ready(ctx)
+  if ready ~= true then return ready end
+  local name, reason = require("lang.unity.tests").at_cursor(ctx.bufnr)
+  return name ~= nil or reason or "No test under the cursor"
+end
+
+---@param ctx core.Context
+---@return boolean|string
+local function asset_buffer(ctx)
+  if not root_of(ctx) then return "Not inside a Unity project" end
+  return require("lang.unity.assets").is_asset(vim.api.nvim_buf_get_name(ctx.bufnr))
+    or "This buffer is not a file under Assets/ or Packages/"
+end
+
+---@param ctx core.Context
+---@return boolean|string
+local function device_ready(ctx)
+  if not root_of(ctx) then return "Not inside a Unity project" end
+  return require("lang.unity.android").available()
+end
+
+---@param ctx core.Context
+---@return boolean|string
+local function debugger_ready(ctx)
+  if not root_of(ctx) then return "Not inside a Unity project" end
+  local why = require("lang.unity.dap").available()
+  if why ~= true then return why end
+  return editor_running(ctx)
+end
+
 local CONTROLS = {
   { id = "play", label = "Enter play mode", type = "Play", said = "Entering play mode" },
   { id = "stop", label = "Leave play mode", type = "Stop", said = "Leaving play mode" },
@@ -73,7 +114,9 @@ return {
     local root = root_of(ctx)
     if not root then return false end
     local state = require("lang.unity.state").get()
-    if state.root == root and state.running then return ("%s -- %s"):format(vim.fn.fnamemodify(root, ":~"), state.state) end
+    if state.root == root and state.running then
+      return ("%s -- %s"):format(vim.fn.fnamemodify(root, ":~"), state.state)
+    end
     local version = project.editor_version(root)
     return vim.fn.fnamemodify(root, ":~") .. (version and (" (" .. version .. ")") or "")
   end,
@@ -241,6 +284,103 @@ return {
       end,
     }
 
+    for _, mode in ipairs(require("lang.unity.tests").MODES) do
+      local lower = mode:gsub("Mode$", ""):lower()
+      local article = mode:match "^[AEIOU]" and "an" or "a"
+      actions[#actions + 1] = {
+        id = "test_cursor_" .. lower,
+        label = ("Run the %s test under the cursor"):format(mode),
+        category = "Test",
+        available = test_at_cursor,
+        run = function() require("lang.unity.tests").run_at_cursor(mode) end,
+      }
+      actions[#actions + 1] = {
+        id = "test_all_" .. lower,
+        label = ("Run all %s tests"):format(mode),
+        category = "Test",
+        available = tests_ready,
+        run = function() require("lang.unity.tests").run(mode, "") end,
+      }
+      actions[#actions + 1] = {
+        id = "test_pick_" .. lower,
+        label = ("Pick %s %s test to run"):format(article, mode),
+        category = "Test",
+        repeatable = false,
+        available = tests_ready,
+        run = function() require("lang.unity.tests").pick(mode) end,
+      }
+    end
+
+    actions[#actions + 1] = {
+      id = "attach_editor",
+      label = "Attach the debugger to the Unity editor",
+      category = "Debug",
+      available = debugger_ready,
+      run = function() require("lang.unity.dap").attach() end,
+    }
+
+    actions[#actions + 1] = {
+      id = "attach_device",
+      label = "Attach the debugger to the app on a device",
+      category = "Debug",
+      available = device_ready,
+      run = function() require("lang.unity.android").attach() end,
+    }
+
+    actions[#actions + 1] = {
+      id = "device_log",
+      label = "Follow the app's log on a device",
+      category = "Inspect",
+      available = device_ready,
+      run = function() require("lang.unity.android").watch() end,
+    }
+
+    actions[#actions + 1] = {
+      id = "device_status",
+      label = "Show what the device is running",
+      category = "Inspect",
+      repeatable = false,
+      available = device_ready,
+      run = function()
+        local lines = require("lang.unity.android").status(assert(root_of(ctx)))
+        vim.notify(table.concat(lines, "\n"), vim.log.levels.INFO, { title = "Unity Android" })
+      end,
+    }
+
+    actions[#actions + 1] = {
+      id = "rename_asset",
+      label = "Rename this asset, carrying its .meta",
+      category = "Refactor",
+      repeatable = false,
+      available = asset_buffer,
+      run = function() require("lang.unity.assets").rename(ctx.bufnr) end,
+    }
+
+    actions[#actions + 1] = {
+      id = "delete_asset",
+      label = "Delete this asset and its .meta",
+      category = "Refactor",
+      repeatable = false,
+      available = asset_buffer,
+      run = function() require("lang.unity.assets").delete(ctx.bufnr) end,
+    }
+
+    actions[#actions + 1] = {
+      id = "audit_meta",
+      label = "List assets with a missing or orphaned .meta",
+      category = "Inspect",
+      repeatable = false,
+      run = function() require("lang.unity.assets").show_audit(assert(root_of(ctx))) end,
+    }
+
+    actions[#actions + 1] = {
+      id = "forget_device",
+      label = "Forget the remembered device",
+      category = "Maintenance",
+      repeatable = false,
+      run = function() require("lang.unity.android").forget() end,
+    }
+
     return actions
   end,
 
@@ -262,12 +402,16 @@ return {
       ("  solution: %s"):format(solution and vim.fn.fnamemodify(solution, ":~") or "not generated"),
       ("  shim: %s"):format(vim.fn.executable(shim.path) == 1 and shim.path or "not installed"),
       ("  open-from-Unity socket: %s"):format(shim.listening(root) and "bound" or "not bound"),
+      ("  debug adapter: %s"):format(require("lang.unity.dap").extension_path() or "vstuc not installed"),
+      ("  adb: %s"):format(require("lang.unity.android.device").adb() or "not installed"),
       ("  running editor: %s"):format(
-        instance and ("pid %d, debug port %d, message port %d"):format(
-          instance.pid,
-          instance.debug_port,
-          instance.message_port
-        ) or "none"
+        instance
+            and ("pid %d, debug port %d, message port %d"):format(
+              instance.pid,
+              instance.debug_port,
+              instance.message_port
+            )
+          or "none"
       ),
     }
 

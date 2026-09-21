@@ -32,6 +32,7 @@ map("n", "<Esc>", function()
 end, { desc = "Clear search highlight and multicursors" })
 
 map("t", "<Esc><Esc>", "<C-\\><C-n>", { desc = "Leave terminal mode" })
+map("n", "<Leader>t", function() require("core.terminal").toggle() end, { desc = "Toggle terminal" })
 
 for key, direction in pairs { h = "h", j = "j", k = "k", l = "l" } do
   map("n", "<C-" .. key .. ">", "<C-w>" .. direction, { desc = "Window " .. direction })

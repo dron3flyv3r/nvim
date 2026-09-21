@@ -13,6 +13,9 @@ vim.g.maplocalleader = ","
 require "core.options"
 require "core.autocmds"
 require("core.utf8_guard").setup()
+require("core.statusline").setup()
+require("core.session").setup()
+require("core.terminal").setup()
 
 local lazypath = vim.fn.stdpath "data" .. "/lazy/lazy.nvim"
 if not (vim.uv or vim.loop).fs_stat(lazypath) then
@@ -32,6 +35,10 @@ if not (vim.uv or vim.loop).fs_stat(lazypath) then
 end
 vim.opt.rtp:prepend(lazypath)
 
+-- Language modules probe for their server binaries as they are required, which
+-- is before lazy has loaded mason and run its own PATH handling.
+vim.env.PATH = vim.fs.joinpath(vim.fn.stdpath "data" --[[@as string]], "mason", "bin") .. ":" .. vim.env.PATH
+
 local lang = require "core.lang"
 
 require("lazy").setup {
@@ -45,3 +52,9 @@ require("core.task").setup()
 require("core.cheatsheet").setup()
 lang.setup()
 require "core.keymaps"
+
+local user_init = vim.fs.joinpath(vim.fn.stdpath "config" --[[@as string]], "lua", "user", "init.lua")
+if vim.uv.fs_stat(user_init) then
+  local ok, err = pcall(dofile, user_init)
+  if not ok then vim.notify(err, vim.log.levels.ERROR, { title = "user" }) end
+end

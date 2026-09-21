@@ -34,5 +34,16 @@ vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile" }, {
 
 ---@type lang.Module
 return {
+  -- Only the debug layer reads this: `unity` declares no server, because
+  -- `csharp` owns roslyn_ls for the same buffers.
+  ft = { "cs" },
+
+  dap = {
+    adapters = {
+      vstuc = function(callback, config) require("lang.unity.dap").adapter(callback, config) end,
+    },
+    configurations = function(bufnr) return require("lang.unity.dap").configurations(bufnr) end,
+  },
+
   actions = require "lang.unity.actions",
 }

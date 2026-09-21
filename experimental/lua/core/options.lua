@@ -26,10 +26,14 @@ o.swapfile = false
 o.writebackup = false
 o.updatetime = 250
 o.timeoutlen = 1000
+o.sessionoptions = "buffers,curdir,folds,tabpages,winsize,localoptions"
 
 o.termguicolors = true
 o.showmode = false
 o.laststatus = 3
+o.cmdheight = 0
+o.showcmdloc = "statusline"
+o.statusline = "%!v:lua.require'core.statusline'.render()"
 o.confirm = true
 o.mouse = "a"
 o.clipboard = "unnamedplus"

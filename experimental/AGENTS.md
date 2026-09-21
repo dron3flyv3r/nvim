@@ -46,6 +46,9 @@ lua/
     keymaps.lua       keymaps that do not belong to a plugin
     autocmds.lua      autocommands
     actions.lua       the <Leader>r provider/action registry
+    statusline.lua    the global statusline and its component registry
+    session.lua       native project session persistence
+    terminal.lua      an interactive shell in the shared bottom strip
     lang.lua          loader for lua/lang
     utf8_guard.lua    masks invalid UTF-8 in didChange payloads
     pane.lua          the one bottom strip, shared by its occupants
@@ -144,10 +147,14 @@ answer "this exact line". It was chosen over harpoon for the per-repository
 scoping and the editable menu; the cost is that upstream has been unmaintained
 since 2024-09-29, so the lockfile pin is the version that matters.
 
-`nvim-web-devicons` is a dependency of grapple rather than a spec of its own.
-grapple's `tag_content.lua` raises a hard `error` when it is missing and
-`icons` is on, and snacks finds it too (`snacks/util/init.lua:146`), so one
-plugin serves both.
+`nvim-web-devicons` is a dependency rather than a spec of its own. grapple's
+`tag_content.lua` raises a hard `error` when it is missing and `icons` is on,
+and both snacks and which-key find it too, so one plugin serves all three.
+
+`key-hints/` is which-key, disabled by default and toggled with `<Leader>uH`.
+Disabling it removes its triggers rather than merely hiding the window, so key
+sequences behave exactly as they did before it loaded. The checked-in user
+override enables it for this device; deleting `lua/user` restores the default.
 
 `lsp.lua` owns the LSP keymaps. They are in the plugin layer rather than in
 `core/keymaps.lua` because they call the snacks picker, and `core` may not
@@ -156,6 +163,27 @@ and returns only `{ "folke/snacks.nvim", optional = true }` as a dependency
 marker. It must not carry `init` or `config`: lazy merges specs with
 `Util.merge`, which *replaces* rather than merges function fields, so a second
 `init` for snacks here would silently delete the one in `snacks.lua`.
+
+`tools.lua` is mason, and it is the **only** way external tooling is installed
+from inside the editor. It is deliberately thin: no `mason-lspconfig`, no
+`ensure_installed` list, no bridge of any kind. A server is installed by hand
+with `:MasonInstall`, and a language module then finds it on `PATH` exactly as
+it would find one installed by a package manager — mason is a downloader, not a
+layer that servers are declared through. Declaring a server is still the `lsp`
+key in `lua/lang`, and nothing in `lua/lang` may name mason.
+
+The install root is `stdpath("data")/mason`, which under `NVIM_APPNAME` is
+`~/.local/share/nvim/experimental/mason` — a different tree from the old
+config's, so the two never fight over a version.
+
+**`init.lua` prepends `stdpath("data")/mason/bin` to `PATH`, not mason.** Its
+own `PATH` handling runs inside `mason.setup()`, which lazy cannot reach until
+`lazy.setup()`, and `lang.specs()` runs before that — a language module probes
+for its binary while it is being required, so a spec-driven prepend would
+always arrive too late and a mason-installed server would never be detected.
+The spec therefore sets `PATH = "skip"`; `init.lua` is the one writer. The
+consequence to state plainly: a server installed during a session is picked up
+on the **next** start, not immediately.
 
 ## `lua/lang`
 
@@ -283,10 +311,17 @@ than expected.
 
 ## Execution
 
-`core.task` runs every external process in this config. A language module never
-calls `jobstart`, `vim.system` or `:!` itself — if something needs to run, it
-goes through here, so that output, queueing and quickfix behave the same
-whatever started it.
+`core.task` runs every external process whose **output you watch** — a build, a
+test run, a log tail, the editor itself. A language module never calls
+`jobstart` or `:!` for one of those, so that output, queueing and quickfix
+behave the same whatever started it.
+
+A short probe read for its *value* is not a task and must not become one: a
+pane that opens to show three lines of `adb devices` is noise, and the caller
+wants the parsed answer rather than a buffer. Those are a plain
+`vim.system(...):wait()` with a timeout — `unity/bridge.lua`'s `git
+check-ignore` and everything in `unity/android/device.lua`. The test is whether
+a human is meant to read the output, not how long the process runs.
 
 ```lua
 require("core.task").run {
@@ -329,8 +364,8 @@ require("core.pane").show({
 ```
 
 `h` hides the strip from any occupant, `q` runs that occupant's `close`, and
-`<Tab>`/`<S-Tab>` cycle between them. Occupants today are `task`, and the
-debugger's `repl` and `program`. This is why dap-ui is configured with a left panel and no
+`<Tab>`/`<S-Tab>` cycle between them. Occupants today are `terminal`, `task`,
+and the debugger's `repl` and `program`. This is why dap-ui is configured with a left panel and no
 bottom dock: a second full-width strip would compete with this one, and during a
 session you still rebuild — the contract that a failing task opens the pane has
 to keep holding while the debugger is up.
@@ -347,6 +382,21 @@ print paths relative to where they ran. Omit it and quickfix is left alone.
 
 `core.task` registers its own `<Leader>r` provider (show last output, restart,
 stop, clear queue) and the commands `:TaskOutput`, `:TaskStop`, `:TaskRestart`.
+
+### Sessions and the terminal
+
+`core.session` stores one native session per Git repository, falling back to the
+startup directory outside Git. A start with no file arguments restores it; an
+explicit file, stdin or diff start does not. `VimLeavePre` saves file-backed
+buffers, tabs, splits, sizes, folds and local options under `stdpath("state")`.
+Temporary panes, terminals and help windows are excluded. `:SessionSave`,
+`:SessionRestore` and `:SessionDelete` provide manual control. Deleting a session
+also suppresses the automatic save for that exit.
+
+`<Leader>t` and `:Terminal` toggle one interactive shell in `core.pane`. It is a
+normal pane occupant: `h` hides it without stopping the shell, `q` stops it, and
+`<Esc><Esc>` leaves terminal mode. Native `:terminal` remains available when an
+ordinary unmanaged terminal window is wanted.
 
 ## Debugging
 
@@ -377,11 +427,11 @@ breakpoint set.
 **One adapter, one owner**, the same rule as the LSP. A language declares its
 adapter through the `dap` key described above; rustaceanvim owns codelldb for
 Rust the way it owns rust-analyzer, so `lang/rust` only tells it *which*
-codelldb, there being no mason here to find one. `adapters.lua` registers plain
-`codelldb` for everything else, found through `$CODELLDB`, `PATH`, or
-`~/.local/share/nvim-dap/codelldb` where `just install-codelldb` puts it. When
-none of the three answers, the action stays visible and says so — installing the
-adapter is the machine's business.
+codelldb. `adapters.lua` registers plain `codelldb` for everything else, found
+through `$CODELLDB`, `PATH` — which includes mason's `bin`, so `:MasonInstall
+codelldb` answers here — or `~/.local/share/nvim-dap/codelldb` where `just
+install-codelldb` puts it. When none of the three answers, the action stays
+visible and says so.
 
 **The UI is a left panel and nothing else.** `breakpoints .15 / stacks .20 /
 scopes .40 / watches .25` at 55 columns, opened on attach or launch rather than
@@ -499,20 +549,22 @@ server settings, not core's business: rust-analyzer's live in
 closing-brace and lifetime-elision hints off, because those two are what turn
 a dense file into noise.
 
-LSP progress is surfaced through `vim.notify` from the `core_lsp_progress`
-autocommand, which keeps `core` plugin-free while still rendering in snacks'
-notifier — the same indirection as `vim.ui.select`. It is throttled and
-debounced deliberately: rust-analyzer emits **28 begin/end events on a
-nine-line crate**, and a naive handler fires ~26 notifications. The counter
-dips to zero constantly between phases, so the idle "ready" message must be
-debounced rather than sent on every dip. Measured result is 5 messages sharing
-one notifier `id`, so they replace in place.
+LSP progress is shown in the global statusline. While idle it lists the clients
+attached to the current buffer; while a client is working its current progress
+replaces that list. Routine indexing does not produce notifications.
+
+The statusline is native and lives in `core/statusline.lua`. `cmdheight=0`
+lets `:`, `/`, `?`, messages and prompts temporarily cover that same final row.
+Plugin-owned information is added with `core.statusline.register`, so the future
+git layer can place its branch and `+`/`~`/`-` counts beside the filename without
+making `core` depend on a plugin.
 
 ## Keys
 
 Prefixes in use: `<Leader>f` find, `<Leader>s` search, `<Leader>u` toggles,
 `<Leader>w` windows, `<Leader>b` buffers, `<Leader>r`/`<Leader>R` actions,
-`<Leader>d` the debugger. `<Leader>m`/`<Leader>M` and `<Leader>1`–`<Leader>4`
+`<Leader>d` the debugger, `<Leader>t` the terminal. `<Leader>m`/`<Leader>M` and
+`<Leader>1`–`<Leader>4`
 are grapple. `<Leader>g` is reserved for the rebuilt git layer and is otherwise
 unclaimed.
 
@@ -576,9 +628,10 @@ mapping once:
   frames, the dap-ui panes are ordinary buffers where `j`/`k` and `<CR>` already
   work, and the bottom strip cycles its occupants on `<Tab>`.
 
-`timeoutlen` is 1000. It was 400, which silently aborted `<Leader>` if you
-paused to think. If which-key is ever added, drop it back to ~300 — which-key
-turns the timeout into "how fast the menu appears" rather than a deadline.
+`timeoutlen` is 1000 while key hints are off. It was 400 globally, which
+silently aborted `<Leader>` if you paused to think. Enabling which-key changes
+it to 300 while the popup is available and restores the previous value when
+the helper is disabled.
 
 Before adding a mapping, check it against the live set rather than the source:
 
@@ -597,6 +650,10 @@ local. Consequences that the code must honour:
   config must start normally in that case, not error.
 - Nothing outside `lua/user` may `require` anything inside it.
 - It is loaded last and may override any earlier layer.
+
+`init.lua` loads `lua/user/init.lua` when it exists and reports an error without
+preventing the rest of the config from starting. The checked-in example enables
+key hints on startup with `require("plugins.key-hints.control").enable()`.
 
 What belongs here: machine-specific paths, per-machine tool locations,
 GPU/font/theme preferences, work-vs-home differences. What does not: anything
@@ -665,8 +722,7 @@ stack traceback in the output. A change is not finished until it passes.
 `:checkhealth` is expected to be clean. Assumptions this config owns — external
 tools, paths, versions — get a health check rather than a comment.
 
-Not built yet: the git layer and `lua/user`. The loader tolerates `lua/user`
-being absent.
+Not built yet: the git layer. The user loader tolerates `lua/user` being absent.
 
 `stylua` and `selene` are not installed on every machine; `check.sh` reports SKIP
 rather than failing, which means a SKIP line is a gate that did **not** run. Do
@@ -713,12 +769,13 @@ exception, justified per module.
   itself. `cargo.allFeatures` was dropped: it expands the feature graph so
   everything is indexed under every combination, which costs startup on a real
   workspace for features you usually do not build.
-- **Done, natively**: `lsp_progress` needs no port. `LspProgress` and
-  `vim.lsp.status()` are built in; see the `core_lsp_progress` autocommand.
-  Note `vim.lsp.status()` *consumes* its messages, so it is a stream, not a
-  state query — it cannot back an availability check.
-- **In progress**: C# and Unity, as `lua/lang/csharp/` and `lua/lang/unity/`.
-  See the section below for what each phase covers and what is still missing.
+- **Done, natively**: `lsp_progress` needs no port. `core/statusline.lua`
+  records `LspProgress` events and redraws the line. `vim.lsp.status()` is not
+  used because it *consumes* its messages; it is a stream rather than the state
+  the statusline needs on every redraw.
+- **Done**: C# and Unity, as `lua/lang/csharp/` and `lua/lang/unity/`. All three
+  phases, including tests, `.meta` handling and the editor and Android attach
+  paths. See the section below for what each one encodes.
 - **Port on demand**: Python, C++, notebooks, inlay hints, hover, and the two
   deferred Rust modules. Port one when it is first missed, rewritten to the
   contracts above rather than copied.
@@ -761,9 +818,11 @@ only reference between the two modules and it is the reason it is a `pcall`.
 The server binary is found through `$ROSLYN_LS` or `roslyn-language-server` on
 `PATH`, and when neither answers the `lsp` key is **absent** rather than
 declared — `vim.lsp.enable` on a missing `cmd` warns at every matching
-`FileType` forever. `:ActionsStatus` says which of the two was used. There is
-no mason here; installing the server is the machine's business, which is why
-the env override exists.
+`FileType` forever. `:ActionsStatus` says which of the two was used.
+`:MasonInstall roslyn-language-server` is the normal way to satisfy the second;
+the env override stays for a copy that came from somewhere else, such as the
+one inside the VS Code C# extension. Either way the probe runs at load time, so
+a freshly installed server attaches on the **next** start.
 
 `background_analysis` is scoped to `openFiles` on purpose. Whole-solution
 analysis on a real Unity project never settles, and the one thing it buys —
@@ -829,28 +888,100 @@ asking. A language module's autocommands are named `lang_<name>_*`, must be
 cheap and idempotent, and must return immediately outside their own projects.
 Anything that can wait until `<Leader>r` should wait there instead.
 
+### Tests, assets and attaching
+
+**Tests are the messenger's second job.** `tests.lua` sends `ExecuteTests` with
+a `TestMode:FullName` value — `TestRunnerApiListener.ExecuteTests` splits on the
+first colon and returns without a word when there is none — and collects
+`TestFinished` until `RunFinished`. A suite reports itself alongside its
+children, so only a single-element `TestResultAdaptors` is a leaf worth
+counting. Failures open the snacks picker the same way compile errors do, not
+quickfix, because `log.lua` already set that precedent for "a list of places in
+the code".
+
+**A run holds the messenger open.** Unity multicasts results only to clients it
+has heard from recently, so `messenger.keepalive_start` pings every two seconds
+for the length of a run; without it a run reports its first few tests and then
+goes quiet. It stops in `report()`, which is also the only place the in-flight
+run is cleared.
+
+`tests.at_cursor` returns a name **or the reason there is none**, and the three
+reasons are different problems: not a C# buffer, no `c_sharp` parser installed,
+or a cursor that is genuinely not in a method. An action that reports only the
+last one sends you looking in the wrong place.
+
+**`.meta` handling has no general hook, and that is the whole design
+constraint.** The old config hooked neo-tree's `file_moved`/`file_deleted`
+events; snacks' explorer has no event bus, and `BufFilePost` is not a
+substitute — `:saveas` and `:file` do not move anything on disk, so carrying a
+`.meta` there would strand it. So the supported path is explicit: the Refactor
+actions rename and delete, with `assets.rename` going through
+`Snacks.rename.rename_file` so the language server hears about it before the
+file moves and a C# namespace follows.
+
+Because that leaves a real gap, *List assets with a missing or orphaned `.meta`*
+is the safety net for a rename done anywhere else. Both halves matter: an asset
+with no `.meta` gets a **new GUID** at the next import and every scene reference
+to it breaks, and an orphaned `.meta` is the other end of the same rename.
+
+**Attaching is one adapter and two endpoints.** `dap.lua` owns `vstuc`, found in
+the VS Code extension directory, and it is registered in nvim-dap's **function**
+form so the four extension directories are globbed when a session starts rather
+than on every start of an editor that is not debugging Unity. The editor path is
+a `configurations` provider: one `attach` config per running editor, the
+buffer's own project first, so a project with one editor open needs no choice.
+`projectPath` is the *editor's* project rather than ours, for the case of
+attaching to a second one.
+
+`editor.list()` earns its filters on a real machine: a Hub session also runs
+`unityhub-bin`, `UnityShaderCompiler`, a licensing client and one
+`AssetImportWorker` per core, and the `-batchMode` check plus the
+`project or comm == "Unity"` gate is what keeps them out of the attach list.
+
+**The device path is the same attach with a longer piece of string.** Same
+adapter, same `attach` request, pointed at a local port `adb` has forwarded.
+What differs is that every step fails as "connection refused" at the adapter —
+no device, one never authorised, an app that is not running, a build with no
+script debugging — so `android/player.lua` checks them in order and the first
+failure is the informative one. The port is the hard part: Unity announces it on
+its first log line and never again, so on a build that has been up an hour the
+announcement has rolled out of the ring buffer. The listening socket is still in
+`/proc`, so that is what is trusted and the log is only the tie-breaker when
+more than one candidate is in range.
+
+A forward outlives the debugger that asked for it, and whoever binds that port
+next inherits a pipe to a tablet, so `release_with_session` tears it down on
+four dap events and `VimLeavePre` sweeps whatever is left.
+
+Deliberately left behind from the old Android stack: `logcat.lua` and
+`monitor.lua`, 430 lines whose job was a log window and a timer that re-attached
+it across app restarts. `core.task` is the log window, so the log is now
+`adb logcat --pid` as an unqueued task. The restart-following timer is not
+ported; if a crash-restart loop becomes annoying enough to chase, that is what
+to reach for.
+
 ### Where the phases are
 
-Phases 1 and 2 are done. Phase 1: project detection (`Assets/` +
+Phases 1, 2 and 3 are done. Phase 1: project detection (`Assets/` +
 `ProjectSettings/ProjectVersion.txt`, cached per directory), editor and
 solution resolution, the Unity asset filetypes, `Editor.log` scraping, the log
 tail through `core.task`, and Scripting Reference lookup that prefers the
 locally installed docs. Phase 2: the shim, the messenger, the bridge and the
-state watcher, plus the play/stop/pause/resume/restart/refresh actions.
+state watcher, plus the play/stop/pause/resume/restart/refresh actions. Phase 3:
+tests, `.meta` sidecar handling, and the editor and Android attach paths, all
+described above.
 
-Still to come: tests (`RetrieveTestList`/`ExecuteTests` over the messenger),
-`.meta` sidecar handling on rename and delete, and the Unity and Android attach
-paths. The debug layer those two plug into exists — a `dap` key declaring the
-`vstuc` adapter found inside the VS Code extension directory, one attach
-configuration per running editor, and `<Leader>r` actions for the device path. The old config's versions are in
-`../lua/user/integrations/unity/`, as reference for behaviour only.
+`unity` carries `ft = { "cs" }` **only** so the debug layer can filter its
+configurations provider by filetype — it still declares no `lsp` key, because
+`csharp` owns roslyn_ls for those same buffers.
+
+Nothing from the old integration is outstanding. What was dropped rather than
+deferred: the Unity-specific heirline component, `condition.lua` and
+`completion.lua` on the debug side, and the logcat restart monitor above.
 
 There are **no `:Unity*` commands**. The old config had eight; here every one
 of them is an action, because `<Leader>r` is the only entry point a language
 module gets and a second one would be the fragmentation this rewrite removed.
-
-The old heirline statusline component has no host here and is **dropped**, not
-deferred; editor state will surface through `vim.notify` and `:ActionsStatus`.
 
 ## Working agreement for agents
 

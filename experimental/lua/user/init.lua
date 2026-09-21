@@ -1,0 +1,1 @@
+-- require("plugins.key-hints.control").enable()

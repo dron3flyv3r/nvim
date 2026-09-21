@@ -1,7 +1,7 @@
 local M = {}
 
 ---@class lang.Dap
----@field adapters? table<string, table>
+---@field adapters? table<string, table|fun(callback: fun(adapter: table), config: table)>
 ---@field configurations? table[]|fun(bufnr: integer): table[]
 
 ---@class lang.Module

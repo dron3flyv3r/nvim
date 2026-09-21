@@ -24,7 +24,7 @@ return {
         }
         -- rustaceanvim derives the launch configuration from cargo's own
         -- metadata, so it owns the adapter here; this only tells it which
-        -- codelldb, since there is no mason to find one.
+        -- codelldb.
         local codelldb = require("plugins.debug.adapters").codelldb()
         vim.g.rustaceanvim = {
           dap = codelldb and { adapter = codelldb } or nil,

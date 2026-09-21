@@ -210,6 +210,24 @@ function M.ping(instance, callback, timeout)
   timer:start(timeout or 700, 0, function() vim.schedule(function() done(false) end) end)
 end
 
+local keepalive ---@type uv.uv_timer_t|nil
+
+--- Unity multicasts test results only to clients it has heard from recently, so
+--- a run started and then left alone stops reporting halfway through.
+---@param instance unity.Instance
+function M.keepalive_start(instance)
+  M.keepalive_stop()
+  keepalive = assert(vim.uv.new_timer())
+  keepalive:start(0, 2000, function() vim.schedule(function() M.send(instance, M.TYPE.Ping) end) end)
+end
+
+function M.keepalive_stop()
+  if not keepalive then return end
+  keepalive:stop()
+  if not keepalive:is_closing() then keepalive:close() end
+  keepalive = nil
+end
+
 M.NOT_LISTENING = "Unity is running but its Visual Studio integration is not listening.\n"
   .. "Install the editor shim from <Leader>r and point Unity's External Script Editor at it."
 

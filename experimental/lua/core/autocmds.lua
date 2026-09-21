@@ -47,49 +47,55 @@ vim.api.nvim_create_autocmd("LspAttach", {
   end,
 })
 
--- Indexing is silent otherwise, and a server that cannot answer yet reads as a
--- broken one. rust-analyzer emits ~28 begin/end pairs on a trivial crate, so
--- this reports at most one line per THROTTLE_MS plus a single closing message.
--- The counter dips to zero constantly between phases, so the idle message is
--- debounced rather than sent on every dip.
-local THROTTLE_MS, SETTLE_MS = 400, 300
-local progress = { active = 0, shown = false, title = "working", client = "LSP", last = 0 }
-
-local function report()
-  local opts = { title = progress.client, id = "lsp_progress" }
-  if progress.active > 0 then
-    progress.shown = true
-    vim.notify(progress.title, vim.log.levels.INFO, opts)
-  elseif progress.shown then
-    progress.shown = false
-    vim.notify("ready", vim.log.levels.INFO, opts)
-  end
-end
+local statusline_group = augroup "statusline"
 
 vim.api.nvim_create_autocmd("LspProgress", {
-  group = augroup "lsp_progress",
+  group = statusline_group,
   callback = function(args)
-    local value = args.data and args.data.params and args.data.params.value
-    if not value then return end
-    if value.kind == "begin" then
-      progress.active = progress.active + 1
-      progress.title = value.title or progress.title
-    elseif value.kind == "end" then
-      progress.active = math.max(0, progress.active - 1)
-    else
-      return
-    end
+    require("core.statusline").on_lsp_progress(args)
+    vim.cmd.redrawstatus()
+  end,
+})
 
-    local client = vim.lsp.get_client_by_id(args.data.client_id)
-    progress.client = client and client.name or "LSP"
+vim.api.nvim_create_autocmd({ "DiagnosticChanged", "LspAttach" }, {
+  group = statusline_group,
+  callback = function() vim.cmd.redrawstatus() end,
+})
 
-    local now = vim.uv.now()
-    if progress.active > 0 and now - progress.last >= THROTTLE_MS then
-      progress.last = now
-      report()
-    end
+vim.api.nvim_create_autocmd("LspDetach", {
+  group = statusline_group,
+  callback = function(args)
+    require("core.statusline").clear_lsp_progress(args.data.client_id)
+    vim.cmd.redrawstatus()
+  end,
+})
 
-    progress.timer = progress.timer or vim.uv.new_timer()
-    progress.timer:start(SETTLE_MS, 0, vim.schedule_wrap(report))
+vim.api.nvim_create_autocmd("ColorScheme", {
+  group = statusline_group,
+  callback = function() require("core.statusline").refresh_highlights() end,
+})
+
+local session_group = augroup "session"
+
+vim.api.nvim_create_autocmd("StdinReadPre", {
+  group = session_group,
+  callback = function() require("core.session").mark_stdin() end,
+})
+
+vim.api.nvim_create_autocmd("VimEnter", {
+  group = session_group,
+  nested = true,
+  callback = function() require("core.session").restore_on_start() end,
+})
+
+vim.api.nvim_create_autocmd("VimLeavePre", {
+  group = session_group,
+  callback = function() require("core.session").save { quiet = true } end,
+})
+
+vim.api.nvim_create_autocmd("TermClose", {
+  group = augroup "terminal",
+  callback = function(args)
+    if vim.b[args.buf].core_terminal then require("core.terminal").on_close(args.buf) end
   end,
 })
