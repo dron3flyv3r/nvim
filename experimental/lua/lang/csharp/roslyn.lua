@@ -133,10 +133,22 @@ function M.config()
           dotnet_enable_references_code_lens = true,
         },
         ["csharp|inlay_hints"] = {
+          -- The four sub-options below it are ignored unless this gate is open.
+          csharp_enable_inlay_hints_for_types = true,
           csharp_enable_inlay_hints_for_implicit_object_creation = true,
           csharp_enable_inlay_hints_for_implicit_variable_types = true,
           csharp_enable_inlay_hints_for_lambda_parameter_types = true,
+          csharp_enable_inlay_hints_for_collection_expressions = true,
           dotnet_enable_inlay_hints_for_parameters = true,
+          dotnet_enable_inlay_hints_for_literal_parameters = true,
+          dotnet_enable_inlay_hints_for_object_creation_parameters = true,
+          dotnet_enable_inlay_hints_for_indexer_parameters = true,
+          dotnet_enable_inlay_hints_for_other_parameters = true,
+          dotnet_suppress_inlay_hints_for_parameters_that_match_argument_name = true,
+          -- Both suppress more than an exact name match: they would drop the
+          -- hint from `SomeFunction(nameText, 30)` and `SetColor(GetName())`.
+          dotnet_suppress_inlay_hints_for_parameters_that_match_method_intent = false,
+          dotnet_suppress_inlay_hints_for_parameters_that_differ_only_by_suffix = false,
         },
       },
     },

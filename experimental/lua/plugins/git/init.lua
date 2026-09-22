@@ -137,8 +137,16 @@ local function diffview_opts()
         review.track(bufnr)
         require("plugins.git.keys").show(require("plugins.git.hud").current_kind())
       end,
+      view_opened = function(view) require("plugins.git.image").watch(view) end,
+      -- Lenses sit on their own screen rows, which pushes the two sides of a
+      -- diff out of alignment. Scoped to the review's tabpage rather than to
+      -- its lifetime, so the rest of the editor keeps them.
+      view_enter = function() require("core.codelens").suspend "review" end,
+      view_leave = function() require("core.codelens").resume "review" end,
       view_closed = function(view)
+        require("core.codelens").resume "review"
         require("plugins.git.hud").closed()
+        require("plugins.git.image").closed(view)
         review.closed(view)
         require("plugins.git.keys").hide()
         -- Scheduled: the detach that deletes the keymaps has not happened yet.

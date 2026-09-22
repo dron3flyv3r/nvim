@@ -48,6 +48,23 @@ function M.check()
     end
   end
 
+  local ok, image = pcall(function() return Snacks.image end)
+  if not (ok and image) then
+    health.warn("snacks.image is not available", { "images in a review will be blank" })
+  elseif image.supports_terminal() then
+    health.ok "snacks.image: this terminal renders the images in a review"
+  else
+    health.warn("this terminal does not support the kitty graphics protocol", {
+      "an image in a review will show a note instead of the picture",
+    })
+  end
+
+  if vim.fn.executable "magick" == 1 or vim.fn.executable "convert" == 1 then
+    health.ok "ImageMagick: images other than PNG can be converted for a review"
+  else
+    health.warn("ImageMagick is not on PATH", { "only PNG images will render in a review" })
+  end
+
   local root = git({ "rev-parse", "--show-toplevel" }, vim.fn.getcwd())
   if not root then return health.info "not inside a git repository" end
   health.info(("repository: %s"):format(vim.fn.fnamemodify(root, ":~")))

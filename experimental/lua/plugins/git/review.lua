@@ -493,6 +493,18 @@ end
 ---@return boolean
 function M.holds(buf) return protected[buf] ~= nil end
 
+---@return string[] the held files, for anything that writes to disk behind them
+function M.held()
+  local names = {}
+  for buf in pairs(protected) do
+    if vim.api.nvim_buf_is_valid(buf) then
+      names[#names + 1] = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buf), ":~:.")
+    end
+  end
+  table.sort(names)
+  return names
+end
+
 -- Neovim sleeps for a second after printing W10 so the warning can be read, once
 -- per buffer and only with a UI attached, which made the first revert or conflict
 -- take in every held file look like a hang. The hold is about `:write`, and it is

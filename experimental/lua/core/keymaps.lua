@@ -33,6 +33,8 @@ end, { desc = "Clear search highlight and multicursors" })
 
 map("n", "<Leader>uv", function() require("core.diagnostics").toggle_all() end, { desc = "Inline diagnostics scope" })
 
+map("n", "<Leader>q", function() require("core.macros").pick() end, { desc = "Macros" })
+
 map("t", "<Esc><Esc>", "<C-\\><C-n>", { desc = "Leave terminal mode" })
 map("n", "<Leader>t", function() require("core.terminal").toggle() end, { desc = "Toggle terminal" })
 

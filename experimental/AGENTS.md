@@ -44,12 +44,15 @@ lua/
   core/               the configuration itself, no plugins involved
     options.lua       vim.o / vim.opt
     diagnostics.lua   vim.diagnostic.config and the inline-scope toggle
+    codelens.lua      the global code lens state and its suspensions
+    colorscheme.lua   the remembered colourscheme and its fallback
     keymaps.lua       keymaps that do not belong to a plugin
     autocmds.lua      autocommands
     actions.lua       the <Leader>r provider/action registry
     statusline.lua    the global statusline and its component registry
     session.lua       native project session persistence
     terminal.lua      an interactive shell in the shared bottom strip
+    macros.lua        the recording indicator and the macro list
     lang.lua          loader for lua/lang
     utf8_guard.lua    masks invalid UTF-8 in didChange payloads
     pane.lua          the one bottom strip, shared by its occupants
@@ -114,10 +117,25 @@ No spec is added "to try out"; this config is the result of deleting one that
 grew that way. The filename states what the plugin is for, which is why the
 files are named after concerns.
 
-`colorscheme.lua` is tokyonight, loaded eagerly at `priority = 1000` so it is
-in place before any other UI plugin draws. It sets the scheme in `config`
-rather than leaving it to `init.lua`; `lazy.setup`'s `install.colorscheme` only
-themes lazy's own install window and sets nothing.
+`colorscheme.lua` is tokyonight, onedark and atom-dark. tokyonight is the
+default and the only one loaded eagerly, at `priority = 1000` so it is in place
+before any other UI plugin draws; the other two are `lazy = true` and are
+brought in by lazy's own `ColorSchemePre` handler when their scheme is named,
+which `<Leader>uC` reaches because snacks' picker globs an unloaded plugin's
+`colors/` directory. It sets the scheme in `config` rather than leaving it to
+`init.lua`; `lazy.setup`'s `install.colorscheme` only themes lazy's own install
+window and sets nothing.
+
+**The choice survives the session.** `core/colorscheme.lua` is the one writer:
+it reads `stdpath("state")/colorscheme` and applies it, then records every
+`ColorScheme` event, so `:colorscheme` typed by hand persists exactly as the
+picker does. `core` names no scheme -- the plugin layer passes the default in.
+The record is debounced by 300 ms, because the picker previews by *applying*
+the scheme under the cursor and so fires one event per keypress; only the last
+of them is a choice, and cancelling restores the original as one more event.
+A stored scheme that no longer loads falls back to the default and is **left on
+disk**, so reinstalling the plugin restores the choice rather than needing it
+picked again.
 
 snacks' picker owns `vim.ui.select` (`ui_select` defaults to true), so every
 `vim.ui.select` call in this config — `<Leader>r`, any language module's prompt
@@ -152,6 +170,26 @@ since 2024-09-29, so the lockfile pin is the version that matters.
 `nvim-web-devicons` is a dependency rather than a spec of its own. grapple's
 `tag_content.lua` raises a hard `error` when it is missing and `icons` is on,
 and both snacks and which-key find it too, so one plugin serves all three.
+
+`pairs.lua` is mini.pairs, and it is the one thing here the editor genuinely
+cannot do: there is no native auto-pairing. `(`, `[`, `{` and `"` open a pair,
+and typing the closing character where one already sits **moves over it** rather
+than inserting a second — which is the whole point, since the alternative is
+reaching for an arrow key. `'` and `` ` `` are mapped to `false`: an apostrophe
+in prose and a C# char literal are the common cases, and neither wants a pair.
+
+It also claims `<BS>` and `<CR>` in insert mode, from its own `ensure_cr_bs` —
+backspace inside an empty pair deletes both halves, and `<CR>` between them puts
+the closing half on its own line. Both are skipped if a mapping is already
+there, so **whoever binds insert-mode `<CR>` has to reproduce `MiniPairs.cr()`**
+or brace-and-Enter stops indenting. blink's default preset leaves `<CR>` alone,
+which is why nothing fights over it today.
+
+A prompt is not a buffer: `foo(` typed into a picker is a search term, and
+closing it turns the search into something else. `vim.b.minipairs_disable` is
+set for `snacks_picker_input` and `snacks_input` from the spec's `init`, not its
+`config`, because the picker has already set its filetype by the time the first
+`InsertEnter` loads the plugin.
 
 `key-hints/` is which-key, disabled by default and toggled with `<Leader>uH`.
 Disabling it removes its triggers rather than merely hiding the window, so key
@@ -561,6 +599,7 @@ plugins/git/
   conflicts.lua  the merge keys
   nav.lua        walking changes and conflicts, including from the file panel
   goto.lua       gf, settling the review before it opens the file
+  image.lua      the picture in the pane, where an image entry was blank
   status.lua     the branch and +~- counts in the statusline
   keys.lua       the legend along the bottom of a review
   health.lua     :checkhealth plugins.git
@@ -614,7 +653,8 @@ The snapshot no longer carries `autosave` or `autoformat`: this config has
 neither, which is most of why `review.lua` is shorter than the module it came
 from. **Whoever adds a formatter or an autosave has to suspend it here**, the
 same way the old config did, or a held file will be written behind the review's
-back.
+back. An agent is the same hazard with nothing to suspend, since it writes from
+outside the editor; see The assistant for what `<Leader>a` does about it.
 
 `disk_state` is dev, inode, size and mtime to the nanosecond, because an
 outside writer changing equally-sized text in the same second must still stop
@@ -734,6 +774,45 @@ file that still has markers, because saving would not write it and the jump
 would open the copy from disk. "Save and finish" wants this tab, so the jump
 stands down rather than racing it.
 
+### Images in a review
+
+An image entry showed **two blank panes**, whatever its status. Diffview's
+`vcs/file.lua` runs its binary check *before* the working-tree branch, so an
+image — added, modified or deleted — was handed `File._get_null_buffer()`, one
+shared empty buffer that both panes point at. snacks never saw the file, and
+neither did `:edit`.
+
+`image.lua` gets there first. `File:is_valid()` is `self.bufnr and
+nvim_buf_is_valid(self.bufnr)`, and `create_buffer` short-circuits on it before
+it asks whether the file is binary, so assigning `file.bufnr` **is** the whole
+intervention. It happens on `file_open_pre`, which fires in `DiffView:_set_file`
+before `use_entry()` claims the windows. That event reaches the *view's* emitter
+and not the `hooks` table, so `view_opened` is what registers the listener — the
+same `view.emitter:on(…)` shape Diffview's own `File:post_buf_created` uses.
+
+Everything after that is Diffview's: `Window.open_file` sets the buffer and
+*then* calls `attach_buffer`, so `q`, `<Tab>`, `gf`, `r` and the winbar land on
+these buffers with nothing re-applied. A nulled side is left alone, so a deleted
+image is picture-and-blank and a modified one is the two versions side by side.
+
+The source is the file on disk for the working tree, and for any other revision
+a blob extracted into `stdpath("cache")/diffview-images`, named by its **sha** so
+an index entry cannot go stale. `adapter:show` is not used — it returns lines,
+and a blob has to stay bytes. `cat-file --batch-check` answers the sha and the
+size in one process, which is what the 32 MB guard reads. The buffers are
+scratch, tracked per view and wiped on `view_closed`: that keeps `review.track`
+off them, since `is_file_buffer` rejects a `nofile` buffer, and keeps a
+working-tree image out of the session.
+
+Nothing here asks `supports_terminal`. A terminal that cannot draw gets snacks'
+own note naming the file, which beats a blank; `health.lua` is where that is
+reported, along with ImageMagick for the formats that need converting.
+
+This reaches into `file.bufnr` and `file.binary`, two of Diffview's own fields.
+That is the bet, and the lockfile pin is what makes it safe — if an update moves
+the `is_valid` short-circuit, images go blank again rather than breaking
+anything else.
+
 ### The legend, and the rest
 
 `?` toggles a one-row float above the statusline listing the keys for the mode
@@ -784,6 +863,55 @@ gitsigns builds that float with `nvim_create_buf` and copies only `filetype`,
 while editorconfig sets indent width per file off `BufReadPost`, which a scratch
 buffer never fires, so every old line lands `(difference × depth)` columns off.
 
+## The assistant
+
+`lua/plugins/assistant/` is Claude Code, on the `<Leader>a` prefix the keys table
+has always reserved. It is `coder/claudecode.nvim` and nothing else: the plugin
+speaks Anthropic's IDE websocket protocol, so the `claude` CLI running in a
+snacks terminal knows which buffer and selection you are on, `@`-mentions resolve
+to real paths, and its edits arrive as a diff with accept and deny. There is no
+Node runtime, no bridge process and no stored token — it rides the CLI's own
+login. A directory rather than a file for the same reason as `plugins/debug/` and
+`plugins/git/`: lazy's `lsmod` is non-recursive, so `health.lua` beside it is
+never mistaken for a spec.
+
+**Eight keys, and two of them are the same key.** `<Leader>as` sends the visual
+selection in an ordinary buffer and adds the files under the cursor in a
+`snacks_picker_list` one, because `ClaudeCodeSend` dispatches on filetype itself.
+The old config bound a second, buffer-local key from a `FileType` autocommand for
+that; it is not needed, and a plugin spec writing global keymaps into other
+people's buffers is what this rewrite removes. `<Leader>am` (select model) and
+`<Leader>aS` (connection status) were dropped: `/model` is one word typed in the
+terminal that is already in front of you, and the status is
+`:checkhealth claudecode`.
+
+**Claude writes to disk; a review holds its buffers in memory.** This is the
+hazard the Git section warns about under a different name — *"whoever adds a
+formatter or an autosave has to suspend it here"* — except an agent writes from
+outside the editor, so there is nothing to suspend. The decision is to **warn
+once per review and allow it**: `<Leader>a` keys that can reach the agent call
+`plugins.git.review.held()` first and say how many files are being held off disk.
+Once, not every press — the choice is yours to make and restating it is noise.
+The call is a `pcall`, the same shape and for the same reason as `roslyn.lua`
+reaching for the Unity root: deleting `lua/plugins/git` must leave this working.
+`review.held()` exists for this caller alone; `health.lua` checks it still
+answers, because a `pcall` that starts failing goes quiet rather than loud.
+
+**The terminal is a right split, not `core.pane`.** The strip is last-writer-wins
+by design, so a chat you keep open all day would be evicted by every failing
+build. A side panel claims nothing `core.pane` owns. `provider` is stated as
+`snacks` rather than left at `auto`, which probes with `require` and would pick
+up whatever else happens to be installed — the same rule as Neogit's
+`integrations`.
+
+Deliberately not here yet: the **explain and discuss** half — a read-only
+`claude -p` into a float, with `--restricted` on the deep variant so it can chase
+a call into the next file, and a generated `--session-id` so "discuss this" can
+resume that exact conversation in the terminal. The treesitter context in the old
+`user/ai_explain.lua` is the part worth keeping. It needs no plugin, which is
+most of why it can wait. Also not here: **inline completion**, which is a
+separate plugin and collides with blink's `<C-j>`/`<C-k>`/`<C-l>` scheme.
+
 ## Diagnostics
 
 `core/diagnostics.lua` is the one `vim.diagnostic.config` call, made from
@@ -800,13 +928,25 @@ expansion is the middle that keeps both. The update is native and happens on
 `CursorHold`, so it is paced by `'updatetime'` — 250 here. There is no
 `CursorMoved` autocommand to add; `vim/diagnostic/_handlers.lua` owns it.
 
+**They also render while you type, and that costs two things.**
+`update_in_insert` is on, because with it off `_display.lua` defers every
+publish to `InsertLeave` and nothing at all appears in insert mode. That alone
+is not enough: the `current_line` handler renders from `CursorHold`, which has
+no insert-mode counterpart in `on_line_hold`, so the block stays under the line
+it was last published for while the cursor walks away from it — measured, and
+the reason `core_diagnostics` is a `CursorMovedI` autocommand calling
+`diagnostics.on_insert_move`. It re-shows only when the *line* changed, not on
+every keystroke, and only while the handler is cursor-scoped: widened to every
+line by `<Leader>uv` the publish already draws them all, and a re-show per line
+would be a whole-file render for nothing.
+
 `<Leader>uv` widens the same handler to every line for the times the whole
 file's errors are the question, and says which mode it landed in. It is a
 scope toggle, not an on/off — hiding diagnostics entirely is still
 `<Leader>ud`.
 
 Signs carry the same two glyphs the statusline counts with, so the gutter and
-the status row agree. `severity_sort` is on, `update_in_insert` is off.
+the status row agree. `severity_sort` is on.
 
 ## Completion and inlay hints
 
@@ -852,8 +992,44 @@ server settings, not core's business: rust-analyzer's live in
 closing-brace and lifetime-elision hints off, because those two are what turn
 a dense file into noise.
 
-Code lens is **on by default**, the same shape one autocommand down:
-`core_codelens` guarded on `textDocument/codeLens`, `<Leader>uc` to toggle.
+Roslyn's live in `lang/csharp/roslyn.lua` and are **two gates and their
+children**, which is the part worth knowing:
+`csharp_enable_inlay_hints_for_types` and
+`dotnet_enable_inlay_hints_for_parameters` each default to false and each
+silently discards the sub-options underneath it. Setting only the children —
+which this config did — renders no type hints at all and only literal
+parameter hints, so `var thing = GetThing()` was bare. Both gates are open now
+and every child under them is stated.
+
+The suppression rule is **exact name match and nothing wider**.
+`dotnet_suppress_inlay_hints_for_parameters_that_match_argument_name` is on, so
+`SetColor(color)` is bare; the other two are written as `false` rather than
+left out, because they are a decision. `..._differ_only_by_suffix` would drop
+the hint from `SomeFunction(nameText, 30)` and `..._match_method_intent` from
+`SetColor(GetName())`, and both of those are the cases the hints exist for.
+Roslyn does not read `GetName()` as matching a `name` parameter, so
+`SomeFunction(GetName(), 30)` keeps its `name:` — which is the whole point.
+
+These reach the server at `initialize`, so changing one needs a restart rather
+than `<Leader>uh`, and Unity inherits all of it: `unity` declares no `lsp` key
+and `csharp` owns roslyn_ls for those buffers.
+
+Code lens is **on by default and global**, unlike the per-buffer inlay hints
+above. `core/codelens.lua` is the only writer: it sets the global marker at
+startup and `<Leader>uc` flips it for every buffer at once. There is no
+`LspAttach` hook for it — `vim.lsp.codelens.enable` with no `bufnr` filter sets
+`vim.g._lsp_enabled_codelens`, which is what a client consults as it attaches, so
+a buffer opened later inherits the state without one.
+
+A **review suspends it**, because a lens takes a screen row and the two sides of
+a diff then stop lining up. `plugins/git/init.lua`'s `view_enter`/`view_leave`
+hooks are what do it, so the suspension follows the review's *tabpage* rather
+than its lifetime and a file open in another tab keeps its lenses. Suspension is
+by name (`core.codelens.suspend`/`resume`), and an explicit `<Leader>uc` clears
+every suspension — a key the user pressed outranks one the config suspended,
+which is what makes the toggle work inside a review rather than reporting a
+state that is not on screen.
+
 0.13's `vim.lsp.codelens.enable` is the `vim.lsp._capability` machinery that
 `inlay_hint.enable` uses, so refresh is viewport-driven and resolution is on
 demand — the `CursorHold`/`InsertLeave` refresh autocommand every guide tells
@@ -871,7 +1047,9 @@ symptom. `core_codelens` therefore also watches `LspProgress` with `pattern =
 `vim.lsp.codelens.enable` off and on for it, which is the supported way to force
 a fresh request. The unresolved check is what keeps this from being the refresh
 autocommand the paragraph above forbids: it fires for the server that answered
-too early and for nothing else.
+too early and for nothing else. It asks `core.codelens` first, because a
+per-buffer re-enable would otherwise put lenses back in a review the tabpage
+hook had just taken them out of.
 
 What the lenses are for is **counts**: references and implementations, the
 questions `grr`/`gri` answer but that a count answers without leaving the line.
@@ -914,15 +1092,40 @@ The statusline is native and lives in `core/statusline.lua`. `cmdheight=0`
 lets `:`, `/`, `?`, messages and prompts temporarily cover that same final row.
 Plugin-owned information is added with `core.statusline.register`, which is how
 `plugins/git/status.lua` places the branch and `+`/`~`/`-` counts beside the
-filename without making `core` depend on a plugin. A component's text is escaped
+filename without making `core` depend on a plugin. The path is `pathshorten`d,
+so every directory is one letter and only the filename is written out: a Unity
+or Rust tree is deep enough that the untruncated path crowded out everything to
+its right, and `%<` dropping the *front* of it took the part that says which
+project you are in. A component's text is escaped
 unless it sets `raw`, which is what lets the git counts carry their own
 highlight groups; a `raw` component is responsible for its own `%%`.
+
+## Macros
+
+`core/macros.lua` is the whole of it: `q<letter>` otherwise says nothing, and a
+recording left running is how a stray `j` ends up in register `q`. A recording
+puts  and the register beside the mode block, from `RecordingEnter` and
+`RecordingLeave` in `core/autocmds.lua`. `reg_recording()` still answers *while*
+`RecordingLeave` runs, so the redraw that clears the indicator is scheduled
+rather than made inside the event.
+
+`<Leader>q` and `:Macros` list the non-empty `a`-`z` registers with their
+contents through `vim.fn.keytrans`, so `<Esc>` and `<CR>` read as keys rather
+than as control characters, and `<CR>` runs the chosen one. Nothing distinguishes
+a macro from a yank -- they are the same register -- so the list hides neither:
+the ones recorded in this session carry a mark and sort first, most recent
+first, and the rest follow in register order. `RecordingLeave` is what records
+that, keyed by the lowercase register, because `qA` appends to `a`.
+
+It is `vim.ui.select` rather than a picker of its own, which snacks owns, so
+`core` still names no plugin.
 
 ## Keys
 
 Prefixes in use: `<Leader>a` assistants, `<Leader>f` find, `<Leader>s` search, `<Leader>u` toggles,
 `<Leader>w` windows, `<Leader>b` buffers, `<Leader>r`/`<Leader>R` actions,
-`<Leader>d` the debugger, `<Leader>t` the terminal. `<Leader>m`/`<Leader>M` and
+`<Leader>d` the debugger, `<Leader>t` the terminal, `<Leader>q` the macro list.
+`<Leader>m`/`<Leader>M` and
 `<Leader>1`–`<Leader>4`
 are grapple. `<Leader>g` is git.
 
@@ -980,6 +1183,9 @@ mapping once:
   rebound to cancel in insert mode too: snacks' default cancels from normal mode
   only, so a prompt-focused menu would otherwise take two presses to dismiss
   where every other list here takes one.
+- Insert-mode `<CR>` and `<BS>` belong to mini.pairs, which takes them only if
+  nothing else has. Binding either one means reproducing `MiniPairs.cr()` and
+  `MiniPairs.bs()` inside the new mapping.
 - The scheme stops at three keys on purpose. `<C-h>` is backspace in insert
   mode and must not be bound. `<C-l>` is safe: there is no `i_CTRL-L`, only
   meanings inside the native completion machinery that blink replaces.
@@ -1148,6 +1354,17 @@ exception, justified per module.
 - **Done**: C# and Unity, as `lua/lang/csharp/` and `lua/lang/unity/`. All three
   phases, including tests, `.meta` handling and the editor and Android attach
   paths. See the section below for what each one encodes.
+- **Done**: the assistant, as `lua/plugins/assistant/`. `claude.lua` came across
+  as the one spec, trimmed by two keymaps and one autocommand. Deliberately left
+  behind: `copilot.lua` and `blink-cmp-copilot` (inline completion is a separate
+  question, and blink's keys are already spoken for), and `ai-explain.lua` with
+  its CopilotChat dependency — the explain path is deferred rather than dropped,
+  and when it lands it goes through the same `claude` CLI rather than a second
+  vendor. `user/ai_explain.lua`'s treesitter context and `user/ai_review.lua`'s
+  three prompts are the reference material for that day. The justfile's
+  `install-codecompanion-agents` and `store-codecompanion-claude-token` were
+  deleted with it: they pinned an ACP bridge and a Node 22 runtime for a plugin
+  that was never added, and the keyring script they installed never existed.
 - **Port on demand**: Python, C++, notebooks, inlay hints, hover, and the two
   deferred Rust modules. Port one when it is first missed, rewritten to the
   contracts above rather than copied.

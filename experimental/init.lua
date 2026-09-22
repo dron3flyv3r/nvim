@@ -12,11 +12,13 @@ vim.g.maplocalleader = ","
 
 require "core.options"
 require("core.diagnostics").setup()
+require("core.codelens").setup()
 require "core.autocmds"
 require("core.utf8_guard").setup()
 require("core.statusline").setup()
 require("core.session").setup()
 require("core.terminal").setup()
+require("core.macros").setup()
 
 local lazypath = vim.fn.stdpath "data" .. "/lazy/lazy.nvim"
 if not (vim.uv or vim.loop).fs_stat(lazypath) then

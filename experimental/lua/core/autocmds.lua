@@ -37,6 +37,11 @@ vim.api.nvim_create_autocmd("VimResized", {
   callback = function() vim.cmd.wincmd "=" end,
 })
 
+vim.api.nvim_create_autocmd("CursorMovedI", {
+  group = augroup "diagnostics",
+  callback = function(args) require("core.diagnostics").on_insert_move(args.buf) end,
+})
+
 vim.api.nvim_create_autocmd("LspAttach", {
   group = augroup "inlay_hints",
   callback = function(args)
@@ -48,16 +53,6 @@ vim.api.nvim_create_autocmd("LspAttach", {
 })
 
 local codelens_group = augroup "codelens"
-
-vim.api.nvim_create_autocmd("LspAttach", {
-  group = codelens_group,
-  callback = function(args)
-    local client = vim.lsp.get_client_by_id(args.data.client_id)
-    if client and client:supports_method "textDocument/codeLens" then
-      vim.lsp.codelens.enable(true, { bufnr = args.buf })
-    end
-  end,
-})
 
 ---@param bufnr integer
 ---@return boolean
@@ -78,7 +73,7 @@ vim.api.nvim_create_autocmd("LspProgress", {
   pattern = "end",
   callback = function(args)
     local client = vim.lsp.get_client_by_id(args.data.client_id)
-    if not client then return end
+    if not client or not require("core.codelens").is_enabled() then return end
     for bufnr in pairs(client.attached_buffers) do
       if vim.api.nvim_buf_is_loaded(bufnr) and lens_unresolved(bufnr) then
         vim.lsp.codelens.enable(false, { bufnr = bufnr })
@@ -132,6 +127,18 @@ vim.api.nvim_create_autocmd("VimEnter", {
 vim.api.nvim_create_autocmd("VimLeavePre", {
   group = session_group,
   callback = function() require("core.session").save { quiet = true } end,
+})
+
+local macros_group = augroup "macros"
+
+-- reg_recording() still answers while RecordingLeave runs, so the redraw that
+-- clears the indicator has to come after the event rather than inside it.
+vim.api.nvim_create_autocmd({ "RecordingEnter", "RecordingLeave" }, {
+  group = macros_group,
+  callback = function(args)
+    if args.event == "RecordingLeave" then require("core.macros").remember(vim.v.event.regname) end
+    vim.schedule(function() vim.cmd.redrawstatus() end)
+  end,
 })
 
 vim.api.nvim_create_autocmd("TermClose", {

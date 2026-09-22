@@ -117,8 +117,8 @@ return {
           .new({
             id = "codelens",
             name = "Code Lens",
-            get = function() return vim.lsp.codelens.is_enabled { bufnr = 0 } end,
-            set = function(state) vim.lsp.codelens.enable(state, { bufnr = 0 }) end,
+            get = function() return require("core.codelens").is_enabled() end,
+            set = function(state) require("core.codelens").set(state) end,
           })
           :map "<Leader>uc"
         Snacks.toggle.indent():map "<Leader>ug"

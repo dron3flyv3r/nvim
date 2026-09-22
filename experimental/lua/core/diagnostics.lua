@@ -2,11 +2,13 @@ local M = {}
 
 local severity = vim.diagnostic.severity
 
+local insert_bufnr, insert_line = -1, -1
+
 function M.setup()
   vim.diagnostic.config {
     severity_sort = true,
     underline = true,
-    update_in_insert = false,
+    update_in_insert = true,
     signs = {
       text = {
         [severity.ERROR] = "",
@@ -34,6 +36,18 @@ function M.toggle_all()
     vim.log.levels.INFO,
     { title = "Diagnostics" }
   )
+end
+
+--- `virtual_lines.current_line` renders from `CursorHold`, which never fires in
+--- insert mode, so the block stays under the line it was last published for
+--- until the next publish moves it.
+function M.on_insert_move(bufnr)
+  local virtual_lines = vim.diagnostic.config().virtual_lines
+  if type(virtual_lines) ~= "table" or virtual_lines.current_line ~= true then return end
+  local line = vim.api.nvim_win_get_cursor(0)[1]
+  if bufnr == insert_bufnr and line == insert_line then return end
+  insert_bufnr, insert_line = bufnr, line
+  vim.diagnostic.show(nil, bufnr)
 end
 
 return M
