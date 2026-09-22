@@ -44,6 +44,7 @@ lua/
   core/               the configuration itself, no plugins involved
     options.lua       vim.o / vim.opt
     diagnostics.lua   vim.diagnostic.config and the inline-scope toggle
+    autosave.lua      registered filetypes, idle timers and suspensions
     codelens.lua      the global code lens state and its suspensions
     colorscheme.lua   the remembered colourscheme and its fallback
     keymaps.lua       keymaps that do not belong to a plugin
@@ -649,12 +650,12 @@ handled in `review.lua`:
   option, which is why `M.writable` exists. The revert keys once read
   `vim.bo.readonly` directly and refused every file in a held review.
 
-The snapshot no longer carries `autosave` or `autoformat`: this config has
-neither, which is most of why `review.lua` is shorter than the module it came
-from. **Whoever adds a formatter or an autosave has to suspend it here**, the
-same way the old config did, or a held file will be written behind the review's
-back. An agent is the same hazard with nothing to suspend, since it writes from
-outside the editor; see The assistant for what `<Leader>a` does about it.
+The snapshot does not carry `autosave` or `autoformat`. The Rust idle autosave
+is suspended through `core.autosave` while a buffer is held and resumed when the
+review releases it; any future automatic writer needs the same explicit hook or
+a held file can reach disk behind the review's back. An agent is the same hazard
+with nothing to suspend, since it writes from outside the editor; see The
+assistant for what `<Leader>a` does about it.
 
 `disk_state` is dev, inode, size and mtime to the nanosecond, because an
 outside writer changing equally-sized text in the same second must still stop
@@ -1331,6 +1332,9 @@ exception, justified per module.
 - **Done**: Rust, as `lua/lang/rust/`. rustaceanvim owns the rust-analyzer
   client, so the module has no `lsp` key — a second client from `vim.lsp.enable`
   would fight it. All three rustaceanvim executor slots route into `core.task`.
+  Native rust-analyzer diagnostics see the unsaved buffer. After 800 ms without
+  another edit, `core.autosave` writes an ordinary Rust file so check-on-save can
+  run `cargo check`; Clippy remains the explicit *Lint with clippy* action.
   Deliberately left behind: `watch.lua` (374 lines, continuous build) and
   `dependencies.lua` (490 lines, crate search UI) are deferred until missed;
   `diagnostics.lua` and `project.lua` are dropped outright, since both exist

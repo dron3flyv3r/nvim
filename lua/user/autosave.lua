@@ -1,5 +1,16 @@
 local M = {}
 
+--- Settings. Edit these to change what autosave does. Saving on focus loss,
+--- `:q`, and before run/build/debug always happens (unless autosave is off
+--- entirely with `<Leader>uW`).
+M.config = {
+  --- Also save when switching buffers, and shortly after you stop editing
+  --- (never mid-insert).
+  save_while_editing = false,
+  --- How long editing has to be idle before that save, in ms.
+  delay = 1000,
+}
+
 --- True only while `write()` is inside `:write`. Read by `M.formatting_allowed`
 --- to tell an automatic write from one you asked for -- the two go through the
 --- same `BufWritePre`, so there is nothing else to tell them apart by.
@@ -18,6 +29,20 @@ local function disk_state(buf)
   return ("%d:%d"):format(vim.fn.getftime(name), vim.fn.getfsize(name))
 end
 
+--- Files above this are not hashed; for them a changed mtime alone is a conflict.
+local HASH_LIMIT = 2 * 1024 * 1024
+
+---@param buf integer
+---@return string?
+local function disk_hash(buf)
+  local name = vim.api.nvim_buf_get_name(buf)
+  local size = vim.fn.getfsize(name)
+  if size < 0 or size > HASH_LIMIT then return nil end
+  local ok, lines = pcall(vim.fn.readfile, name, "b")
+  if not ok then return nil end
+  return vim.fn.sha256(table.concat(lines, "\n"))
+end
+
 --- Record the current disk state as the agreed one. Wired to the events where
 --- Neovim reads or writes the file, in `plugins/autosave.lua`.
 ---@param buf integer
@@ -25,17 +50,26 @@ function M.stamp(buf)
   if not vim.api.nvim_buf_is_valid(buf) then return end
   warned[buf] = nil
   vim.b[buf].autosave_disk = disk_state(buf)
+  vim.b[buf].autosave_hash = disk_hash(buf)
 end
 
+--- Returns whether the disk disagrees with the stamp, and whether it only
+--- looked that way: the mtime moved but the bytes are the ones we last saw (a
+--- `touch`, a checkout that restored the same content). `:write` itself still
+--- balks at the new mtime then, so the caller has to force it.
 ---@param buf integer
----@return boolean
+---@return boolean conflict
+---@return boolean touched
 local function conflicted(buf)
   local known = vim.b[buf].autosave_disk
   if not known then
     M.stamp(buf)
-    return true
+    return true, false
   end
-  return known ~= disk_state(buf)
+  if known == disk_state(buf) then return false, false end
+  local hash = vim.b[buf].autosave_hash
+  if hash and hash == disk_hash(buf) then return false, true end
+  return true, false
 end
 
 ---@param buf? integer Defaults to the current buffer.
@@ -99,7 +133,8 @@ function M.write(buf)
   -- The prompt guard, per the header. Warn once, then leave the buffer alone
   -- until it and the disk agree again -- `polish.lua`'s `checktime` on
   -- `BufEnter`/`FocusGained` is what usually resolves it.
-  if conflicted(buf) then
+  local conflict, touched = conflicted(buf)
+  if conflict then
     if not warned[buf] then
       warned[buf] = true
       require("astrocore").notify(
@@ -116,7 +151,7 @@ function M.write(buf)
   -- `silent` keeps the `"foo.py" 12L, 340B written` line out of the command
   -- line on every passive save. It is not `silent!`: a write that fails
   -- should still say so.
-  local ok, err = pcall(vim.api.nvim_buf_call, buf, function() vim.cmd "silent write" end)
+  local ok, err = pcall(vim.api.nvim_buf_call, buf, function() vim.cmd(touched and "silent write!" or "silent write") end)
   writing = false
 
   if ok then
@@ -132,6 +167,54 @@ function M.sweep()
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
     M.write(buf)
   end
+end
+
+local timer = assert(vim.uv.new_timer())
+
+--- Sweep once editing has been idle for `M.config.delay` ms, when
+--- `M.config.save_while_editing` is on. Never fires mid-insert or
+--- mid-command: if the timer lands there, it re-arms and waits.
+function M.debounce()
+  if not M.config.save_while_editing or vim.g.autosave == false then return end
+  local delay = M.config.delay
+  timer:stop()
+  timer:start(
+    delay,
+    0,
+    vim.schedule_wrap(function()
+      if vim.api.nvim_get_mode().mode ~= "n" then return M.debounce() end
+      M.sweep()
+    end)
+  )
+end
+
+--- Set when the pending quit is one that throws changes away (`:q!`, `ZQ`,
+--- `<C-Q>`), so `on_quit` leaves the buffers dirty for it to discard.
+local discarding = false
+
+local QUITS = { quit = true, qall = true, quitall = true, close = true, wq = true, wqall = true, xit = true, xall = true, exit = true }
+
+--- `CmdlineLeave`: note whether the command about to run is a forced quit.
+--- `QuitPre` cannot see the bang itself.
+function M.note_cmdline()
+  if vim.fn.getcmdtype() ~= ":" or vim.v.event.abort then return end
+  local ok, cmd = pcall(vim.api.nvim_parse_cmd, vim.fn.getcmdline(), {})
+  discarding = ok and QUITS[cmd.cmd] == true and cmd.bang == true
+end
+
+--- Quit without saving, the way `:q!` does. For mappings that bypass the
+--- command line.
+---@param cmd string
+function M.discard(cmd)
+  discarding = true
+  vim.cmd(cmd)
+  discarding = false
+end
+
+--- `QuitPre`: save before `:q`/`:qa`/`:wq` checks for unsaved changes.
+function M.on_quit()
+  if not discarding then M.sweep() end
+  vim.schedule(function() discarding = false end)
 end
 
 --- The `format_on_save.filter` installed in `plugins/astrolsp.lua`: format on a

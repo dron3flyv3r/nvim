@@ -42,6 +42,16 @@ vim.api.nvim_create_autocmd("CursorMovedI", {
   callback = function(args) require("core.diagnostics").on_insert_move(args.buf) end,
 })
 
+local autosave_group = augroup "autosave"
+vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI", "TextChangedP" }, {
+  group = autosave_group,
+  callback = function(args) require("core.autosave").changed(args.buf) end,
+})
+vim.api.nvim_create_autocmd("BufWipeout", {
+  group = autosave_group,
+  callback = function(args) require("core.autosave").forget(args.buf) end,
+})
+
 vim.api.nvim_create_autocmd("LspAttach", {
   group = augroup "inlay_hints",
   callback = function(args)

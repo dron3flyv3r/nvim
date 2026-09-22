@@ -163,8 +163,10 @@ function M.track(buf)
   -- `BufWritePre` only aborts writes issued through the API; a `:w` typed on the
   -- command line reports the error and writes the file anyway. E45 comes from
   -- `:write` itself, before any autocommand, so it stops both.
+  local newly_protected = protected[buf] == nil
   vim.bo[buf].readonly = true
   protected[buf] = session
+  if newly_protected then require("core.autosave").suspend(buf) end
   return true
 end
 
@@ -196,6 +198,7 @@ local function unprotect(session)
     if protected[snap.buf] == session then
       if vim.api.nvim_buf_is_valid(snap.buf) then vim.bo[snap.buf].readonly = snap.readonly end
       protected[snap.buf] = nil
+      require("core.autosave").resume(snap.buf)
     end
   end
 end

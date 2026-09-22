@@ -9,6 +9,7 @@ return {
       "mrcjkb/rustaceanvim",
       lazy = false,
       init = function()
+        require("core.autosave").register("rust", { delay = 800 })
         require("lang.rust.lens").setup()
         local cargo = require "lang.rust.cargo"
         local executor = {
@@ -39,7 +40,10 @@ return {
             default_settings = {
               ["rust-analyzer"] = {
                 checkOnSave = true,
-                check = { command = "clippy" },
+                check = { command = "check" },
+                -- The only diagnostics that see an unsaved buffer: everything
+                -- under `check` is cargo, and cargo only reads the disk.
+                diagnostics = { experimental = { enable = true } },
                 inlayHints = {
                   maxLength = 25,
                   typeHints = { enable = true },

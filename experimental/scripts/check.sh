@@ -65,6 +65,15 @@ else
 fi
 
 if [[ -x $nvim_bin ]]; then
+  autosave=$("$nvim_bin" --headless -u NONE -l scripts/autosave-smoke.lua 2>&1)
+  if grep -q 'AUTOSAVE_SMOKE_OK' <<<"$autosave" &&
+    ! grep -qE 'Error detected|stack traceback|E[0-9]+:' <<<"$autosave"; then
+    say PASS "idle autosave smoke"
+  else
+    say FAIL "idle autosave smoke"
+    sed 's/^/        /' <<<"$autosave" | head -20
+  fi
+
   smoke=$(NVIM_APPNAME=nvim/experimental "$nvim_bin" --headless \
     -c 'lua require("core.lang").setup(); print("CONFIG_SMOKE_OK")' -c 'qa!' 2>&1)
   if grep -q 'CONFIG_SMOKE_OK' <<<"$smoke" &&

@@ -14,6 +14,8 @@ return {
         "on_complete_notify",
         { "on_complete_dispose", require_view = { "SUCCESS", "FAILURE" } },
         "user_output_pane",
+        -- Build and run what is on screen, not what was last saved.
+        "user_autosave",
       },
     },
   },
