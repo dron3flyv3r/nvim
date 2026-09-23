@@ -121,6 +121,53 @@ vim.api.nvim_create_autocmd("ColorScheme", {
   callback = function() require("core.statusline").refresh_highlights() end,
 })
 
+local winbar_group = augroup "winbar"
+
+vim.api.nvim_create_autocmd({ "BufWinEnter", "WinEnter", "WinNew" }, {
+  group = winbar_group,
+  callback = function() require("core.winbar").update(vim.api.nvim_get_current_win()) end,
+})
+
+vim.api.nvim_create_autocmd({ "FileType", "BufFilePost", "TermOpen" }, {
+  group = winbar_group,
+  callback = function(args) require("core.winbar").update_buffer(args.buf) end,
+})
+
+vim.api.nvim_create_autocmd("DiffUpdated", {
+  group = winbar_group,
+  callback = function() require("core.winbar").update_tab() end,
+})
+
+vim.api.nvim_create_autocmd({ "LspAttach", "LspDetach" }, {
+  group = winbar_group,
+  callback = function(args)
+    vim.schedule(function()
+      if vim.api.nvim_buf_is_valid(args.buf) then require("core.winbar").request(args.buf) end
+    end)
+  end,
+})
+
+vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI", "InsertLeave" }, {
+  group = winbar_group,
+  callback = function(args) require("core.winbar").changed(args.buf) end,
+})
+
+vim.api.nvim_create_autocmd("LspProgress", {
+  group = winbar_group,
+  pattern = "end",
+  callback = function(args) require("core.winbar").retry_empty(args.data.client_id) end,
+})
+
+vim.api.nvim_create_autocmd("BufWipeout", {
+  group = winbar_group,
+  callback = function(args) require("core.winbar").forget(args.buf) end,
+})
+
+vim.api.nvim_create_autocmd("CmdlineLeave", {
+  group = augroup "rename",
+  callback = function() require("core.rename").leave() end,
+})
+
 local session_group = augroup "session"
 
 vim.api.nvim_create_autocmd("StdinReadPre", {

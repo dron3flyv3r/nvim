@@ -1,3 +1,26 @@
+---@param ctx snacks.picker.preview.ctx
+local function code_action_preview(ctx)
+  local item, picker = ctx.item, ctx.picker
+  local preview = require("core.code_action").preview(item.item, function()
+    if not picker.closed and picker:current { resolve = false } == item then
+      picker.preview:show(picker, { force = true })
+    end
+  end)
+
+  ctx.preview:set_title(item.item.action.title)
+  if not preview then
+    ctx.preview:reset()
+    ctx.preview:set_lines { "Asking the server for the change…" }
+  elseif preview.diff then
+    item.diff = preview.diff
+    Snacks.picker.preview.diff(ctx)
+    if #preview.notes > 0 then ctx.preview:set_title(table.concat(preview.notes, " · ")) end
+  else
+    ctx.preview:reset()
+    ctx.preview:set_lines(preview.notes)
+  end
+end
+
 ---@type LazySpec
 return {
   "folke/snacks.nvim",
@@ -41,6 +64,27 @@ return {
                   },
                 },
               },
+            },
+            codeaction = {
+              -- A whole layout rather than a tweak of the `select` preset, which
+              -- hides the preview and whose list children merge by position.
+              layout = {
+                layout = {
+                  backdrop = false,
+                  width = 0.6,
+                  min_width = 80,
+                  max_width = 120,
+                  height = 0.8,
+                  box = "vertical",
+                  border = true,
+                  title = "{title}",
+                  title_pos = "center",
+                  { win = "input", height = 1, border = "bottom" },
+                  { win = "list", border = "none" },
+                  { win = "preview", title = "{preview}", border = "top" },
+                },
+              },
+              preview = code_action_preview,
             },
           },
         },

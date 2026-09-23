@@ -103,7 +103,7 @@ local SECTIONS = {
     {
       { "grd  (gd)", "go to definition" },
       { "grr / gri / grt", "references / implementations / type definition" },
-      { "grn / gra", "rename / code action" },
+      { "grn / gra", "rename, previewed live / code action, previewed as a diff" },
       { "gggqG / gqip / x gq", "format via the LSP: file · block · selection" },
       { "K / gO", "hover documentation / symbols in this document" },
       { "ød / æd", "next / previous diagnostic" },

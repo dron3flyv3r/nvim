@@ -188,12 +188,14 @@ function M.render()
   local mode = vim.api.nvim_get_mode().mode
   local mode_item = mode_groups[mode] or mode_groups[mode:sub(1, 1)] or { "?", "CoreStatuslineCommand" }
 
-  local left = { highlighted(mode_item[2], " " .. mode_item[1] .. " ") }
+  local left = { highlighted(mode_item[2], " " .. mode_item[1] .. " ") .. "%<" }
   local macro = recording()
   if macro then left[#left + 1] = macro end
-  left[#left + 1] = "%<󰈙 " .. escape(filename(bufnr))
-  if vim.bo[bufnr].modified then left[#left + 1] = highlighted("DiagnosticWarn", "●") end
-  if vim.bo[bufnr].readonly then left[#left + 1] = highlighted("DiagnosticWarn", "") end
+  if not require("core.winbar").shows(winid) then
+    left[#left + 1] = "󰈙 " .. escape(filename(bufnr))
+    if vim.bo[bufnr].modified then left[#left + 1] = highlighted("DiagnosticWarn", "●") end
+    if vim.bo[bufnr].readonly then left[#left + 1] = highlighted("DiagnosticWarn", "") end
+  end
   vim.list_extend(left, extra_components(ctx, "left"))
 
   local right = extra_components(ctx, "right")

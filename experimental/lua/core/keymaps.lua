@@ -31,6 +31,8 @@ map("n", "<Esc>", function()
   vim.api.nvim_buf_clear_namespace(0, vim.api.nvim_create_namespace "nvim.multicursor", 0, -1)
 end, { desc = "Clear search highlight and multicursors" })
 
+map("n", "grn", function() require("core.rename").start() end, { desc = "Rename with a live preview" })
+
 map("n", "<Leader>uv", function() require("core.diagnostics").toggle_all() end, { desc = "Inline diagnostics scope" })
 
 map("n", "<Leader>q", function() require("core.macros").pick() end, { desc = "Macros" })

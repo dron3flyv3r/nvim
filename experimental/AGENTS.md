@@ -51,6 +51,10 @@ lua/
     autocmds.lua      autocommands
     actions.lua       the <Leader>r provider/action registry
     statusline.lua    the global statusline and its component registry
+    winbar.lua        the per-window path and LSP symbol breadcrumb
+    rename.lua        grn and :Rename, previewed as you type
+    code_action.lua   resolves a code action into a previewable diff
+    workspace_edit.lua  applies an LSP WorkspaceEdit to lines, and diffs it
     session.lua       native project session persistence
     terminal.lua      an interactive shell in the shared bottom strip
     macros.lua        the recording indicator and the macro list
@@ -167,6 +171,15 @@ deliberately coarse and does not replace marks — marks and `<Leader>sm` still
 answer "this exact line". It was chosen over harpoon for the per-repository
 scoping and the editable menu; the cost is that upstream has been unmaintained
 since 2024-09-29, so the lockfile pin is the version that matters.
+
+**The tags are the tab bar.** There is no bufferline: a list of every open
+buffer is the clutter grapple exists to replace. The spec registers a statusline
+component that shows the tags as `1 pane.lua  2 winbar.lua`, the current file
+highlighted, so the number beside each name is the `<Leader>n` that reaches it.
+A tail shared by two tags gets its parent directory. That is why the spec
+carries `event = "VeryLazy"` rather than loading on its keys alone: a statusline
+expression runs under textlock and cannot load a plugin, so the component shows
+nothing until grapple is already loaded.
 
 `nvim-web-devicons` is a dependency rather than a spec of its own. grapple's
 `tag_content.lua` raises a hard `error` when it is missing and `icons` is on,
@@ -1092,14 +1105,80 @@ replaces that list. Routine indexing does not produce notifications.
 The statusline is native and lives in `core/statusline.lua`. `cmdheight=0`
 lets `:`, `/`, `?`, messages and prompts temporarily cover that same final row.
 Plugin-owned information is added with `core.statusline.register`, which is how
-`plugins/git/status.lua` places the branch and `+`/`~`/`-` counts beside the
-filename without making `core` depend on a plugin. The path is `pathshorten`d,
-so every directory is one letter and only the filename is written out: a Unity
-or Rust tree is deep enough that the untruncated path crowded out everything to
-its right, and `%<` dropping the *front* of it took the part that says which
-project you are in. A component's text is escaped
+`plugins/git/status.lua` places the branch and `+`/`~`/`-` counts and
+`plugins/grapple.lua` the tag list without making `core` depend on a plugin.
+The statusline carries the file name only for a window the winbar does not
+dress — a terminal, a picker, a panel. A component's text is escaped
 unless it sets `raw`, which is what lets the git counts carry their own
 highlight groups; a `raw` component is responsible for its own `%%`.
+
+**The path and the code context are the winbar**, `core/winbar.lua`, one row per
+window: `l/c/winbar.lua › 󰊕 M.render`. It is a breadcrumb rather than sticky
+context lines, because the question is "where am I", and a row of text answers
+it without covering code. The symbols are `textDocument/documentSymbol`, so no
+language is named and no plugin is involved; both response shapes are handled,
+the flat `SymbolInformation[]` nested by range containment. Only containers are
+shown — modules, types, functions — and a variable holding a closure is walked
+through rather than named. The request is debounced after an edit and cached
+per buffer, so moving the cursor only walks the cache. A server that answered
+empty while it was still loading is asked again on its `LspProgress` end.
+
+The path is `pathshorten`d, so every directory is one letter: a Unity or Rust
+tree is deep enough that the whole path crowded out everything to its right.
+`%<` sits at the front, so a narrow split drops the path before the innermost
+symbol. Inactive windows render the same crumbs without colour.
+
+**The winbar is window-local and yields.** It is set only on a non-floating
+window showing a named file with `buftype` empty, and never in a diff: the git
+hud is the single writer of the winbar in a review, and a crumb row on one
+side of a plain `:diffthis` would put the two sides out of line. `update`
+leaves any local winbar it did not write alone, which is what keeps it off the
+hud's windows. `DiffUpdated` is what removes it when a diff starts; nothing
+fires on `:diffoff`, so the row comes back on the next enter.
+
+## Rename and code actions
+
+Both show what they will change before they change it, and both are core:
+they speak LSP and name no plugin.
+
+**`grn` is `:Rename` with an `inccommand` preview.** The command line opens as
+`:Rename oldname`; as you type, the buffers on screen change in place and the
+`inccommand=split` window lists every occurrence in every file, with the new
+name in it. `<Esc>` leaves nothing behind, because Neovim undoes whatever a
+preview callback did. The preview must answer synchronously on every
+keystroke, so the positions are asked for **once**, when `grn` is pressed, by
+sending `textDocument/rename` with a sentinel name (`old .. "_nvimrenamepreview"`)
+and substituting the typed name for the sentinel in the returned edits. That is
+what makes the preview exact rather than a guess from references: rust-analyzer
+renaming the `x` in `Foo { x }` returns `Foo { x_nvimrenamepreview: x }`, and
+the preview shows the field shorthand expanding. `<CR>` sends a **second**,
+real rename with the typed name, so the server still validates it, and a
+summary names the occurrence and file count — the native rename is silent,
+which is how a rename touching an unexpected file goes unnoticed.
+
+The prepared state lives only for the command line `grn` opened: `CmdlineLeave`
+clears it on the next tick, which is after `:Rename` has run. A `:Rename` typed
+by hand renames without a preview. `grn` is therefore a **global** override —
+it needs no buffer-local copy, since with no client it only says so.
+
+A preview needs a UI: headless Neovim skips `inccommand` entirely, even for
+`:s`. Test it under a real terminal (tmux works) rather than concluding from a
+headless run that it is broken.
+
+**`gra` previews each action as a diff.** The native code action sends
+`kind = "codeaction"` through `vim.ui.select`, and `picker.sources.select.kinds.codeaction`
+in `plugins/snacks.lua` gives it a preview pane — the per-kind mechanism
+`<Leader>r` already uses. The layout is written out whole rather than as a
+tweak of the `select` preset, which hides the preview and whose child windows
+merge by position. `core.code_action` resolves an action that arrived without
+an edit (`codeAction/resolve`, which is how rust-analyzer sends nearly all of
+them), caches the result per action, and redraws the preview when it lands if
+that action is still under the cursor. The diff is `core.workspace_edit`
+applying the edit to a copy of the lines — nothing touches a buffer — and is
+rendered by snacks' diff previewer. An action that only runs a server command
+says so instead of showing an empty pane. Snippet markers (`$0`, `${1:name}`)
+are stripped from the previewed text, because rust-analyzer sends snippet
+edits and the preview should show what lands, not the template.
 
 ## Macros
 
@@ -1169,7 +1248,8 @@ mapping once:
   no location list. Overriding those would be churn.
 - These are the only overridden defaults, and they are set buffer-local on
   `LspAttach`, so the global defaults survive untouched for any buffer without
-  a client.
+  a client. `grn` is the exception: it is `core.rename`, global, and says so
+  when no client can rename.
 - A Danish layout needs AltGr for `|` and `\`, so anything reachable only
   through those gets a leader alternative. `æ ø å` map to `[ ] $` and their
   shifted forms to `{ } ^`, in all of normal, visual and operator-pending.
