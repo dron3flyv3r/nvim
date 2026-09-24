@@ -393,7 +393,9 @@ require("core.task").run {
 
 **Queueing is the default.** A second task waits for the running one instead of
 competing with it for the same target directory. Pass `queue = false` for
-something genuinely independent, such as a watcher or a server.
+something genuinely independent, such as a watcher or a server. An
+independent task also never holds the queue: a server that runs all day must
+not leave every later build waiting behind it.
 
 **Output is a real pty** (`jobstart` with `term = true`), so colours, progress
 bars and interactive prompts work. It lands in `core.pane`, the strip described
@@ -474,6 +476,9 @@ file-backed buffer to still exist. So `nv one-file.rs` in a project leaves the
 stored layout alone, and so does closing a project buffer by buffer before `:q`.
 Stdin and diff starts never attach, and `:SessionDelete` detaches, which is what
 suppresses the save for that exit.
+`core.session.disable()` opts an instance out entirely — no restore on start, no
+save on exit — for an editor that is a satellite of another one rather than the
+project's own; the user layer calls it for a detach side instance.
 
 `<Leader>t` and `:Terminal` toggle one interactive shell in `core.pane`. It is a
 normal pane occupant: `h` hides it without stopping the shell, `q` stops it, and
@@ -1311,6 +1316,26 @@ local. Consequences that the code must honour:
 preventing the rest of the config from starting. The checked-in example enables
 key hints on startup with `require("plugins.key-hints.control").enable()`.
 
+**detach.nvim** is wired here and nowhere else, because it is Hyprland and kitty
+and therefore this machine. It lives in its own repository at
+`~/code/detach.nvim`, is put on the runtimepath rather than handed to lazy (which
+has already run by the time `lua/user` loads), and is skipped when that directory
+is absent. One *main* instance owns a group of *side* instances, each an ordinary
+`nv` in its own kitty window that you place with Hyprland; the main closing
+closes them all, and there is no layout persistence — the main is the session.
+`<C-h/j/k/l>` focus the nearest linked instance in that direction at the edge
+of the Neovim layout, and do nothing when there is none — never an unrelated
+window. A new side starts through the fish `fullscreen` function when it exists.
+Hyprland 0.56's Lua config reads `hyprctl dispatch` as a Lua expression, so the
+plugin tries `hl.dsp.focus{…}` first and the classic syntax second; `<Leader>wd` detaches the buffer into a new side, `<Leader>wn` opens an
+empty one, `<Leader>wH/J/K/L` send the buffer to the linked instance in that
+direction by window geometry, `<Leader>wa` sends it back to the main and
+`<Leader>wi` lists the group. A buffer is wiped before it is sent, so the
+receiver never meets its swap file; that is why a modified buffer, one shown in
+a second window, or one a git review holds is refused instead. A side calls
+`core.session.disable()`, since it would otherwise restore or overwrite the
+project's session.
+
 What belongs here: machine-specific paths, per-machine tool locations,
 GPU/font/theme preferences, work-vs-home differences. What does not: anything
 that would be correct on every machine — that belongs in `core`, `plugins` or
@@ -1415,8 +1440,20 @@ exception, justified per module.
   Native rust-analyzer diagnostics see the unsaved buffer. After 800 ms without
   another edit, `core.autosave` writes an ordinary Rust file so check-on-save can
   run `cargo check`; Clippy remains the explicit *Lint with clippy* action.
-  Deliberately left behind: `watch.lua` (374 lines, continuous build) and
-  `dependencies.lua` (490 lines, crate search UI) are deferred until missed;
+  A reload from disk sends no `didSave`, so a file fixed outside the editor —
+  Claude's edits included — kept the last check's `rustc` errors until the next
+  `:w`; `flycheck.lua` sends `rust-analyzer/runFlycheck` on
+  `FileChangedShellPost` for that case.
+  `watch.lua` came back smaller: two tasks rather than `cargo watch -x run`, so a
+  failed build fills quickfix and leaves the running program alone, and only a
+  green one stops it and starts the fresh binary. The trigger is an explicit
+  `:w` of a `.rs` or `Cargo.toml` under the root and **never an autosave**, which
+  `core.autosave.writing()` exists to tell apart — otherwise the program would
+  restart every time you paused for 800 ms. Writes from outside the editor,
+  Claude's included, do not trigger it. The build-only mode rebuilds and
+  launches nothing, for a host process that reloads a dylib itself.
+  Deliberately left behind: `dependencies.lua` (490 lines, crate search UI) is
+  deferred until missed;
   `diagnostics.lua` and `project.lua` are dropped outright, since both exist
   only to reconcile bacon-ls against rust-analyzer and there is no bacon-ls
   here. Debugging is rustaceanvim's `debuggables`, wired to the codelldb that

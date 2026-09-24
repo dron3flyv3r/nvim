@@ -4,6 +4,7 @@ local root
 local read_stdin = false
 local attached = false
 local started_from_directory = false
+local disabled = false
 
 local function project_root()
   -- `vim.uv.cwd()` fails outright when the directory has been deleted underneath
@@ -72,7 +73,7 @@ function M.save(opts)
   opts = opts or {}
   -- An exit that happens to hold nothing -- a one-file visit, a project closed
   -- buffer by buffer -- must not replace the layout that is stored for it.
-  if opts.quiet and (not attached or not holds_a_file()) then return false end
+  if opts.quiet and (disabled or not attached or not holds_a_file()) then return false end
   attached = true
   forget_hidden_uri_buffers()
   local directory, path = session_path()
@@ -128,6 +129,11 @@ end
 
 function M.mark_stdin() read_stdin = true end
 
+function M.disable()
+  disabled = true
+  attached = false
+end
+
 ---@return string?
 local function directory_argument()
   if vim.fn.argc(-1) ~= 1 then return end
@@ -158,7 +164,7 @@ local function adopt_directory_argument()
 end
 
 function M.restore_on_start()
-  if read_stdin or vim.o.diff then return end
+  if disabled or read_stdin or vim.o.diff then return end
   if not started_from_directory and vim.fn.argc(-1) > 0 then return end
   attached = true
   M.restore { quiet = true }

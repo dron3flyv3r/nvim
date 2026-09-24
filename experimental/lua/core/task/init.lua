@@ -91,8 +91,15 @@ local function to_quickfix(task)
   if count > 0 then notify(("%s: %d quickfix entr%s"):format(task.name, count, count == 1 and "y" or "ies")) end
 end
 
+---@return core.Task|nil
+local function queue_head()
+  for _, task in ipairs(tasks) do
+    if task.status == "running" and task.spec.queue ~= false then return task end
+  end
+end
+
 local function pump()
-  if active() then return end
+  if queue_head() then return end
   while true do
     local task = table.remove(pending, 1)
     if not task then return end
@@ -172,7 +179,7 @@ function M.run(spec)
   vim.b[bufnr].core_task_id = task.id
   table.insert(tasks, 1, task)
 
-  if spec.queue == false or not active() then return M.start(task) end
+  if spec.queue == false or not queue_head() then return M.start(task) end
 
   table.insert(pending, task)
   notify(("%s is %s in the queue"):format(task.name, #pending == 1 and "next" or ("#" .. #pending)))

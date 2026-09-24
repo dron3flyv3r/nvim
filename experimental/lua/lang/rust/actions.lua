@@ -1,4 +1,5 @@
 local cargo = require "lang.rust.cargo"
+local watch = require "lang.rust.watch"
 
 local function rustlsp(sub)
   return function() vim.cmd("RustLsp " .. sub) end
@@ -81,11 +82,86 @@ local function debug_binary(workspace, binary, argv)
 end
 
 ---@param ctx core.Context
+---@param prompt string
+---@param callback fun(workspace: rust.CargoWorkspace, binary: string)
+local function pick_binary(ctx, prompt, callback)
+  local workspace = assert(workspace_of(ctx))
+  local binaries = cargo.binaries(workspace)
+  if #binaries == 0 then error "this workspace builds no binaries" end
+  if #binaries == 1 then return callback(workspace, binaries[1]) end
+  vim.ui.select(binaries, { prompt = prompt }, function(choice)
+    if choice then callback(workspace, choice) end
+  end)
+end
+
+---@param ctx core.Context
 ---@return boolean|string
 local function buildable(ctx)
   if vim.fn.executable "cargo" ~= 1 then return "cargo is not on PATH" end
   local _, err = workspace_of(ctx)
   return err or true
+end
+
+---@param ctx core.Context
+---@param buildable_here boolean|string
+---@return core.Action[]
+local function watch_actions(ctx, buildable_here)
+  ---@param run fun(workspace: rust.CargoWorkspace, memory?: { binary: string, args: string }, repeated: boolean)
+  local function with_memory(run)
+    return function(_, opts)
+      local workspace = assert(workspace_of(ctx))
+      run(workspace, watch.remembered(workspace.root), opts.repeated)
+    end
+  end
+
+  return {
+    {
+      id = "watch_run",
+      label = "Watch a binary, rerunning it on :w",
+      category = "Run",
+      available = buildable_here,
+      run = with_memory(function(workspace, memory, repeated)
+        if repeated and memory then return watch.start(workspace, "run", memory.binary) end
+        pick_binary(ctx, "Watch which binary?", function(_, binary) watch.start(workspace, "run", binary) end)
+      end),
+    },
+    {
+      id = "watch_args",
+      label = "Watch a binary with arguments, rerunning it on :w",
+      category = "Run",
+      available = buildable_here,
+      run = with_memory(function(workspace, memory, repeated)
+        if repeated and memory then return watch.start(workspace, "run", memory.binary, memory.args) end
+        pick_binary(ctx, "Watch which binary?", function(_, binary)
+          local default = memory and memory.args or ""
+          vim.ui.input({ prompt = ("Arguments for %s: "):format(binary), default = default }, function(input)
+            if input ~= nil then watch.start(workspace, "run", binary, input) end
+          end)
+        end)
+      end),
+    },
+    {
+      id = "watch_build",
+      label = "Rebuild on :w without relaunching, for a process that reloads itself",
+      category = "Build",
+      available = buildable_here,
+      run = function() watch.start(assert(workspace_of(ctx)), "build") end,
+    },
+    {
+      id = "watch_stop",
+      label = "Stop watching",
+      category = "Run",
+      repeatable = false,
+      available = function(inner)
+        local workspace = workspace_of(inner)
+        return (workspace and watch.get(workspace.root)) ~= nil or "Nothing is being watched in this workspace"
+      end,
+      run = function()
+        local workspace = assert(workspace_of(ctx))
+        watch.stop(workspace.root)
+      end,
+    },
+  }
 end
 
 local CARGO_TASKS = {
@@ -183,15 +259,15 @@ return {
       available = buildable_here,
       repeatable = false,
       run = function()
-        local workspace = assert(workspace_of(ctx))
-        local binaries = cargo.binaries(workspace)
-        if #binaries == 0 then error "this workspace builds no binaries" end
-        if #binaries == 1 then return cargo_task(ctx, "cargo run", { "run", "--bin", binaries[1] }) end
-        vim.ui.select(binaries, { prompt = "Run which binary?" }, function(choice)
-          if choice then cargo_task(ctx, "cargo run " .. choice, { "run", "--bin", choice }) end
-        end)
+        pick_binary(
+          ctx,
+          "Run which binary?",
+          function(_, binary) cargo_task(ctx, "cargo run " .. binary, { "run", "--bin", binary }) end
+        )
       end,
     }
+
+    vim.list_extend(actions, watch_actions(ctx, buildable_here))
 
     local lsp = {
       { "run_cursor", "Run the target under the cursor", "Run", "runnables" },
@@ -294,9 +370,11 @@ return {
     local workspace, err = workspace_of(ctx)
     if not workspace then return { "  " .. (err or "no workspace") } end
     local names = vim.tbl_map(function(pkg) return pkg.name end, workspace.packages)
+    local watcher = watch.get(workspace.root)
     return {
       ("  root: %s"):format(vim.fn.fnamemodify(workspace.root, ":~")),
       ("  packages: %s"):format(table.concat(names, ", ")),
+      ("  watching: %s"):format(watcher and watch.describe(watcher) or "nothing"),
     }
   end,
 }

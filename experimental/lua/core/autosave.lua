@@ -13,6 +13,7 @@ local filetypes = {}
 local states = {}
 ---@type table<integer, integer>
 local suspended = {}
+local writing = false
 
 local function in_diff(bufnr)
   for _, winid in ipairs(vim.fn.win_findbuf(bufnr)) do
@@ -40,9 +41,14 @@ end
 local function save(bufnr, generation)
   local state = states[bufnr]
   if not state or state.generation ~= generation or not eligible(bufnr) then return end
+  writing = true
   local ok, err = pcall(vim.api.nvim_buf_call, bufnr, function() vim.cmd "silent update" end)
+  writing = false
   if not ok then vim.notify(err, vim.log.levels.WARN, { title = "Autosave" }) end
 end
+
+---@return boolean
+function M.writing() return writing end
 
 ---@param filetype string
 ---@param config? core.AutosaveConfig
