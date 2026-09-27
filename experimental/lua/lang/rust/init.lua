@@ -9,7 +9,6 @@ return {
       "mrcjkb/rustaceanvim",
       lazy = false,
       init = function()
-        require("core.autosave").register("rust", { delay = 800 })
         require("lang.rust.lens").setup()
         require("lang.rust.flycheck").setup()
         local cargo = require "lang.rust.cargo"

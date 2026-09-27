@@ -43,9 +43,13 @@ vim.api.nvim_create_autocmd("CursorMovedI", {
 })
 
 local autosave_group = augroup "autosave"
-vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI", "TextChangedP" }, {
+vim.api.nvim_create_autocmd({ "BufLeave", "FocusLost" }, {
   group = autosave_group,
-  callback = function(args) require("core.autosave").changed(args.buf) end,
+  callback = function() vim.schedule(require("core.autosave").flush) end,
+})
+vim.api.nvim_create_autocmd("QuitPre", {
+  group = autosave_group,
+  callback = function() require("core.autosave").on_quit() end,
 })
 vim.api.nvim_create_autocmd("BufWipeout", {
   group = autosave_group,

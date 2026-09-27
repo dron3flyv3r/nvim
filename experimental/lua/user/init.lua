@@ -28,15 +28,15 @@ if vim.uv.fs_stat(detach_path) then
     )
     vim.keymap.set(
       "n",
-      "<Leader>w" .. key:upper(),
+      "<Leader>W" .. key:upper(),
       function() detach.send(key) end,
       { desc = "Send buffer to the instance " .. key }
     )
   end
-  vim.keymap.set("n", "<Leader>wd", detach.detach, { desc = "Detach buffer to a new instance" })
-  vim.keymap.set("n", "<Leader>wn", detach.spawn, { desc = "New linked instance" })
-  vim.keymap.set("n", "<Leader>wa", detach.attach, { desc = "Send buffer back to the main instance" })
-  vim.keymap.set("n", "<Leader>wi", detach.list, { desc = "Linked instances" })
+  vim.keymap.set("n", "<Leader>Wd", detach.detach, { desc = "Detach buffer to a new instance" })
+  vim.keymap.set("n", "<Leader>Wn", detach.spawn, { desc = "New linked instance" })
+  vim.keymap.set("n", "<Leader>Wa", detach.attach, { desc = "Send buffer back to the main instance" })
+  vim.keymap.set("n", "<Leader>Wi", detach.list, { desc = "Linked instances" })
 
   require("core.statusline").register("detach", {
     side = "right",

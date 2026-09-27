@@ -17,11 +17,32 @@ for lhs, spec in pairs(motions) do
   map({ "n", "x", "o" }, lhs, rhs, { desc = desc, remap = recursive })
 end
 
--- `|` and `\` both need AltGr on a Danish layout, so splits get a leader path too.
-map("n", "<Leader>wv", "<Cmd>vsplit<CR>", { desc = "Vertical split" })
-map("n", "<Leader>wh", "<Cmd>split<CR>", { desc = "Horizontal split" })
-map("n", "<Leader>wc", "<Cmd>close<CR>", { desc = "Close window" })
-map("n", "<Leader>wo", "<Cmd>only<CR>", { desc = "Close other windows" })
+map("n", "<Leader>w", "<Cmd>write<CR>", { desc = "Write" })
+
+local ESCAPE_WINDOW_NS = 200e6
+local escape_pending
+-- A plain `inoremap jj <Esc>` holds back every `j` for 'timeoutlen'; this
+-- inserts it at once and takes it back if the second key follows in time.
+for _, key in ipairs { "j", "k" } do
+  map("i", key, function()
+    local now = vim.uv.hrtime()
+    local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+    local bufnr = vim.api.nvim_get_current_buf()
+    local previous = escape_pending
+    escape_pending = { bufnr = bufnr, row = row, col = col + 1, time = now }
+    if
+      previous
+      and previous.bufnr == bufnr
+      and previous.row == row
+      and previous.col == col
+      and now - previous.time < ESCAPE_WINDOW_NS
+    then
+      escape_pending = nil
+      return "<BS><Esc>"
+    end
+    return key
+  end, { expr = true, desc = "Insert " .. key .. ", or leave insert mode after j/k" })
+end
 
 -- <C-l> is taken for window navigation below, and it was the default way to
 -- clear multicursors (|mcursor-clear|). Clearing the namespace is the

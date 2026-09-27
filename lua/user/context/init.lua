@@ -180,7 +180,7 @@ function M.status()
 end
 
 function M.setup()
-  for _, name in ipairs { "tasks", "python", "notebook", "rust", "cpp", "cmake", "unity", "http" } do
+  for _, name in ipairs { "tasks", "python", "notebook", "rust", "cpp", "cmake", "make", "unity", "http" } do
     M.register(require("user.context.providers." .. name))
   end
 end

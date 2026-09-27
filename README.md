@@ -8,7 +8,7 @@ tool integrations; they do not introduce a second editor model.
 ## Development actions
 
 `<Leader>r` is the contextual entry point for operations valid in the current
-project, including run, test, build, notebooks, Cargo dependencies, CMake, and
+project, including run, test, build, notebooks, Cargo dependencies, CMake, Make, and
 Unity maintenance. Language-specific engines contribute actions without
 claiming their own global key namespace. Native LSP keys remain the direct path
 for code intelligence.

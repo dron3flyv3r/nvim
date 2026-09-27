@@ -143,8 +143,11 @@ local SECTIONS = {
     {
       { "<C-h/j/k/l>", "move between windows, terminal included" },
       { "<C-Up/Down/Left/Right>", "resize this window, terminal included" },
-      { "<Leader>wv / wh", "split vertically / horizontally" },
-      { "<Leader>wc / wo", "close this window / close the others" },
+      { "<C-w>v / <C-w>s", "split vertically / horizontally" },
+      { "<C-w>c / <C-w>o", "close this window / close the others" },
+      { "<Leader>w", "write this buffer" },
+      { "jj jk kj kk  (insert)", "leave insert mode, typed quickly" },
+      { "autosave", "changed files are written on buffer leave, focus loss and quit" },
       { "<Leader>bd", "delete this buffer" },
       { "<Leader>t", "toggle a shell in the bottom pane" },
       { "<Esc><Esc>  (terminal)", "leave terminal input mode" },

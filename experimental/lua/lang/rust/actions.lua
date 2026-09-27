@@ -257,13 +257,14 @@ return {
       label = "Run a binary target",
       category = "Run",
       available = buildable_here,
-      repeatable = false,
-      run = function()
-        pick_binary(
-          ctx,
-          "Run which binary?",
-          function(_, binary) cargo_task(ctx, "cargo run " .. binary, { "run", "--bin", binary }) end
-        )
+      run = function(_, opts)
+        local function run(binary)
+          vim.b[ctx.bufnr].rust_run_bin = binary
+          cargo_task(ctx, "cargo run " .. binary, { "run", "--bin", binary })
+        end
+        local last_bin = vim.b[ctx.bufnr].rust_run_bin
+        if opts.repeated and last_bin then return run(last_bin) end
+        pick_binary(ctx, "Run which binary?", function(_, binary) run(binary) end)
       end,
     }
 

@@ -44,7 +44,7 @@ lua/
   core/               the configuration itself, no plugins involved
     options.lua       vim.o / vim.opt
     diagnostics.lua   vim.diagnostic.config and the inline-scope toggle
-    autosave.lua      registered filetypes, idle timers and suspensions
+    autosave.lua      writes on leave, focus loss and quit, and suspensions
     codelens.lua      the global code lens state and its suspensions
     colorscheme.lua   the remembered colourscheme and its fallback
     keymaps.lua       keymaps that do not belong to a plugin
@@ -363,6 +363,24 @@ The last one explains what was detected and why any unavailable action is
 unavailable, and is the first thing to reach for when `<Leader>r` is emptier
 than expected.
 
+## Autosave
+
+`core/autosave.lua` writes every modified file buffer — hidden ones included,
+which is what catches a rename or a code action that edited a file you never
+looked at — on `BufLeave`, `FocusLost` and quit. It never writes on an idle
+timer: an idle write per pause was what made it save constantly. It applies to
+every file; there is no per-language registration. It skips buffers that are
+readonly, in a diff, suspended, named by a URI or under `.git/`, the last so
+a Neogit commit message is never written behind your back.
+
+Quitting borrows `'autowriteall'` for the length of the one command, from
+`QuitPre`. That is what keeps `:q!` meaning discard, which a flush from
+`QuitPre` cannot tell apart from `:q`. It is not left on, because it also
+writes on `:!` and `<C-^>` and those writes would reach the Rust watcher as
+an explicit `:w`. When any modified buffer is one autosave would skip, the quit
+falls back to the ordinary `confirm` dialog. Every write it makes answers
+`core.autosave.writing()`.
+
 ## Execution
 
 `core.task` runs every external process whose **output you watch** — a build, a
@@ -668,7 +686,7 @@ handled in `review.lua`:
   option, which is why `M.writable` exists. The revert keys once read
   `vim.bo.readonly` directly and refused every file in a held review.
 
-The snapshot does not carry `autosave` or `autoformat`. The Rust idle autosave
+The snapshot does not carry `autosave` or `autoformat`. Autosave
 is suspended through `core.autosave` while a buffer is held and resumed when the
 review releases it; any future automatic writer needs the same explicit hook or
 a held file can reach disk behind the review's back. An agent is the same hazard
@@ -1208,7 +1226,7 @@ It is `vim.ui.select` rather than a picker of its own, which snacks owns, so
 ## Keys
 
 Prefixes in use: `<Leader>a` assistants, `<Leader>f` find, `<Leader>s` search, `<Leader>u` toggles,
-`<Leader>w` windows, `<Leader>b` buffers, `<Leader>r`/`<Leader>R` actions,
+`<Leader>w` write, `<Leader>b` buffers, `<Leader>r`/`<Leader>R` actions,
 `<Leader>d` the debugger, `<Leader>t` the terminal, `<Leader>q` the macro list.
 `<Leader>m`/`<Leader>M` and
 `<Leader>1`–`<Leader>4`
@@ -1269,6 +1287,12 @@ mapping once:
   rebound to cancel in insert mode too: snacks' default cancels from normal mode
   only, so a prompt-focused menu would otherwise take two presses to dismiss
   where every other list here takes one.
+- `jj` `jk` `kj` `kk` typed within 200 ms leave insert mode. The first key is
+  inserted at once and removed by the second, instead of an `inoremap jj`
+  holding every `j` back for `timeoutlen`. The window replaces AstroNvim's
+  better-escape plugin; it is ten lines in `core/keymaps.lua`.
+- Window splits have no leader keys: `<C-w>v/s/c/o` are the native spelling
+  and need no AltGr. `<Leader>w` is write, and detach's keys are `<Leader>W`.
 - Insert-mode `<CR>` and `<BS>` belong to mini.pairs, which takes them only if
   nothing else has. Binding either one means reproducing `MiniPairs.cr()` and
   `MiniPairs.bs()` inside the new mapping.
@@ -1327,10 +1351,10 @@ closes them all, and there is no layout persistence — the main is the session.
 of the Neovim layout, and do nothing when there is none — never an unrelated
 window. A new side starts through the fish `fullscreen` function when it exists.
 Hyprland 0.56's Lua config reads `hyprctl dispatch` as a Lua expression, so the
-plugin tries `hl.dsp.focus{…}` first and the classic syntax second; `<Leader>wd` detaches the buffer into a new side, `<Leader>wn` opens an
-empty one, `<Leader>wH/J/K/L` send the buffer to the linked instance in that
-direction by window geometry, `<Leader>wa` sends it back to the main and
-`<Leader>wi` lists the group. A buffer is wiped before it is sent, so the
+plugin tries `hl.dsp.focus{…}` first and the classic syntax second; `<Leader>Wd` detaches the buffer into a new side, `<Leader>Wn` opens an
+empty one, `<Leader>WH/J/K/L` send the buffer to the linked instance in that
+direction by window geometry, `<Leader>Wa` sends it back to the main and
+`<Leader>Wi` lists the group. A buffer is wiped before it is sent, so the
 receiver never meets its swap file; that is why a modified buffer, one shown in
 a second window, or one a git review holds is refused instead. A side calls
 `core.session.disable()`, since it would otherwise restore or overwrite the
@@ -1437,9 +1461,8 @@ exception, justified per module.
 - **Done**: Rust, as `lua/lang/rust/`. rustaceanvim owns the rust-analyzer
   client, so the module has no `lsp` key — a second client from `vim.lsp.enable`
   would fight it. All three rustaceanvim executor slots route into `core.task`.
-  Native rust-analyzer diagnostics see the unsaved buffer. After 800 ms without
-  another edit, `core.autosave` writes an ordinary Rust file so check-on-save can
-  run `cargo check`; Clippy remains the explicit *Lint with clippy* action.
+  Native rust-analyzer diagnostics see the unsaved buffer; check-on-save runs
+  `cargo check` whenever `core.autosave` or `:w` writes the file; Clippy remains the explicit *Lint with clippy* action.
   A reload from disk sends no `didSave`, so a file fixed outside the editor —
   Claude's edits included — kept the last check's `rustc` errors until the next
   `:w`; `flycheck.lua` sends `rust-analyzer/runFlycheck` on
@@ -1449,7 +1472,7 @@ exception, justified per module.
   green one stops it and starts the fresh binary. The trigger is an explicit
   `:w` of a `.rs` or `Cargo.toml` under the root and **never an autosave**, which
   `core.autosave.writing()` exists to tell apart — otherwise the program would
-  restart every time you paused for 800 ms. Writes from outside the editor,
+  restart every time you switched buffers. Writes from outside the editor,
   Claude's included, do not trigger it. The build-only mode rebuilds and
   launches nothing, for a host process that reloads a dylib itself.
   Deliberately left behind: `dependencies.lua` (490 lines, crate search UI) is
@@ -1486,7 +1509,11 @@ exception, justified per module.
   `install-codecompanion-agents` and `store-codecompanion-claude-token` were
   deleted with it: they pinned an ACP bridge and a Node 22 runtime for a plugin
   that was never added, and the keyring script they installed never existed.
-- **Port on demand**: Python, C++, notebooks, inlay hints, hover, and the two
+- **Done, partly**: C and C++, as `lua/lang/cpp/` — build, run and debug only.
+  See the section below. Deliberately not yet: `:CppNew` scaffolding,
+  "implement in the .cpp", the clangd refactor keys and the blink definition
+  source; those are the next C++ port when they are missed.
+- **Port on demand**: Python, notebooks, inlay hints, hover, and the two
   deferred Rust modules. Port one when it is first missed, rewritten to the
   contracts above rather than copied.
 - **Let die**: everything AstroNvim-shaped (`astrocore`, `astrolsp`, `astroui`,
@@ -1512,6 +1539,48 @@ ImageMagick, and the placement. Removing it once already broke image rendering.
 When porting, rewrite to the new contract. Copying a file across and leaving it
 shaped like AstroNvim reintroduces exactly the inconsistency this rewrite
 exists to remove.
+
+## C and C++
+
+`lua/lang/cpp/` declares `clangd` natively and one `<Leader>r` provider that
+picks **one build system per buffer**: the outermost `CMakeLists.txt` inside the
+repository wins, then the nearest Makefile, then the file on its own. Outermost,
+because a subdirectory's list is part of the project above it. The provider
+also answers in `cmake` and `make` buffers; clangd names its own filetypes and
+never attaches there.
+
+Each backend (`cmake.lua`, `make.lua`, `file.lua`) answers the same four
+questions — `prepare`, `executables`, `build_executable`, `cwd` — and
+`actions.lua` builds Run and Debug on top of them, so *Build and run* means the
+same thing in all three. Everything runs through `core.task`; the program is
+started only from a green build's `on_exit`, with `queue = false` so a program
+left running never holds the next build. Debug is `dap.run` against the plain
+`codelldb` that `adapters.lua` registers — there is no `dap` key, because no
+configuration can be known before the build. Every build writes the project's
+modified buffers first: clangd sees the unsaved buffer, the compiler does not.
+
+**CMake is driven directly, not through cmake-tools**: the old config's plugin
+had its own executor that would compete with `core.task`. Build directories are
+`build/<BuildType>`, Ninja when it is installed (a generator is only passed to a
+fresh directory — CMake refuses to change it), and `compile_commands.json` is
+symlinked to the root after every configure so clangd follows the build type;
+a regular file already there is left alone. Targets come from the **File API**:
+an empty `codemodel-v2` query makes every configure write the reply, which names
+each target's artifact and sources. That is how the target that compiles the
+current file is offered first, with no parsing of `CMakeLists.txt`.
+
+**Make has no metadata**, so its targets are read from `make -npq` and its
+executables are whatever ELF files sit under the root, newest first. Debugging
+needs `-g` in the Makefile; nothing here can add it.
+
+The build type, the chosen executable and its arguments are remembered per
+root **for the session only**, the same as Rust's watch. `<Leader>R` reuses
+them rather than prompting.
+
+A long compiler line wider than the task pane is hard-wrapped by the terminal,
+and a wrapped path does not parse into quickfix. That is `core.task`'s pty and
+affects every language; CMake shows it first because it compiles by absolute
+path.
 
 ## C# and Unity
 

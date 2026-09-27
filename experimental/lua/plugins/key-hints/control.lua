@@ -67,7 +67,6 @@ function M.setup()
       { "<Leader>f", group = "Find" },
       { "<Leader>s", group = "Search" },
       { "<Leader>u", group = "Toggle" },
-      { "<Leader>w", group = "Window" },
     },
   }
 
