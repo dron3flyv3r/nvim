@@ -1,5 +1,7 @@
 -- require("plugins.key-hints.control").enable()
 
+if vim.fn.executable "fish" == 1 then require("core.terminal").set_shell { "fish" } end
+
 local detach_path = vim.fs.normalize "~/code/detach.nvim"
 if vim.uv.fs_stat(detach_path) then
   vim.opt.rtp:append(detach_path)

@@ -3,6 +3,8 @@ local M = {}
 local NAME = "terminal"
 local bufnr
 local closing = false
+---@type string|string[]|nil
+local shell
 
 local function running()
   if not bufnr or not vim.api.nvim_buf_is_valid(bufnr) then return false end
@@ -30,10 +32,15 @@ local function create()
   local win = pane.show({ name = NAME, bufnr = bufnr, close = close }, { enter = true })
   if not win then return end
 
-  local job = vim.fn.jobstart(vim.o.shell, { term = true, cwd = vim.uv.cwd() })
+  local cmd = shell or vim.o.shell
+  local job = vim.fn.jobstart(cmd, { term = true, cwd = vim.uv.cwd() })
   if job <= 0 then
     close()
-    vim.notify("Could not start " .. vim.o.shell, vim.log.levels.ERROR, { title = "terminal" })
+    vim.notify(
+      "Could not start " .. (type(cmd) == "table" and table.concat(cmd, " ") or cmd),
+      vim.log.levels.ERROR,
+      { title = "terminal" }
+    )
     return
   end
   vim.cmd.startinsert()
@@ -59,8 +66,9 @@ function M.on_close(buf)
   end)
 end
 
-function M.setup()
-  vim.api.nvim_create_user_command("Terminal", M.toggle, {})
-end
+---@param cmd string|string[]
+function M.set_shell(cmd) shell = cmd end
+
+function M.setup() vim.api.nvim_create_user_command("Terminal", M.toggle, {}) end
 
 return M

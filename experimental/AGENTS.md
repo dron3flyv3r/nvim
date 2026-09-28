@@ -510,6 +510,10 @@ normal pane occupant: `h` hides it without stopping the shell, `q` stops it, and
 `<Esc><Esc>` leaves terminal mode. Native `:terminal` remains available when an
 ordinary unmanaged terminal window is wanted.
 
+It runs `'shell'` unless `core.terminal.set_shell()` names something else, which
+the user layer does for fish. `'shell'` itself stays POSIX, because `:!`,
+`system()` and every plugin that passes a shell string run through it too.
+
 ## Debugging
 
 nvim-dap lives in `lua/plugins/debug/`, a directory rather than a file because
@@ -848,6 +852,11 @@ scratch, tracked per view and wiped on `view_closed`: that keeps `review.track`
 off them, since `is_file_buffer` rejects a `nofile` buffer, and keeps a
 working-tree image out of the session.
 
+**The image is attached on every `BufWinEnter`, not once.** Diffview keeps the
+buffer when you move to the next file, and snacks' placement `hide()`s itself as
+soon as no window shows it; nothing un-hides a buffer placement, so coming back
+drew empty extmarks. Re-attaching is cheap because snacks caches the decoded image.
+
 Nothing here asks `supports_terminal`. A terminal that cannot draw gets snacks'
 own note naming the file, which beats a blank; `health.lua` is where that is
 reported, along with ImageMagick for the formats that need converting.
@@ -1047,6 +1056,13 @@ Whoever flips that option has to fix `completeopt` in the same commit.
 `vim.lsp.completion.enable(..., { autotrigger = true })` was tried as the
 alternative auto-popup path and produced no menu at all. Not understood; it is
 not a substitute yet.
+
+blink's auto-brackets run on the item's **kind** only. Its semantic-token
+resolution is off because it reads the highlighter's tokens from *before* the
+edit: typing `if (` in front of `SetupCamera();` and accepting the field
+`isReady` produced `isReady()`, since the stale `SetupCamera` method token still
+covered the cursor's column. Kind resolution already bracket-completes methods
+from roslyn and lua_ls, and blink blocks Rust and C++ itself.
 
 What native does not do is **frecency** — it never learns which candidates you
 accept. That, plus a working auto-popup, is what would justify blink.cmp.

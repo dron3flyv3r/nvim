@@ -105,7 +105,13 @@ local function load(view, file)
 
   buffers[view] = buffers[view] or {}
   table.insert(buffers[view], buf)
-  module.buf.attach(buf, { src = src })
+
+  -- snacks hides a placement once no window shows it and never un-hides it, so
+  -- an image is attached afresh each time its buffer is shown again.
+  api.nvim_create_autocmd("BufWinEnter", {
+    buffer = buf,
+    callback = function() module.buf.attach(buf, { src = src }) end,
+  })
 end
 
 ---@param view table

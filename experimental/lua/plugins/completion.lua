@@ -21,6 +21,9 @@ return {
     },
     appearance = { nerd_font_variant = "mono" },
     completion = {
+      -- Semantic resolution reads the tokens from before the edit, so a field typed
+      -- where a method name used to start on that line was accepted as `field()`.
+      accept = { auto_brackets = { semantic_token_resolution = { enabled = false } } },
       documentation = { auto_show = true, auto_show_delay_ms = 200 },
       menu = { draw = { treesitter = { "lsp" } } },
     },
