@@ -42,7 +42,7 @@ local function file_history(first, last)
   if file == "" or vim.bo.buftype ~= "" then
     return say "No file in this window -- <Leader>gH is the history of the repository"
   end
-  vim.cmd(("DiffviewFileHistory -L %d,%d:%s"):format(first, last, vim.fn.fnameescape(file)))
+  vim.cmd(("DiffviewFileHistory -L%d,%d:%s"):format(first, last, vim.fn.fnameescape(file)))
 end
 
 local function history_of_line()
@@ -141,10 +141,17 @@ local function diffview_opts()
       -- Lenses sit on their own screen rows, which pushes the two sides of a
       -- diff out of alignment. Scoped to the review's tabpage rather than to
       -- its lifetime, so the rest of the editor keeps them.
-      view_enter = function() require("core.codelens").suspend "review" end,
-      view_leave = function() require("core.codelens").resume "review" end,
+      view_enter = function()
+        require("core.codelens").suspend "review"
+        require("core.diagnostics").suspend "review"
+      end,
+      view_leave = function()
+        require("core.codelens").resume "review"
+        require("core.diagnostics").resume "review"
+      end,
       view_closed = function(view)
         require("core.codelens").resume "review"
+        require("core.diagnostics").resume "review"
         require("plugins.git.hud").closed()
         require("plugins.git.image").closed(view)
         review.closed(view)

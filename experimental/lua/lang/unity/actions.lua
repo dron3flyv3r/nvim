@@ -26,6 +26,8 @@ end
 local function editor_available(ctx)
   local root = root_of(ctx)
   if not root then return "Not inside a Unity project" end
+  local instance = require("lang.unity.editor").for_project(root)
+  if instance then return ("Already open (pid %d)"):format(instance.pid) end
   local exe, version = project.editor_exe(root)
   if exe then return true end
   if not version then return "ProjectSettings/ProjectVersion.txt names no editor version" end
@@ -156,19 +158,20 @@ return {
     actions[#actions + 1] = {
       id = "open_editor",
       label = "Open the project in the Unity editor",
-      category = "Run",
+      category = "Open",
       repeatable = false,
       available = editor_available,
       run = function()
         local root = assert(root_of(ctx))
-        local exe = assert(project.editor_exe(root))
-        require("core.task").run {
-          name = "unity editor",
-          cmd = { exe, "-projectPath", root },
-          cwd = root,
-          queue = false,
-          focus = false,
-        }
+        local exe, version = project.editor_exe(root)
+        local pid, err = require("lang.unity.editor").launch(root, assert(exe))
+        if pid then
+          vim.notify(("Opening %s in Unity %s"):format(vim.fs.basename(root), version or ""), vim.log.levels.INFO, {
+            title = "Unity",
+          })
+        else
+          vim.notify("Could not start Unity: " .. err, vim.log.levels.ERROR, { title = "Unity" })
+        end
       end,
     }
 

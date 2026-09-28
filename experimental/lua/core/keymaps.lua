@@ -19,31 +19,6 @@ end
 
 map("n", "<Leader>w", "<Cmd>write<CR>", { desc = "Write" })
 
-local ESCAPE_WINDOW_NS = 200e6
-local escape_pending
--- A plain `inoremap jj <Esc>` holds back every `j` for 'timeoutlen'; this
--- inserts it at once and takes it back if the second key follows in time.
-for _, key in ipairs { "j", "k" } do
-  map("i", key, function()
-    local now = vim.uv.hrtime()
-    local row, col = unpack(vim.api.nvim_win_get_cursor(0))
-    local bufnr = vim.api.nvim_get_current_buf()
-    local previous = escape_pending
-    escape_pending = { bufnr = bufnr, row = row, col = col + 1, time = now }
-    if
-      previous
-      and previous.bufnr == bufnr
-      and previous.row == row
-      and previous.col == col
-      and now - previous.time < ESCAPE_WINDOW_NS
-    then
-      escape_pending = nil
-      return "<BS><Esc>"
-    end
-    return key
-  end, { expr = true, desc = "Insert " .. key .. ", or leave insert mode after j/k" })
-end
-
 -- <C-l> is taken for window navigation below, and it was the default way to
 -- clear multicursors (|mcursor-clear|). Clearing the namespace is the
 -- documented equivalent.
@@ -55,8 +30,32 @@ end, { desc = "Clear search highlight and multicursors" })
 map("n", "grn", function() require("core.rename").start() end, { desc = "Rename with a live preview" })
 
 map("n", "<Leader>uv", function() require("core.diagnostics").toggle_all() end, { desc = "Inline diagnostics scope" })
+map("n", "<Leader>ue", function() require("core.diagnostics").toggle_errors_only() end, { desc = "Errors only" })
 
 map("n", "<Leader>q", function() require("core.macros").pick() end, { desc = "Macros" })
+
+local ESCAPE_WINDOW_NS = 200 * 1e6
+local typed_keys, escape_armed_at, escape_armed_count = 0, nil, 0
+vim.on_key(function(_, typed)
+  if typed ~= "" then typed_keys = typed_keys + 1 end
+end, vim.api.nvim_create_namespace "core_escape")
+
+---@param key string
+local function escape_or(key)
+  return function()
+    local now = vim.uv.hrtime()
+    if escape_armed_at and typed_keys == escape_armed_count + 1 and now - escape_armed_at < ESCAPE_WINDOW_NS then
+      escape_armed_at = nil
+      -- Not <Esc>: the <Leader>r menu binds insert-mode <Esc> to cancel, and jj there should reach the list.
+      return "<BS><C-\\><C-n>"
+    end
+    escape_armed_at, escape_armed_count = now, typed_keys
+    return key
+  end
+end
+for _, key in ipairs { "j", "k" } do
+  map({ "i", "c", "t" }, key, escape_or(key), { expr = true, desc = "Type " .. key .. ", or leave the mode after j/k" })
+end
 
 map("t", "<Esc><Esc>", "<C-\\><C-n>", { desc = "Leave terminal mode" })
 map("n", "<Leader>t", function() require("core.terminal").toggle() end, { desc = "Toggle terminal" })

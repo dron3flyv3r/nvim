@@ -29,10 +29,10 @@ local M = {}
 ---@class core.ActionRunOpts
 ---@field repeated boolean true when <Leader>R re-ran it rather than the menu choosing it
 
----@alias core.ActionCategory "Build"|"Run"|"Test"|"Debug"|"Refactor"|"Inspect"|"Maintenance"
+---@alias core.ActionCategory "Open"|"Build"|"Run"|"Test"|"Debug"|"Refactor"|"Inspect"|"Maintenance"
 
 ---@type core.ActionCategory[]
-M.CATEGORIES = { "Build", "Run", "Test", "Debug", "Refactor", "Inspect", "Maintenance" }
+M.CATEGORIES = { "Open", "Build", "Run", "Test", "Debug", "Refactor", "Inspect", "Maintenance" }
 
 local FALLBACK_CATEGORY = "Inspect"
 

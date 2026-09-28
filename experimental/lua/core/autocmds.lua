@@ -43,13 +43,15 @@ vim.api.nvim_create_autocmd("CursorMovedI", {
 })
 
 local autosave_group = augroup "autosave"
-vim.api.nvim_create_autocmd({ "BufLeave", "FocusLost" }, {
-  group = autosave_group,
-  callback = function() vim.schedule(require("core.autosave").flush) end,
-})
 vim.api.nvim_create_autocmd("QuitPre", {
   group = autosave_group,
   callback = function() require("core.autosave").on_quit() end,
+})
+-- An agent in a terminal writes the files you have open, and a buffer still
+-- modified when it does gets the reload prompt instead of a silent 'autoread'.
+vim.api.nvim_create_autocmd({ "BufLeave", "FocusLost", "TermEnter" }, {
+  group = autosave_group,
+  callback = function() vim.schedule(require("core.autosave").flush) end,
 })
 vim.api.nvim_create_autocmd("BufWipeout", {
   group = autosave_group,

@@ -97,6 +97,18 @@ function M.require_for_project(root)
   return instance
 end
 
+---@param root string
+---@param exe string
+---@return integer|nil pid
+---@return string|nil err
+function M.launch(root, exe)
+  -- A pty job gets SIGHUP when Neovim exits, which closes Unity without saving.
+  local handle, pid_or_err = vim.uv.spawn(exe, { args = { "-projectPath", root }, cwd = root, detached = true })
+  if not handle then return nil, tostring(pid_or_err) end
+  handle:unref()
+  return pid_or_err --[[@as integer]]
+end
+
 ---@param instance unity.Instance
 ---@return string
 function M.describe(instance)

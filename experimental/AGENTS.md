@@ -350,8 +350,9 @@ remembers for that purpose must be read **inside** `run`: the closure in the men
 was built before the run that set it.
 
 Categories are drawn from a fixed vocabulary so that muscle memory transfers
-between languages: **Build**, **Run**, **Test**, **Debug**, **Refactor**,
-**Inspect**, **Maintenance**. A Rust build and a Unity compile appear under the same
+between languages: **Open**, **Build**, **Run**, **Test**, **Debug**, **Refactor**,
+**Inspect**, **Maintenance**. **Open** starts an outside application on the
+project, such as the Unity editor, and runs nothing of the project's own. A Rust build and a Unity compile appear under the same
 heading, and the menu lists them in that order rather than alphabetically, so
 the shape of the menu does not change with the language. Anything outside the
 vocabulary is filed under Inspect and warns once, naming the action. Add a new
@@ -367,7 +368,7 @@ than expected.
 
 `core/autosave.lua` writes every modified file buffer — hidden ones included,
 which is what catches a rename or a code action that edited a file you never
-looked at — on `BufLeave`, `FocusLost` and quit. It never writes on an idle
+looked at — on `BufLeave`, `FocusLost`, `TermEnter` and quit. It never writes on an idle
 timer: an idle write per pause was what made it save constantly. It applies to
 every file; there is no per-language registration. It skips buffers that are
 readonly, in a diff, suspended, named by a URI or under `.git/`, the last so
@@ -384,7 +385,7 @@ falls back to the ordinary `confirm` dialog. Every write it makes answers
 ## Execution
 
 `core.task` runs every external process whose **output you watch** — a build, a
-test run, a log tail, the editor itself. A language module never calls
+test run, a log tail. A language module never calls
 `jobstart` or `:!` for one of those, so that output, queueing and quickfix
 behave the same whatever started it.
 
@@ -394,6 +395,12 @@ wants the parsed answer rather than a buffer. Those are a plain
 `vim.system(...):wait()` with a timeout — `unity/bridge.lua`'s `git
 check-ignore` and everything in `unity/android/device.lua`. The test is whether
 a human is meant to read the output, not how long the process runs.
+
+An application that should outlive the editor is neither. *Open the project in
+the Unity editor* is `vim.uv.spawn` with `detached = true`, because a pty job is
+sent SIGHUP when Neovim exits and Unity dies with unsaved scenes. It writes its
+own `Editor.log`, which *Show the editor log* reads, and a running editor for the
+project makes the action unavailable rather than starting a second one.
 
 ```lua
 require("core.task").run {
@@ -638,7 +645,7 @@ plugins/git/
   goto.lua       gf, settling the review before it opens the file
   image.lua      the picture in the pane, where an image entry was blank
   status.lua     the branch and +~- counts in the statusline
-  keys.lua       the legend along the bottom of a review
+  keys.lua       the legend along the top of a review
   health.lua     :checkhealth plugins.git
 ```
 
@@ -852,12 +859,16 @@ anything else.
 
 ### The legend, and the rest
 
-`?` toggles a one-row float above the statusline listing the keys for the mode
-you are in — diff, merge, or the staged finish. A float rather than a window,
-because a real window there is one Diffview folds into the layout; entries drop
-from the end as the screen narrows, so what survives is the half that moves you
-around. It is closed on `VimLeavePre`: a float stored in a session comes back as
-an ordinary window in the wrong place.
+`?` toggles a legend listing the keys for the mode you are in — diff, merge, or
+the staged finish — drawn as the **tabline** of the review's tab: `showtabline`
+goes to 2 while that tab is current and back to what it was on any other.
+Entries drop from the end as the screen narrows, so what survives is the half
+that moves you around. It is the tabline because both alternatives failed: a
+real window there is one Diffview folds into the layout, and the float it used
+to be sat over the last row of every pane, so a change at the end of a file was
+hidden under it — no motion scrolls past EOF to uncover that row. The tabline
+takes a real screen row without being a window, and `sessionoptions` carries no
+`options`, so it never reaches a session.
 
 `enhanced_diff_hl` is **off**. It exists to highlight the changed words inside a
 changed line, and `diffopt` already carries `inline:char` on this nightly, which
@@ -934,6 +945,16 @@ reaching for the Unity root: deleting `lua/plugins/git` must leave this working.
 `review.held()` exists for this caller alone; `health.lua` checks it still
 answers, because a `pcall` that starts failing goes quiet rather than loud.
 
+**A file Claude edits reloads silently only if its buffer is saved.** `'autoread'`
+already reloads an unmodified buffer, and claudecode reloads after an accepted
+diff — but only unmodified ones — so the reload prompt means unsaved edits were
+still in the buffer. `core.autosave.flush()` writes every modified file buffer on
+`FocusLost`, `BufLeave` and `TermEnter`: typing into the Claude split, or leaving the editor
+for a Claude outside it, settles the buffers first. It goes through the same eligibility check, so a review's
+held buffers, a diff and a `readonly` file are still left alone and
+`core.autosave.writing()` still reports it as an autosave. A buffer edited
+*while* Claude is working is a real conflict and still prompts.
+
 **The terminal is a right split, not `core.pane`.** The strip is last-writer-wins
 by design, so a chat you keep open all day would be evicted by every failing
 build. A side panel claims nothing `core.pane` owns. `provider` is stated as
@@ -981,6 +1002,15 @@ would be a whole-file render for nothing.
 file's errors are the question, and says which mode it landed in. It is a
 scope toggle, not an on/off — hiding diagnostics entirely is still
 `<Leader>ud`.
+
+`<Leader>ue` narrows signs, underlines and the inline block to errors, for the
+times warnings are noise. `diagnostics.lua` rebuilds the whole
+`vim.diagnostic.config` from its state on every change, so the scope and the
+severity filter never overwrite each other. A **review suspends it** the same
+way it suspends code lens: `view_enter`/`view_leave` in `plugins/git/init.lua`,
+by name, following the tabpage — and an explicit `<Leader>ue` clears every
+suspension, so the key always changes what is on screen. The statusline counts
+are not filtered; they are the answer to what was hidden.
 
 Signs carry the same two glyphs the statusline counts with, so the gutter and
 the status row agree. `severity_sort` is on.
@@ -1058,7 +1088,7 @@ startup and `<Leader>uc` flips it for every buffer at once. There is no
 `vim.g._lsp_enabled_codelens`, which is what a client consults as it attaches, so
 a buffer opened later inherits the state without one.
 
-A **review suspends it**, because a lens takes a screen row and the two sides of
+A **review suspends it**, as it does the diagnostics filter, because a lens takes a screen row and the two sides of
 a diff then stop lining up. `plugins/git/init.lua`'s `view_enter`/`view_leave`
 hooks are what do it, so the suspension follows the review's *tabpage* rather
 than its lifetime and a file open in another tab keeps its lenses. Suspension is
@@ -1287,15 +1317,23 @@ mapping once:
   rebound to cancel in insert mode too: snacks' default cancels from normal mode
   only, so a prompt-focused menu would otherwise take two presses to dismiss
   where every other list here takes one.
-- `jj` `jk` `kj` `kk` typed within 200 ms leave insert mode. The first key is
-  inserted at once and removed by the second, instead of an `inoremap jj`
-  holding every `j` back for `timeoutlen`. The window replaces AstroNvim's
-  better-escape plugin; it is ten lines in `core/keymaps.lua`.
 - Window splits have no leader keys: `<C-w>v/s/c/o` are the native spelling
   and need no AltGr. `<Leader>w` is write, and detach's keys are `<Leader>W`.
 - Insert-mode `<CR>` and `<BS>` belong to mini.pairs, which takes them only if
   nothing else has. Binding either one means reproducing `MiniPairs.cr()` and
   `MiniPairs.bs()` inside the new mapping.
+- **Any two of `j`/`k` within 200 ms leave the mode** — `jj` `jk` `kj` `kk`, in
+  insert, command-line and terminal mode alike, so the REPL and the prompts
+  get it for free. Slower, and both letters are typed. It is not a two-key
+  mapping: `inoremap jj` would time out on `timeoutlen`, which moves with the
+  key hints, and would hold every lone `j` pending. Each letter is typed at
+  once and the second checks the first's timestamp, then sends
+  `<BS><C-\><C-n>`. `vim.on_key` counts typed keys so `j`, `x`, `k` does not
+  count as a pair, and fed keys never trigger it. `<C-\><C-n>` rather than
+  `<Esc>`, because the `<Leader>r` menu binds insert `<Esc>` to cancel, and
+  there `jj` is meant to drop into the list so `j`/`k` move. The first letter
+  really reaches the buffer (or the pty) before it is erased, so a `jj` still
+  marks a buffer modified. It replaces AstroNvim's better-escape plugin.
 - The scheme stops at three keys on purpose. `<C-h>` is backspace in insert
   mode and must not be bound. `<C-l>` is safe: there is no `i_CTRL-L`, only
   meanings inside the native completion machinery that blink replaces.

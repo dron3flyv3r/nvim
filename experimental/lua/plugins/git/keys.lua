@@ -28,14 +28,12 @@ local HINTS = {
   { keys = "?", what = "hide this", mode = "all" },
 }
 
-local NS = api.nvim_create_namespace "git_keys"
-
 -- Remembered for the session rather than saved: it is "yes, I know these now"
 -- for the review you are in, not a permanent preference.
 local hidden = false
 
----@type integer?, integer?
-local win, buf
+---@type { showtabline: integer, tabline: string }?
+local saved
 
 local function set_highlights()
   local normal = api.nvim_get_hl(0, { name = "Normal", link = false })
@@ -47,30 +45,32 @@ end
 
 ---@param mode "diff"|"merge"|"finish"
 ---@param width integer
----@return string line, integer[][] key column ranges
+---@return string
 local function compose(mode, width)
   local chosen = {}
   for _, hint in ipairs(HINTS) do
     if hint.mode == "all" or hint.mode:find(mode, 1, true) then chosen[#chosen + 1] = hint end
   end
 
-  local line, spans
+  local plain, parts
   repeat
-    line, spans = " ", {}
+    plain, parts = " ", { "%#GitKeysLine# " }
     for _, hint in ipairs(chosen) do
-      spans[#spans + 1] = { #line, #line + #hint.keys }
-      line = ("%s%s %s   "):format(line, hint.keys, hint.what)
+      plain = ("%s%s %s   "):format(plain, hint.keys, hint.what)
+      parts[#parts + 1] = ("%%#GitKeysKey#%s%%#GitKeysLine# %s   "):format(hint.keys, hint.what)
     end
-    line = line:gsub("%s+$", "")
-    if #line <= width or #chosen <= 3 then break end
+    if #vim.trim(plain) + 1 <= width or #chosen <= 3 then break end
     table.remove(chosen)
   until false
-  return line, spans
+  parts[#parts + 1] = "%="
+  return table.concat(parts)
 end
 
 local function close()
-  if win and api.nvim_win_is_valid(win) then api.nvim_win_close(win, true) end
-  win = nil
+  if not saved then return end
+  vim.o.tabline = saved.tabline
+  vim.o.showtabline = saved.showtabline
+  saved = nil
 end
 
 ---@return boolean
@@ -81,46 +81,14 @@ local function reviewing()
   return found and view ~= nil
 end
 
+-- The tabline rather than a float or a window: a float covered the last row of
+-- every pane, and a real window is one Diffview would fold into the layout.
 ---@param mode "diff"|"merge"|"finish"
 local function draw(mode)
   if hidden or not reviewing() then return close() end
-
-  if not (buf and api.nvim_buf_is_valid(buf)) then
-    buf = api.nvim_create_buf(false, true)
-    vim.bo[buf].bufhidden = "hide"
-  end
-
-  local width = vim.o.columns
-  local line, spans = compose(mode, width)
-  vim.bo[buf].modifiable = true
-  api.nvim_buf_set_lines(buf, 0, -1, false, { line })
-  vim.bo[buf].modifiable = false
-  api.nvim_buf_clear_namespace(buf, NS, 0, -1)
-  for _, span in ipairs(spans) do
-    if span[2] <= #line then
-      api.nvim_buf_set_extmark(buf, NS, 0, span[1], { end_col = span[2], hl_group = "GitKeysKey" })
-    end
-  end
-
-  -- One row above the statusline, overlaying the panes rather than shrinking
-  -- them: a real window here is a window Diffview would fold into the layout.
-  local config = {
-    relative = "editor",
-    row = vim.o.lines - 2 - (vim.o.cmdheight or 0),
-    col = 0,
-    width = width,
-    height = 1,
-    style = "minimal",
-    focusable = false,
-    zindex = 40,
-  }
-  if win and api.nvim_win_is_valid(win) then
-    api.nvim_win_set_config(win, config)
-  else
-    config.noautocmd = true
-    win = api.nvim_open_win(buf, false, config)
-  end
-  vim.wo[win].winhighlight = "Normal:GitKeysLine"
+  saved = saved or { showtabline = vim.o.showtabline, tabline = vim.o.tabline }
+  vim.o.tabline = compose(mode, vim.o.columns)
+  vim.o.showtabline = 2
 end
 
 ---@param kind string the pane kind from `plugins.git.hud`
@@ -155,18 +123,11 @@ function M.setup()
   })
   api.nvim_create_autocmd({ "VimResized", "TabEnter" }, {
     group = group,
-    desc = "Keep the review legend on the bottom row of the tab holding the review",
+    desc = "Show the review legend only in the tab holding the review",
     callback = function()
       if not reviewing() then return close() end
       M.show(require("plugins.git.hud").current_kind() or "diff")
     end,
-  })
-  -- A float stored in a session comes back as an ordinary window in the wrong
-  -- place, so it is never part of one.
-  api.nvim_create_autocmd("VimLeavePre", {
-    group = group,
-    desc = "Drop the review legend before exit",
-    callback = close,
   })
 end
 
