@@ -1,5 +1,10 @@
 -- require("plugins.key-hints.control").enable()
 
+local explorer_exclude = { "*.meta", "*.uid", "*.prefab" }
+
+local sources = require("snacks").config.picker.sources
+sources.explorer = vim.tbl_extend("force", sources.explorer or {}, { exclude = explorer_exclude })
+
 if vim.fn.executable "fish" == 1 then require("core.terminal").set_shell { "fish" } end
 
 local detach_path = vim.fs.normalize "~/code/detach.nvim"
