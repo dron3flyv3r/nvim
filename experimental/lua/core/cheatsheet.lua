@@ -150,6 +150,7 @@ local SECTIONS = {
       { "autosave", "changed files are written on buffer leave, focus loss and quit" },
       { "<Leader>bd", "delete this buffer" },
       { "<Leader>t", "toggle a shell in the bottom pane" },
+      { "<Leader>z", "zen: a reading view, markdown rendered, nothing else on screen" },
       { "jj jk kj kk  (fast)", "leave insert, command-line or terminal mode" },
       { "<Esc><Esc>  (terminal)", "leave terminal input mode" },
       { "<Esc>", "clear the search highlight and any multicursors" },

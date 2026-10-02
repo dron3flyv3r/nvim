@@ -99,6 +99,30 @@ return {
     scope = { enabled = true },
     statuscolumn = { enabled = true },
     words = { enabled = true },
+    zen = {
+      toggles = { dim = false, diagnostics = false, inlay_hints = false, indent = false, words = false },
+      win = {
+        backdrop = {
+          transparent = false,
+          blend = 0,
+          win = { wo = { winhighlight = "Normal:Normal,NormalFloat:Normal" } },
+        },
+        wo = {
+          number = false,
+          relativenumber = false,
+          signcolumn = "no",
+          statuscolumn = "",
+          foldcolumn = "0",
+          colorcolumn = "",
+          winbar = "",
+          list = false,
+          linebreak = true,
+        },
+      },
+      -- A snacks toggle for code lens would call `set`, which clears the review's suspension too.
+      on_open = function() require("core.codelens").suspend "zen" end,
+      on_close = function() require("core.codelens").resume "zen" end,
+    },
   },
   keys = {
     { "<Leader><Space>", function() Snacks.picker.smart() end, desc = "Smart find files" },

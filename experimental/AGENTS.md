@@ -205,6 +205,16 @@ set for `snacks_picker_input` and `snacks_input` from the spec's `init`, not its
 `config`, because the picker has already set its filetype by the time the first
 `InsertEnter` loads the plugin.
 
+**Zen, `<Leader>z`, is for reading, not writing.** It is `Snacks.zen` at the
+default 120 columns with everything that is not the text turned off: dim, indent
+guides, diagnostics, inlay hints, word highlights, the whole gutter and the
+winbar. A small fix in insert mode works; a debugging session does not belong
+there. The backdrop is solid `Normal`, not the see-through default, so nothing
+behind the window shows. Code lens is hidden with `core.codelens.suspend("zen")`
+rather than a snacks toggle, because the toggle's `set` clears every suspension,
+a review's included. `lang/markdown.lua` adds its own toggle to the list, so a
+markdown file is rendered for as long as zen is open.
+
 `key-hints/` is which-key, disabled by default and toggled with `<Leader>uH`.
 Disabling it removes its triggers rather than merely hiding the window, so key
 sequences behave exactly as they did before it loaded. The checked-in user
@@ -1273,7 +1283,8 @@ It is `vim.ui.select` rather than a picker of its own, which snacks owns, so
 
 Prefixes in use: `<Leader>a` assistants, `<Leader>f` find, `<Leader>s` search, `<Leader>u` toggles,
 `<Leader>w` write, `<Leader>b` buffers, `<Leader>r`/`<Leader>R` actions,
-`<Leader>d` the debugger, `<Leader>t` the terminal, `<Leader>q` the macro list.
+`<Leader>d` the debugger, `<Leader>t` the terminal, `<Leader>q` the macro list,
+`<Leader>z` zen.
 `<Leader>m`/`<Leader>M` and
 `<Leader>1`–`<Leader>4`
 are grapple. `<Leader>g` is git.
@@ -1567,6 +1578,14 @@ exception, justified per module.
   See the section below. Deliberately not yet: `:CppNew` scaffolding,
   "implement in the .cpp", the clangd refactor keys and the blink definition
   source; those are the next C++ port when they are missed.
+- **Done, new**: Markdown, as `lua/lang/markdown.lua`. render-markdown.nvim is
+  **off by default** and is switched on by zen, which makes zen the reading mode;
+  Inspect → *Render the markdown* turns it on outside zen. The cursor line stays
+  rendered too — `anti_conceal` off and `concealcursor` at `nc` — because the raw
+  text is what turning rendering off is for; insert mode still shows it raw. It uses the
+  `markdown` parsers that ship with 0.13 and the devicons that are already
+  installed. The zen toggle is a `snacks.nvim` `opts` fragment in the module's
+  `plugins`, because the plugin layer must not name a language.
 - **Port on demand**: Python, notebooks, inlay hints, hover, and the two
   deferred Rust modules. Port one when it is first missed, rewritten to the
   contracts above rather than copied.
