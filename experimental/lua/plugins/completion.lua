@@ -11,12 +11,13 @@ return {
   ---@type blink.cmp.Config
   opts = {
     -- j/k move through a list and l commits, matching the picker keys. <C-h>
-    -- is deliberately absent: in insert mode it is backspace.
+    -- is deliberately absent: in insert mode it is backspace. With the menu
+    -- closed, <C-l> takes the inline suggestion instead.
     keymap = {
       preset = "default",
       ["<C-j>"] = { "select_next", "fallback" },
       ["<C-k>"] = { "select_prev", "fallback" },
-      ["<C-l>"] = { "accept", "fallback" },
+      ["<C-l>"] = { "accept", function() return require("core.copilot").accept() end, "fallback" },
       ["<C-y>"] = {},
     },
     appearance = { nerd_font_variant = "mono" },

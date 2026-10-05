@@ -1,5 +1,19 @@
 -- require("plugins.key-hints.control").enable()
 
+local function nvm_node(min_major)
+  local found, best = nil, -1
+  for _, dir in ipairs(vim.fn.glob(vim.fs.normalize "~/.nvm/versions/node/v*", false, true)) do
+    local major = tonumber(vim.fs.basename(dir):match "^v(%d+)")
+    if major and major >= min_major and major > best then
+      found, best = dir .. "/bin/node", major
+    end
+  end
+  return found
+end
+
+-- The system node is 20; copilot-language-server refuses anything below 22.13.
+require("core.copilot").enable { node = nvm_node(22) }
+
 local explorer_exclude = { "*.meta", "*.uid", "*.prefab" }
 
 local sources = require("snacks").config.picker.sources

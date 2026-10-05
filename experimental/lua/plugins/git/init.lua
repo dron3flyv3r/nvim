@@ -143,14 +143,17 @@ local function diffview_opts()
       -- its lifetime, so the rest of the editor keeps them.
       view_enter = function()
         require("core.codelens").suspend "review"
+        require("core.copilot").suspend "review"
         require("core.diagnostics").suspend "review"
       end,
       view_leave = function()
         require("core.codelens").resume "review"
+        require("core.copilot").resume "review"
         require("core.diagnostics").resume "review"
       end,
       view_closed = function(view)
         require("core.codelens").resume "review"
+        require("core.copilot").resume "review"
         require("core.diagnostics").resume "review"
         require("plugins.git.hud").closed()
         require("plugins.git.image").closed(view)

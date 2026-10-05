@@ -32,6 +32,9 @@ map("n", "grn", function() require("core.rename").start() end, { desc = "Rename 
 map("n", "<Leader>uv", function() require("core.diagnostics").toggle_all() end, { desc = "Inline diagnostics scope" })
 map("n", "<Leader>ue", function() require("core.diagnostics").toggle_errors_only() end, { desc = "Errors only" })
 
+map("i", "<M-]>", function() vim.lsp.inline_completion.select { count = 1 } end, { desc = "Next inline suggestion" })
+map("i", "<M-[>", function() vim.lsp.inline_completion.select { count = -1 } end, { desc = "Previous inline suggestion" })
+
 map("n", "<Leader>q", function() require("core.macros").pick() end, { desc = "Macros" })
 
 local ESCAPE_WINDOW_NS = 200 * 1e6

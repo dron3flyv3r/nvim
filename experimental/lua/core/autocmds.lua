@@ -13,6 +13,11 @@ vim.api.nvim_create_autocmd("BufWritePre", {
   end,
 })
 
+vim.api.nvim_create_autocmd("BufWritePre", {
+  group = augroup "format_on_save",
+  callback = function(args) require("core.format").on_write(args.buf) end,
+})
+
 vim.api.nvim_create_autocmd("FileType", {
   group = augroup "quickclose",
   pattern = { "help", "qf", "man", "checkhealth", "lspinfo" },

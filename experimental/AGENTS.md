@@ -46,6 +46,7 @@ lua/
     diagnostics.lua   vim.diagnostic.config and the inline-scope toggle
     autosave.lua      writes on leave, focus loss and quit, and suspensions
     codelens.lua      the global code lens state and its suspensions
+    copilot/          inline suggestions from copilot-language-server, opt-in
     colorscheme.lua   the remembered colourscheme and its fallback
     keymaps.lua       keymaps that do not belong to a plugin
     autocmds.lua      autocommands
@@ -141,6 +142,14 @@ of them is a choice, and cancelling restores the original as one more event.
 A stored scheme that no longer loads falls back to the default and is **left on
 disk**, so reinstalling the plugin restores the choice rather than needing it
 picked again.
+
+**Renaming a directory carries its buffers along.** snacks' `rename._rename`
+re-points only a buffer named exactly `from`, so every buffer inside a moved
+folder kept the old path and the next autosave recreated it beside the new one.
+`snacks.lua` wraps that private function to rename those buffers first, then
+writes the modified ones and re-reads the rest, because a renamed buffer refuses
+`:write` with E13 until it has done one or the other. The explorer, its move and
+Unity's asset rename all go through it.
 
 snacks' picker owns `vim.ui.select` (`ui_select` defaults to true), so every
 `vim.ui.select` call in this config — `<Leader>r`, any language module's prompt
@@ -383,6 +392,9 @@ timer: an idle write per pause was what made it save constantly. It applies to
 every file; there is no per-language registration. It skips buffers that are
 readonly, in a diff, suspended, named by a URI or under `.git/`, the last so
 a Neogit commit message is never written behind your back.
+It also skips a buffer whose directory no longer exists: `core_mkdir` creates
+missing parents on write, so an autosave would otherwise put a renamed or deleted
+folder straight back.
 
 Quitting borrows `'autowriteall'` for the length of the one command, from
 `QuitPre`. That is what keeps `:q!` meaning discard, which a flush from
@@ -986,8 +998,8 @@ Deliberately not here yet: the **explain and discuss** half — a read-only
 a call into the next file, and a generated `--session-id` so "discuss this" can
 resume that exact conversation in the terminal. The treesitter context in the old
 `user/ai_explain.lua` is the part worth keeping. It needs no plugin, which is
-most of why it can wait. Also not here: **inline completion**, which is a
-separate plugin and collides with blink's `<C-j>`/`<C-k>`/`<C-l>` scheme.
+most of why it can wait. Inline completion is not here either: it is Copilot,
+native, and lives in `core/copilot/` — see Completion and inlay hints.
 
 ## Diagnostics
 
@@ -1034,6 +1046,18 @@ are not filtered; they are the answer to what was hidden.
 Signs carry the same two glyphs the statusline counts with, so the gutter and
 the status row agree. `severity_sort` is on.
 
+## Format on save
+
+`core/format.lua` runs `vim.lsp.buf.format` from a `core_format_on_save`
+`BufWritePre` autocommand. It is **off at startup** and `<Leader>uf` toggles it
+for the whole editor, for this session only. It covers every write, autosave's included, so
+what reaches disk is formatted. It uses whichever attached server answers
+`textDocument/formatting`, and does nothing when none does. Those that have it
+switched off — lua_ls and vtsls — stay unformatted. It skips readonly buffers
+and diff windows: a review holds its buffers readonly, and reformatting one
+would trigger the W10 sleep and shift a diff side away from the other.
+`gq` is still the way to format by hand.
+
 ## Completion and inlay hints
 
 Completion is **blink.cmp**, and it is explicitly **temporary**. It is the one
@@ -1073,6 +1097,35 @@ edit: typing `if (` in front of `SetupCamera();` and accepting the field
 `isReady` produced `isReady()`, since the stale `SetupCamera` method token still
 covered the cursor's column. Kind resolution already bracket-completes methods
 from roslyn and lua_ls, and blink blocks Rust and C++ itself.
+
+**Inline suggestions are Copilot, and Copilot is native, not a plugin.** 0.12 added `vim.lsp.inline_completion`, which
+draws ghost text from any server answering `textDocument/inlineCompletion`, and
+`copilot-language-server` is such a server. copilot.vim and copilot.lua both start
+that same server and then draw the text themselves, so neither earns a spec.
+`core/copilot/` declares the server, owns the on/off state and its suspensions in
+the shape of `core/codelens.lua`, and registers a `<Leader>r` provider whose
+Maintenance actions sign in and out. It names a service, not a plugin or a
+language, which is why it may live in `core`.
+
+**It is opt-in per device.** Nothing starts it until `lua/user` calls
+`require("core.copilot").enable()`, because it is a paid account and that is a
+work-vs-home difference. Installing is `:MasonInstall copilot-language-server`;
+sign-in shares `~/.config/github-copilot` with every other Copilot client, so a
+machine already signed in elsewhere needs nothing more. The server refuses Node
+older than 22.13 and mason's npm install leaves out the native binary the
+launcher would otherwise fall back to, so on a machine whose system Node is
+older `enable { node = ... }` names a newer one; this device passes the newest
+nvm one. `:checkhealth core.copilot` checks the binary, the Node version and
+whether the server is running.
+
+Accepting is **`<C-l>`, shared with blink**: blink's mapping is `accept`, then
+`core.copilot.accept()`, then `fallback`, so an open menu wins and the ghost text
+is taken only when it is closed — one accept key, and `<Tab>` stays free.
+`<M-]>`/`<M-[>` cycle candidates. `<Leader>uA` is the global toggle and clears
+every suspension, like `<Leader>uc`. Zen and a review suspend it by name, the
+former because zen is for reading, the latter because ghost text in a diff pane
+pushes the two sides out of line. Commit messages, rebase todos and `.env*`
+files are refused in `root_dir`, so the server never sees a secret.
 
 What native does not do is **frecency** — it never learns which candidates you
 accept. That, plus a working auto-popup, is what would justify blink.cmp.
@@ -1249,7 +1302,9 @@ headless run that it is broken.
 in `plugins/snacks.lua` gives it a preview pane — the per-kind mechanism
 `<Leader>r` already uses. The layout is written out whole rather than as a
 tweak of the `select` preset, which hides the preview and whose child windows
-merge by position. `core.code_action` resolves an action that arrived without
+merge by position. The list carries its own height: left unsized, snacks fits it
+to `lines * 0.8 - 10`, which is fractional, and a long Rust list then fails in
+`nvim_win_set_config`. `core.code_action` resolves an action that arrived without
 an edit (`codeAction/resolve`, which is how rust-analyzer sends nearly all of
 them), caches the result per action, and redraws the preview when it lands if
 that action is still under the cursor. The diff is `core.workspace_edit`
@@ -1363,7 +1418,8 @@ mapping once:
   marks a buffer modified. It replaces AstroNvim's better-escape plugin.
 - The scheme stops at three keys on purpose. `<C-h>` is backspace in insert
   mode and must not be bound. `<C-l>` is safe: there is no `i_CTRL-L`, only
-  meanings inside the native completion machinery that blink replaces.
+  meanings inside the native completion machinery that blink replaces. With
+  the menu closed it accepts the Copilot suggestion, so it is still one key.
 - blink's `<C-y>` default is unbound rather than left as an alias, which keeps
   one accept key and restores `i_CTRL-Y` (insert the character above).
   `<C-k>` shadows digraphs (`i_CTRL-K`) only while the menu is open; blink
@@ -1565,8 +1621,8 @@ exception, justified per module.
   paths. See the section below for what each one encodes.
 - **Done**: the assistant, as `lua/plugins/assistant/`. `claude.lua` came across
   as the one spec, trimmed by two keymaps and one autocommand. Deliberately left
-  behind: `copilot.lua` and `blink-cmp-copilot` (inline completion is a separate
-  question, and blink's keys are already spoken for), and `ai-explain.lua` with
+  behind: `copilot.lua` and `blink-cmp-copilot` (inline completion came back
+  later as native `core/copilot/`, with no plugin), and `ai-explain.lua` with
   its CopilotChat dependency — the explain path is deferred rather than dropped,
   and when it lands it goes through the same `claude` CLI rather than a second
   vendor. `user/ai_explain.lua`'s treesitter context and `user/ai_review.lua`'s
@@ -1586,7 +1642,12 @@ exception, justified per module.
   `markdown` parsers that ship with 0.13 and the devicons that are already
   installed. The zen toggle is a `snacks.nvim` `opts` fragment in the module's
   `plugins`, because the plugin layer must not name a language.
-- **Port on demand**: Python, notebooks, inlay hints, hover, and the two
+- **Done, rebuilt**: Python, as `lua/lang/python/`, and JavaScript/TypeScript
+  with React, as `lua/lang/typescript/`. See the sections below. From the old
+  `python-lsp.lua` only the decision that ruff owns the unused-symbol reports
+  came across; pyrefly as a completion-only second server was dropped, since
+  one type checker answering completion is enough.
+- **Port on demand**: notebooks, inlay hints, hover, and the two
   deferred Rust modules. Port one when it is first missed, rewritten to the
   contracts above rather than copied.
 - **Let die**: everything AstroNvim-shaped (`astrocore`, `astrolsp`, `astroui`,
@@ -1834,6 +1895,111 @@ deferred: the Unity-specific heirline component, `condition.lua` and
 There are **no `:Unity*` commands**. The old config had eight; here every one
 of them is an action, because `<Leader>r` is the only entry point a language
 module gets and a second one would be the fragmentation this rewrite removed.
+
+## Python
+
+`lua/lang/python/` declares **one type checker and ruff**. basedpyright is
+preferred and pyright is the fallback; whichever `*-langserver` is on `PATH` at
+startup is the one declared, and with neither the `lsp` key holds only ruff, or
+is absent. Ruff runs as its own server (`ruff server`) beside it, and when it is
+present the checker's `reportUnused*` diagnostics are set to `none` and its
+organize-imports is disabled, because ruff reports and fixes the same things
+and two copies of every warning is noise. Ruff's hover is turned off for the
+same reason. Nothing here formats — no language in this config does.
+
+### The virtual environment follows the buffer
+
+**The `.venv` nearest above the file is the environment, and it is activated
+for the whole editor**: `$VIRTUAL_ENV` is set and its `bin` is prepended to
+`$PATH`, so `:!python`, a `<Leader>t` shell started afterwards and every
+`core.task` see the same interpreter the language server does. It follows
+`BufEnter` on a Python file, and `VimEnter`/`DirChanged` for the working
+directory — unless the current buffer is a Python file, because a file given on
+the command line is entered *before* `VimEnter` and would otherwise be undone by
+it. Leaving for a Python file with no `.venv` above it deactivates, so the state
+on screen is always the current file's. A shell already running in the pane
+keeps the environment it started with; that is how processes work, not a bug.
+
+**A `$VIRTUAL_ENV` inherited from the shell wins and is never touched.** If `nv`
+was started from an activated shell, someone chose that environment on purpose,
+so nothing is followed and `:checkhealth lang.python` says so.
+
+**The server is told the interpreter rather than finding it on `PATH`.** The
+server starts on `FileType`, which fires *before* the `BufEnter` that activates
+the environment, so the first Python buffer of a session would start its
+checker with the system interpreter. `before_init` sets
+`settings.python.pythonPath` from the client's own `root_dir` instead; the
+config is deep-copied per client, so two projects keep two interpreters.
+
+uv is assumed but not required. A project with a `pyproject.toml` and uv on
+`PATH` is a uv project: with no `.venv` yet, its commands go through `uv run`,
+which creates one, and the first Python file opened in it says once that
+*Sync the environment with uv* exists. It is never run automatically —
+it resolves and downloads. Sync and *Create a .venv* re-follow the environment
+and restart the servers when they succeed, so the new interpreter is picked up
+without a restart of the editor.
+
+The statusline shows `󰌠 <project>` in a Python buffer while an environment is
+active, which is how you know the activation happened.
+
+### Running, testing, debugging
+
+Running a file is `core.task` with `queue = false`, the same as a C++ program:
+a script that serves forever must not hold the next build. pytest is run as
+`python -m pytest` from the project root, so the environment's pytest is the one
+that runs. *Run the test under the cursor* finds the enclosing `def test_*` and
+its `class` chain by **indentation, not treesitter** — no Python parser ships with
+0.13 and none is installed — and `<Leader>R` re-runs the same node ID rather
+than whatever the cursor is in now. Tracebacks and pytest's `file:line:` lines
+fill quickfix.
+
+Debugging is debugpy, found at session start in this order: `debugpy-adapter`
+on `PATH` (`:MasonInstall debugpy`), mason's own debugpy venv, then the
+project's interpreter if it can import debugpy. The debuggee is always the
+project's interpreter, and `console = "integratedTerminal"` puts the program in
+the strip as `program`, the same as codelldb.
+
+## JavaScript and TypeScript
+
+`lua/lang/typescript/` covers `javascript`, `javascriptreact`, `typescript` and
+`typescriptreact` — React is not a separate module, because a `.tsx` file is
+TypeScript with JSX in it and the same server answers both.
+
+**vtsls is the one TypeScript server**, with no `typescript-language-server`
+fallback: one server, one owner, and vtsls is the one that uses the workspace's
+own TypeScript (`autoUseWorkspaceTsdk`). Its inlay hints follow the roslyn rule —
+every parameter, suppressed only on an exact name match — and its reference and
+implementation lenses are on, because code lens here is for counts. vtsls
+answers a lens with `editor.action.showReferences`, a VS Code command Neovim
+does not have; the client's own `commands` table answers it with the locations
+the lens carries, in the picker.
+
+**ESLint is a second server only where there is an ESLint config.** Its root is
+the nearest `eslint.config.*` or `.eslintrc*`; a project without one never starts
+it. `eslint/confirmESLintExecution` is answered *approved*, or the server
+refuses to load the project's own ESLint. Formatting is off, as everywhere.
+
+**The package's scripts are the menu.** Every `package.json` script is an action,
+run through the package manager the project uses — `packageManager` first, then
+the nearest lockfile, so a workspace member inherits the root's. `dev`, `start`,
+`serve`, `preview`, `watch` and `storybook` are filed under Run and are
+`queue = false`, since a dev server runs all day; `test*` is Test, the rest is
+Build. Lifecycle hooks (`prepare`, `postinstall`, a `pre`/`post` with a sibling)
+are hidden, because nobody runs them on purpose.
+
+Tests are vitest or jest, whichever `node_modules/.bin` has. *The test under the
+cursor* is the nearest `it(`/`test(` above it, passed to `-t` with regex
+characters escaped. A plain `.js` runs with node; a `.ts` with the project's
+`tsx`, or with node itself from 23.6, which strips types — on an older node the
+action says so rather than failing.
+
+Debugging is js-debug (`:MasonInstall js-debug-adapter`) as `pwa-node` and
+`pwa-chrome`. The adapter is told to bind `127.0.0.1` explicitly: it binds
+`localhost` otherwise, which can resolve to `::1` while nvim-dap connects over
+IPv4, and the session then fails as a refused connection. *Debug the app in a
+browser* launches Chrome, Chromium, Brave or Edge against the dev server's URL —
+5173 for Vite, 3000 otherwise, remembered per project — and the dev server has
+to be running already; starting it is the `dev` script's job.
 
 ## Working agreement for agents
 

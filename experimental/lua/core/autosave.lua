@@ -25,6 +25,7 @@ local function eligible(bufnr)
     and name ~= ""
     and not name:find("://", 1, true)
     and not name:find("/.git/", 1, true)
+    and vim.uv.fs_stat(vim.fs.dirname(name)) ~= nil
 end
 
 local function write(bufnr)

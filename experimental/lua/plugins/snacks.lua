@@ -21,6 +21,60 @@ local function code_action_preview(ctx)
   end
 end
 
+---@param dir string
+---@return table<integer, string>
+local function buffers_under(dir)
+  local prefix = vim.fs.normalize(vim.fn.fnamemodify(dir, ":p")) .. "/"
+  local found = {}
+  for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+    local name = vim.api.nvim_buf_get_name(bufnr)
+    if vim.startswith(name, prefix) then found[bufnr] = name:sub(#prefix + 1) end
+  end
+  return found
+end
+
+---@param bufnr integer
+---@param name string
+local function retarget(bufnr, name)
+  local old = vim.api.nvim_buf_get_name(bufnr)
+  vim.api.nvim_buf_set_name(bufnr, name)
+  local alternate = vim.fn.bufnr("^" .. vim.fn.escape(old, "\\[]*?.~") .. "$")
+  if alternate > 0 and alternate ~= bufnr then vim.api.nvim_buf_delete(alternate, { force = true }) end
+end
+
+-- A renamed buffer refuses `:write` with E13 until it has been written or re-read once under its new name.
+---@param bufnr integer
+local function settle(bufnr)
+  if not vim.api.nvim_buf_is_loaded(bufnr) or vim.bo[bufnr].readonly then return end
+  local command = vim.bo[bufnr].modified and "silent keepalt write!" or "silent keepalt edit!"
+  pcall(vim.api.nvim_buf_call, bufnr, function() vim.cmd(command) end)
+end
+
+-- snacks only re-points a buffer named exactly `from`, so moving a directory left every buffer inside it on
+-- the old path, and the next autosave wrote them there and recreated the directory.
+---@param rename fun(from: string, to: string): boolean
+local function follow_directory_rename(rename)
+  return function(from, to)
+    if vim.fn.isdirectory(from) == 0 then return rename(from, to) end
+    local target = vim.fs.normalize(vim.fn.fnamemodify(to, ":p"))
+    local moved = buffers_under(from)
+    local names = {}
+    for bufnr, relative in pairs(moved) do
+      names[bufnr] = vim.api.nvim_buf_get_name(bufnr)
+      retarget(bufnr, target .. "/" .. relative)
+    end
+    local ok = rename(from, to)
+    for bufnr in pairs(moved) do
+      if ok then
+        settle(bufnr)
+      else
+        retarget(bufnr, names[bufnr])
+      end
+    end
+    return ok
+  end
+end
+
 ---@type LazySpec
 return {
   "folke/snacks.nvim",
@@ -80,7 +134,9 @@ return {
                   title = "{title}",
                   title_pos = "center",
                   { win = "input", height = 1, border = "bottom" },
-                  { win = "list", border = "none" },
+                  -- An unsized list is fitted by snacks to `lines * 0.8 - 10`, a fraction that
+                  -- nvim_win_set_config rejects once there are more actions than that.
+                  { win = "list", border = "none", height = 0.35 },
                   { win = "preview", title = "{preview}", border = "top" },
                 },
               },
@@ -120,8 +176,14 @@ return {
         },
       },
       -- A snacks toggle for code lens would call `set`, which clears the review's suspension too.
-      on_open = function() require("core.codelens").suspend "zen" end,
-      on_close = function() require("core.codelens").resume "zen" end,
+      on_open = function()
+        require("core.codelens").suspend "zen"
+        require("core.copilot").suspend "zen"
+      end,
+      on_close = function()
+        require("core.codelens").resume "zen"
+        require("core.copilot").resume "zen"
+      end,
     },
   },
   keys = {
@@ -174,6 +236,7 @@ return {
     vim.api.nvim_create_autocmd("User", {
       pattern = "VeryLazy",
       callback = function()
+        Snacks.rename._rename = follow_directory_rename(Snacks.rename._rename)
         Snacks.toggle.option("spell", { name = "Spelling" }):map "<Leader>us"
         Snacks.toggle.option("wrap", { name = "Wrap" }):map "<Leader>uw"
         Snacks.toggle.option("relativenumber", { name = "Relative Number" }):map "<Leader>uL"
@@ -189,6 +252,22 @@ return {
             set = function(state) require("core.codelens").set(state) end,
           })
           :map "<Leader>uc"
+        Snacks.toggle
+          .new({
+            id = "copilot",
+            name = "Inline Suggestions",
+            get = function() return require("core.copilot").is_enabled() end,
+            set = function(state) require("core.copilot").set(state) end,
+          })
+          :map "<Leader>uA"
+        Snacks.toggle
+          .new({
+            id = "format_on_save",
+            name = "Format on Save",
+            get = function() return require("core.format").is_enabled() end,
+            set = function(state) require("core.format").set(state) end,
+          })
+          :map "<Leader>uf"
         Snacks.toggle.indent():map "<Leader>ug"
         Snacks.toggle.dim():map "<Leader>uD"
         Snacks.toggle.scroll():map "<Leader>uS"
