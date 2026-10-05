@@ -1,5 +1,10 @@
 local project = require "lang.cpp.project"
 
+local brace_own_line = {}
+for _, ft in ipairs(project.SOURCES) do
+  brace_own_line[ft] = true
+end
+
 ---@type lang.Module
 return {
   -- `cmake` and `make` so <Leader>r works from the build files too; clangd
@@ -22,6 +27,13 @@ return {
       root_markers = { ".clangd", "compile_commands.json", "compile_flags.txt", ".git" },
     },
   } or nil,
+
+  plugins = {
+    {
+      "echasnovski/mini.pairs",
+      opts = { brace_own_line = brace_own_line },
+    },
+  },
 
   actions = require "lang.cpp.actions",
 }

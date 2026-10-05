@@ -209,6 +209,17 @@ there, so **whoever binds insert-mode `<CR>` has to reproduce `MiniPairs.cr()`**
 or brace-and-Enter stops indenting. blink's default preset leaves `<CR>` alone,
 which is why nothing fights over it today.
 
+`pairs.lua` binds `<CR>` itself, and falls through to `MiniPairs.cr()`, for
+one reason: **in a language that asks, `<CR>` between `{}` puts the opening
+brace on its own line too**, so `fn foo() {|}` becomes `fn foo()`, `{`, the
+cursor, `}`. A brace with nothing before it on the line, and `()`/`[]`, split
+as usual. A language asks through its `plugins` key with
+`{ "echasnovski/mini.pairs", opts = { brace_own_line = { rust = true } } }` —
+a map rather than a list, because lazy merges `opts` maps and replaces lists.
+Rust, C# and the C family (`lang/cpp`'s `SOURCES`) ask today. rustfmt's own style is the opposite, so a manual `gq`
+puts the brace back unless the project's `rustfmt.toml` says
+`brace_style = "AlwaysNextLine"`, which is a nightly-only option.
+
 A prompt is not a buffer: `foo(` typed into a picker is a search term, and
 closing it turns the search into something else. `vim.b.minipairs_disable` is
 set for `snacks_picker_input` and `snacks_input` from the spec's `init`, not its
@@ -1142,9 +1153,11 @@ older `enable { node = ... }` names a newer one; this device passes the newest
 nvm one. `:checkhealth core.copilot` checks the binary, the Node version and
 whether the server is running.
 
-Accepting is **`<C-l>`, shared with blink**: blink's mapping is `accept`, then
-`core.copilot.accept()`, then `fallback`, so an open menu wins and the ghost text
-is taken only when it is closed — one accept key, and `<Tab>` stays free.
+Accepting is **`<Tab>`**, declared in blink's keymap as `core.copilot.accept()`,
+then `snippet_forward`, then `fallback`, so with no ghost text it is the snippet
+jump or a plain tab. It once shared `<C-l>` with blink, menu first, and that
+lost: the menu is open on nearly every keystroke, so the ghost text was almost
+never what `<C-l>` took. Two things on screen need two keys.
 `<M-]>`/`<M-[>` cycle candidates. `<Leader>uA` is the global toggle and clears
 every suspension, like `<Leader>uc`. Zen and a review suspend it by name, the
 former because zen is for reading, the latter because ghost text in a diff pane
@@ -1471,8 +1484,8 @@ mapping once:
   marks a buffer modified. It replaces AstroNvim's better-escape plugin.
 - The scheme stops at three keys on purpose. `<C-h>` is backspace in insert
   mode and must not be bound. `<C-l>` is safe: there is no `i_CTRL-L`, only
-  meanings inside the native completion machinery that blink replaces. With
-  the menu closed it accepts the Copilot suggestion, so it is still one key.
+  meanings inside the native completion machinery that blink replaces. It
+  accepts the menu only; Copilot's ghost text is `<Tab>`.
 - blink's `<C-y>` default is unbound rather than left as an alias, which keeps
   one accept key and restores `i_CTRL-Y` (insert the character above).
   `<C-k>` shadows digraphs (`i_CTRL-K`) only while the menu is open; blink
