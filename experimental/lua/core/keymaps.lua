@@ -37,6 +37,9 @@ map("i", "<M-[>", function() vim.lsp.inline_completion.select { count = -1 } end
 
 map("n", "<Leader>q", function() require("core.macros").pick() end, { desc = "Macros" })
 
+map({ "n", "x" }, "<Leader>sf", function() require("core.replace").open "file" end, { desc = "Replace in file" })
+map({ "n", "x" }, "<Leader>sp", function() require("core.replace").open "project" end, { desc = "Replace in project" })
+
 local ESCAPE_WINDOW_NS = 200 * 1e6
 local typed_keys, escape_armed_at, escape_armed_count = 0, nil, 0
 vim.on_key(function(_, typed)

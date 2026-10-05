@@ -39,6 +39,7 @@ local SECTIONS = {
       { "gg / gm", "Neogit: stage, commit, push, branch, stash · merge" },
       { "gd / gD", "review every change · review against a branch" },
       { "gh / gH", "history of this line or selection · of the repository" },
+      { "+ / -  ·  =  (in gh)", "10 more / fewer lines around them · the whole file" },
       { "øg / æg", "next / previous hunk" },
       { "gp / gP", "preview this hunk inline · in a popup" },
       { "gs / gS / gu", "stage this hunk · the file · undo the last stage" },
@@ -172,6 +173,17 @@ local SECTIONS = {
       { "uS / uD", "smooth scrolling / dim" },
       { "uH", "contextual key hints" },
       { "un / uC", "dismiss notifications / pick a colourscheme (remembered)" },
+    },
+  },
+  {
+    "FIND AND REPLACE  (<Leader>s…)",
+    {
+      { "sf / sp", "replace in this file / the project; word or selection prefilled" },
+      { "f / r  (panel)", "edit what to find / the replacement, previewed as you type" },
+      { "-c / -w / -l", "match case · whole word · literal (off: regex, $1 in replace)" },
+      { "-. / -i / =i / =e", "hidden · git-ignored files · include / exclude globs" },
+      { "x / <CR>", "skip this line or file / go to the match" },
+      { "R / q", "replace everything not skipped / close" },
     },
   },
   {

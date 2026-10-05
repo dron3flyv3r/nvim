@@ -6,7 +6,9 @@ local api = vim.api
 -- first, so what survives is the half of the line that moves you around.
 ---@type { keys: string, what: string, mode: string }[]
 local HINTS = {
-  { keys = "n/N", what = "change", mode = "diff finish" },
+  { keys = "n/N", what = "change", mode = "diff finish history" },
+  { keys = "+/-", what = "context", mode = "history" },
+  { keys = "=", what = "whole file", mode = "history" },
   { keys = "n/N", what = "conflict", mode = "merge" },
   { keys = "H", what = "ours", mode = "merge" },
   { keys = "L", what = "theirs", mode = "merge" },
@@ -18,11 +20,13 @@ local HINTS = {
   { keys = "]r/[r", what = "check", mode = "merge" },
   { keys = "<Leader>cb", what = "base", mode = "merge" },
   { keys = "<Tab>", what = "file", mode = "diff finish" },
+  { keys = "<Tab>", what = "older commit", mode = "history" },
   { keys = "<Tab>", what = "next file", mode = "merge" },
-  { keys = "gf", what = "edit", mode = "diff finish" },
+  { keys = "gf", what = "edit", mode = "diff finish history" },
   { keys = "u", what = "undo", mode = "diff merge" },
   { keys = "q", what = "finish", mode = "diff merge" },
   { keys = "q", what = "commit this", mode = "finish" },
+  { keys = "q", what = "close", mode = "history" },
   { keys = "zM/zR", what = "folds", mode = "diff finish" },
   { keys = "F1", what = "all keys", mode = "all" },
   { keys = "?", what = "hide this", mode = "all" },
@@ -43,7 +47,7 @@ local function set_highlights()
   api.nvim_set_hl(0, "GitKeysKey", { bg = normal.bg, fg = special.fg, bold = true })
 end
 
----@param mode "diff"|"merge"|"finish"
+---@param mode "diff"|"merge"|"finish"|"history"
 ---@param width integer
 ---@return string
 local function compose(mode, width)
@@ -83,7 +87,7 @@ end
 
 -- The tabline rather than a float or a window: a float covered the last row of
 -- every pane, and a real window is one Diffview would fold into the layout.
----@param mode "diff"|"merge"|"finish"
+---@param mode "diff"|"merge"|"finish"|"history"
 local function draw(mode)
   if hidden or not reviewing() then return close() end
   saved = saved or { showtabline = vim.o.showtabline, tabline = vim.o.tabline }
@@ -98,6 +102,8 @@ function M.show(kind)
     mode = "merge"
   elseif kind == "staged" then
     mode = "finish"
+  elseif require("plugins.git.history").active() then
+    mode = "history"
   end
   vim.schedule(function() draw(mode) end)
 end

@@ -134,10 +134,14 @@ local function diffview_opts()
     hooks = {
       diff_buf_win_enter = function(bufnr, winid, ctx)
         require("plugins.git.hud").dress(bufnr, winid, ctx)
+        require("plugins.git.history").dress(bufnr)
         review.track(bufnr)
         require("plugins.git.keys").show(require("plugins.git.hud").current_kind())
       end,
-      view_opened = function(view) require("plugins.git.image").watch(view) end,
+      view_opened = function(view)
+        require("plugins.git.image").watch(view)
+        require("plugins.git.history").watch(view)
+      end,
       -- Lenses sit on their own screen rows, which pushes the two sides of a
       -- diff out of alignment. Scoped to the review's tabpage rather than to
       -- its lifetime, so the rest of the editor keeps them.
@@ -223,6 +227,10 @@ local function diffview_opts()
         { "n", "<C-w><C-f>", leave "split", { desc = "Leave the history and open this file in a split" } },
         { "n", "<C-w>gf", leave "tab", { desc = "Leave the history and open this file in a new tab" } },
         { "n", "X", review.block_history_restore, { desc = "Restoring is disabled during a review" } },
+
+        { "n", "+", call("history", "widen"), { desc = "Show 10 more lines around the traced lines" } },
+        { "n", "-", call("history", "narrow"), { desc = "Show 10 fewer lines around the traced lines" } },
+        { "n", "=", call("history", "toggle_full"), { desc = "Toggle between the traced lines and the whole file" } },
       },
     },
   }

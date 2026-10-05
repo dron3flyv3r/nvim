@@ -59,6 +59,7 @@ lua/
     session.lua       native project session persistence
     terminal.lua      an interactive shell in the shared bottom strip
     macros.lua        the recording indicator and the macro list
+    replace.lua       find and replace in a file or the project, previewed
     lang.lua          loader for lua/lang
     utf8_guard.lua    masks invalid UTF-8 in didChange payloads
     pane.lua          the one bottom strip, shared by its occupants
@@ -670,6 +671,7 @@ plugins/git/
   nav.lua        walking changes and conflicts, including from the file panel
   goto.lua       gf, settling the review before it opens the file
   image.lua      the picture in the pane, where an image entry was blank
+  history.lua    <Leader>gh narrowed to the traced lines, and their context
   status.lua     the branch and +~- counts in the statusline
   keys.lua       the legend along the top of a review
   health.lua     :checkhealth plugins.git
@@ -887,6 +889,28 @@ This reaches into `file.bufnr` and `file.binary`, two of Diffview's own fields.
 That is the bet, and the lockfile pin is what makes it safe — if an update moves
 the `is_valid` short-circuit, images go blank again rather than breaking
 anything else.
+
+### The history of a line
+
+`<Leader>gh` is `DiffviewFileHistory -L`, so git already picks the commits that
+touched the line or selection and follows it as it moves. Each commit opens
+showing **only the traced lines**, with everything else folded; `+`/`-` widen
+and narrow by ten lines on both sides and `=` toggles the whole file. The
+context is per view, so it carries over as you walk to older commits.
+
+Diffview already folds a traced history down to the patch, but `hud.dress`
+sets `foldlevel` to 99 on every pane, which opened those folds and showed the
+whole file. `history.lua` lays its own manual folds instead, from the hunk
+ranges Diffview keeps on `commit.diff`, and lays them twice: after `hud.dress`,
+and again on `file_open_post`, because the first time a commit is shown
+Diffview builds its zero-context folds *after* the panes have opened and would
+otherwise overwrite ours. A side with nothing in the range reports the line it
+sits after, and that line is shown as the anchor. With `++base` the hunks
+describe a revision that is not on screen, so nothing is folded, the same as
+Diffview's own rule.
+
+The keys are buffer-local on the two panes and in the history panel, and only
+in a traced history; `<Leader>gH` is unchanged.
 
 ### The legend, and the rest
 
@@ -1314,6 +1338,35 @@ says so instead of showing an empty pane. Snippet markers (`$0`, `${1:name}`)
 are stripped from the previewed text, because rust-analyzer sends snippet
 edits and the preview should show what lands, not the template.
 
+## Find and replace
+
+`core/replace.lua` is `<Leader>sf` for the current file and `<Leader>sp` for the
+project, both prefilled with the word under the cursor or the visual selection.
+It opens a panel in a right split, shaped like a Neogit popup: `f` and `r` edit
+what to find and the replacement in a one-line float laid over the field, and
+the preview below follows every keystroke. `-c` `-w` `-l` are match case, whole
+word and literal; the project adds `-.` hidden files, `-i` git-ignored files and
+`=i`/`=e` include and exclude globs. `x` skips the line or file under the
+cursor, `<CR>` goes to it, `R` replaces what is left and `q` closes. The
+switches and globs are stored in `stdpath("state")/replace.json`; the two texts
+are not. The defaults are exact: case, whole word and literal all on.
+
+**ripgrep is the only matcher**, for the file as well as the project — the
+buffer is sent on stdin, so unsaved text is what is searched. One engine means
+the preview and the result cannot disagree, and regex mode is rg's syntax with
+`$1` captures, which is what a VS Code search uses. rg's JSON has no
+replacement text, so a replacement containing `$` costs a second
+`--only-matching --replace` run, joined to the first by path, line and column.
+
+Every match is applied only if its line still reads exactly what the preview
+read; one that changed is left alone and counted. A loaded buffer is edited and
+left to autosave, so `u` undoes it. A file that was not loaded is read with
+`noautocmd`, written and unloaded again — no language server, formatter or
+editorconfig runs for each of hundreds of files, and `'undofile'` still records
+the change. A readonly buffer, which is what a review's hold is, is refused and
+named. Past 5000 matches the search stops and `R` refuses rather than replacing
+a set nobody has seen.
+
 ## Macros
 
 `core/macros.lua` is the whole of it: `q<letter>` otherwise says nothing, and a
@@ -1336,7 +1389,7 @@ It is `vim.ui.select` rather than a picker of its own, which snacks owns, so
 
 ## Keys
 
-Prefixes in use: `<Leader>a` assistants, `<Leader>f` find, `<Leader>s` search, `<Leader>u` toggles,
+Prefixes in use: `<Leader>a` assistants, `<Leader>f` find, `<Leader>s` search (and `sf`/`sp` replace), `<Leader>u` toggles,
 `<Leader>w` write, `<Leader>b` buffers, `<Leader>r`/`<Leader>R` actions,
 `<Leader>d` the debugger, `<Leader>t` the terminal, `<Leader>q` the macro list,
 `<Leader>z` zen.
