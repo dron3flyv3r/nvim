@@ -8,6 +8,11 @@ return {
 
   plugins = {
     { "echasnovski/mini.pairs", opts = { brace_own_line = { cs = true } } },
+    {
+      url = "https://gitlab.com/schrieveslaach/sonarlint.nvim",
+      optional = true,
+      opts = { languages = { csharp = require "lang.csharp.analysis" } },
+    },
   },
 
   actions = require "lang.csharp.actions",

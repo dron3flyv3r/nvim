@@ -42,9 +42,21 @@ vim.api.nvim_create_autocmd("VimResized", {
   callback = function() vim.cmd.wincmd "=" end,
 })
 
+local diagnostics_group = augroup "diagnostics"
 vim.api.nvim_create_autocmd("CursorMovedI", {
-  group = augroup "diagnostics",
+  group = diagnostics_group,
   callback = function(args) require("core.diagnostics").on_insert_move(args.buf) end,
+})
+vim.api.nvim_create_autocmd("LspNotify", {
+  group = diagnostics_group,
+  callback = function(args)
+    if args.data.method ~= "textDocument/didChange" then return end
+    require("core.diagnostics").on_lsp_change(args.data.client_id, args.buf)
+  end,
+})
+vim.api.nvim_create_autocmd("BufEnter", {
+  group = diagnostics_group,
+  callback = function(args) require("core.diagnostics").on_enter(args.buf) end,
 })
 
 local autosave_group = augroup "autosave"
@@ -76,31 +88,52 @@ vim.api.nvim_create_autocmd("LspAttach", {
 local codelens_group = augroup "codelens"
 
 ---@param bufnr integer
+---@param row integer
+---@return boolean
+local function row_on_screen(bufnr, row)
+  for _, win in ipairs(vim.fn.win_findbuf(bufnr)) do
+    local info = vim.fn.getwininfo(win)[1]
+    if row >= info.topline - 1 and row <= info.botline - 1 then return true end
+  end
+  return false
+end
+
+-- Only lenses on screen count: the rest are resolved when scrolled to, and a
+-- toggle wipes every lens in the buffer, which flickered on each progress end.
+---@param bufnr integer
 ---@return boolean
 local function lens_unresolved(bufnr)
   for _, entry in ipairs(vim.lsp.codelens.get { bufnr = bufnr }) do
-    if not entry.lens.command then return true end
+    if not entry.lens.command and row_on_screen(bufnr, entry.lens.range.start.line) then return true end
   end
   return false
+end
+
+local LENS_RETRY_DELAY = 1500
+
+---@param client_id integer
+local function retry_unresolved_lenses(client_id)
+  local client = vim.lsp.get_client_by_id(client_id)
+  if not client or not require("core.codelens").is_enabled() then return end
+  for bufnr in pairs(client.attached_buffers) do
+    if vim.api.nvim_buf_is_loaded(bufnr) and lens_unresolved(bufnr) then
+      vim.lsp.codelens.enable(false, { bufnr = bufnr })
+      vim.lsp.codelens.enable(true, { bufnr = bufnr })
+    end
+  end
 end
 
 -- A `codeLens/resolve` answered -32801 ContentModified while the server is still
 -- loading is logged and dropped, and the row is already marked current, so nothing
 -- re-requests it: the lens stays blank until an edit bumps the document version.
--- Toggling is the supported way to force a fresh request, and the unresolved check
--- is what keeps this to the one server that answered too early.
+-- Toggling is the supported way to force a fresh request; the delay lets a resolve
+-- still in flight land first, so only a lens that is genuinely stuck is retried.
 vim.api.nvim_create_autocmd("LspProgress", {
   group = codelens_group,
   pattern = "end",
   callback = function(args)
-    local client = vim.lsp.get_client_by_id(args.data.client_id)
-    if not client or not require("core.codelens").is_enabled() then return end
-    for bufnr in pairs(client.attached_buffers) do
-      if vim.api.nvim_buf_is_loaded(bufnr) and lens_unresolved(bufnr) then
-        vim.lsp.codelens.enable(false, { bufnr = bufnr })
-        vim.lsp.codelens.enable(true, { bufnr = bufnr })
-      end
-    end
+    local client_id = args.data.client_id
+    vim.defer_fn(function() retry_unresolved_lenses(client_id) end, LENS_RETRY_DELAY)
   end,
 })
 

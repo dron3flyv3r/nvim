@@ -14,6 +14,13 @@ end
 -- The system node is 20; copilot-language-server refuses anything below 22.13.
 require("core.copilot").enable { node = nvm_node(22) }
 
+require("plugins.code-analysis.control").enable {
+  url = vim.env.SONAR_HOST_URL,
+  projects = {
+    ["/home/smally-work/git/display_master"] = "display"
+  },
+}
+
 local explorer_exclude = { "*.meta", "*.uid", "*.prefab", "*.imports" }
 
 local sources = require("snacks").config.picker.sources

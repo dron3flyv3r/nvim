@@ -17,7 +17,7 @@ end
 
 ---@param dir string
 ---@return string|nil
-local function solution_in(dir)
+function M.solution(dir)
   local ok, project = pcall(require, "lang.unity.project")
   if ok and project.root(dir) == dir then
     local solution = project.solution(dir)
@@ -67,7 +67,7 @@ local function on_init(client)
   local dir = client.config.root_dir
   if not dir then return end
 
-  local solution = solution_in(dir)
+  local solution = M.solution(dir)
   if solution then
     client:notify("solution/open", { solution = vim.uri_from_fname(solution) })
     return
@@ -84,13 +84,11 @@ local function initialization_complete(_, __, ctx)
   vim.notify("project initialization complete", vim.log.levels.INFO, { title = "roslyn_ls" })
 
   -- Diagnostics requested while the workspace was still loading came back
-  -- empty; nothing re-requests them on its own. Guarded because this is
-  -- private and a rename should cost the refresh, not throw from a handler.
-  local refresh = vim.lsp.diagnostic._refresh
-  local client = refresh and vim.lsp.get_client_by_id(ctx.client_id)
+  -- empty; nothing re-requests them on its own.
+  local client = vim.lsp.get_client_by_id(ctx.client_id)
   if not client then return end
   for buf in pairs(client.attached_buffers) do
-    pcall(refresh, buf, ctx.client_id)
+    require("core.diagnostics").pull(client, buf)
   end
 end
 

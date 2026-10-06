@@ -1064,6 +1064,23 @@ every keystroke, and only while the handler is cursor-scoped: widened to every
 line by `<Leader>uv` the publish already draws them all, and a re-show per line
 would be a whole-file render for nothing.
 
+**An edit in one file re-checks the others.** A pull server (roslyn) is asked
+again only about the buffer that changed — Neovim ignores the
+`interFileDependencies` flag every roslyn identifier sets — so adding an
+overload left the caller's CS1503 standing until it was typed in. On the
+`didChange`, `core_diagnostics` marks the client's other buffers stale; 500 ms
+after the last change the stale ones on screen are re-pulled, and the rest on
+`BufEnter`, only for identifiers that declare the flag. Those requests carry no
+`previousResultId`, which is private state, so the server answers in full; a
+list identical to the one on screen is dropped rather than set, because
+re-setting it redraws every inline block and the other split flickered on each
+pause in typing. Not through
+`workspace/diagnostic/refresh`: that handler also starts a workspace pull, 8 s
+on the Unity solution and immediately re-issued. Listing the identifiers needs
+the private `Client:_provider_foreach`, which warns once if it disappears —
+the `vim.lsp.diagnostic._refresh` it replaced had already vanished silently,
+taking roslyn's re-pull after project load with it.
+
 `<Leader>uv` widens the same handler to every line for the times the whole
 file's errors are the question, and says which mode it landed in. It is a
 scope toggle, not an on/off — hiding diagnostics entirely is still
@@ -1080,6 +1097,142 @@ are not filtered; they are the answer to what was hidden.
 
 Signs carry the same two glyphs the statusline counts with, so the gutter and
 the status row agree. `severity_sort` is on.
+
+## Code analysis
+
+`lua/plugins/code-analysis/` is SonarQube for IDE — `sonarlint-language-server`
+through `sonarlint.nvim` — in **connected mode** against the work server, so the
+rules that fire locally are the server's quality profile and an issue resolved
+there as won't-fix or false positive stays hidden here too. What it does not
+reproduce is the quality gate's *metric* conditions, coverage and duplication:
+no local issues means no rule violations, not a green gate. The PR analysis is
+still the final word.
+
+**Open buffers only.** The server analyses what it is told is open —
+`shouldAnalyseFile` answers from the buffer list — and never the whole project.
+The issues are ordinary diagnostics in the client's own namespace, so everything
+in Diagnostics above applies to them unchanged.
+
+It is a plugin rather than a native `vim.lsp.config` because the server is not
+plain LSP: it asks the client for its token, for which files are open, whether a
+file is ignored by git and a dozen other `sonarlint/*` requests, and the plugin
+is those handlers. Its one entry point is `setup`, which starts a client per git
+root on `FileType` — so it attaches to a review's `diffview://` panes as well,
+and `control.lua` detaches it from any buffer that is not a file.
+
+**Opt-in per device**, like Copilot: nothing loads until `lua/user` calls
+`require("plugins.code-analysis.control").enable { url = ..., projects = ... }`.
+The URL is read from `$SONAR_HOST_URL`; the token from `$SONAR_TOKEN`, or from a
+`token` function for a keyring. Neither is ever written into the repository.
+`projects` maps a git root to its project key; a root with no entry falls back to
+`sonar.projectKey` in a `sonar-project.properties`, and with neither it runs in
+local mode on Sonar's default rules. The Unity repository is shared, so its key
+belongs in `lua/user`, not in a `.sonarlint/` folder committed for everyone.
+
+**A bound project analyses nothing until its first sync succeeds.** Off the VPN
+the server fails with a `NetworkException` that only reaches its log, and the
+buffer simply stays clean. `:checkhealth plugins.code-analysis` asks
+`api/authentication/validate` with the token — on curl's stdin, never its argv —
+and is the first thing to reach for when Sonar is quiet. After one sync the
+rules are cached under `~/.sonarlint`.
+
+The plugin layer names no language. A language asks through its `plugins` key
+with an `optional` fragment carrying `opts.languages.<name>`: the analyzer jars,
+the executables it needs, a function for `init_options` given the install paths
+and one for per-root `settings`. `lang/csharp/analysis.lua` is the only one
+today: `sonarlintomnisharp.jar` with the bundled OmniSharp, which needs `dotnet`
+and is a **second C# process** beside roslyn_ls, loading the same solution —
+measured at about twenty seconds to the first issue on a small project.
+
+**On the Unity solution OmniSharp loads projects on demand, and that is set by
+hand.** A full load of `display_master.sln` takes about 85 s, past the 60 s the
+bridge waits, and the bridge then analyses the file *without C#* and publishes
+an empty list — a clean-looking buffer that is simply wrong. The server's own
+`omnisharp.enableMsBuildLoadProjectsOnDemand` cannot fix it: it forwards it as
+`sonar.cs.internal.loadProjectOnDemand`, one letter off the
+`loadProjectsOnDemand` the bridge reads. So `lang/csharp/analysis.lua` passes
+`sonarlint.analyzerProperties` itself, and those **replace** the properties the
+server computes rather than adding to them, which is why the solution path and
+`useNet6` are restated there. On demand, a file is analysed in about 16 s.
+Loading the whole solution with a longer timeout was measured too, and agreed
+with CI *less*: 19 of the PR's issues in untouched files went missing against 9
+on demand — rules that depend on resolved types behave differently with more of
+the solution loaded. Neither matches CI exactly; on demand is the closer one.
+If the solution load ever times out anyway, `control.lua` sees the log line,
+warns, and does not count that analysis. The
+install is found at mason's package directory or `$SONARLINT_HOME`, and started
+as `java -jar` directly; Java 17 or newer, through `$JAVA_HOME` or `PATH`.
+
+**What CI found is a list, not diagnostics.** Inspect → *Show the pull
+request's issues on SonarQube* finds the PR whose branch is the current git
+branch through `api/project_pull_requests/list`, and opens its open issues in a
+picker with the quality gate in the title. The preview is *why* — the rule's
+description sections, HTML turned into markdown by `html.lua` — and `<CR>` goes
+to the code. Like Unity's compile messages, the report is only as fresh as the
+analysis, so in the diagnostic namespace a fixed issue would keep answering `]d`;
+the live server already covers what is open. Lines belong to the analysed commit
+and drift once you edit. A branch with no PR says *No PR* and nothing else, and
+a 404 from that endpoint means the server has no PR support at all: Community
+Build reports PRs only with the community branch plugin installed.
+
+**The report is cached, and only the action refreshes it.** Each fetch is
+written to `stdpath("state")/sonar/`, one file per repository and branch, and
+`<Leader>si` shows that file with its age in the title — no request at all. It
+fetches only when nothing is stored for the branch yet, since an empty answer
+would teach nothing. `<Leader>si` is a key on the plugin spec rather than in
+`core/keymaps.lua`, so it is lazy's key and loads nothing until pressed; on a
+device that has not opted in it says so. It is deliberately not folded into
+`<Leader>sd`: those are the live diagnostics, and a cached report among them is
+the stale-diagnostic problem by another route.
+
+**Fixes are checked against the live analysis, never written back.** Every
+time the list opens, each issue whose file Sonar has analysed in this session
+is matched against that buffer's live Sonar diagnostics; an issue nothing
+matches is *fixed locally* — dimmed, ticked, sorted last and counted in the
+title. Matching is by rule and message first, because the message names the
+symbol and survives lines moving under an edit, nearest line breaking ties; a
+message reworded by a different analyzer version falls back to the same rule
+within five lines; ` [+1 location]`, which the server appends to some live
+messages, is stripped first.
+
+**Only a file that changed since the fetch can have fixed anything.** The local
+analysis sees a different build from CI and disagrees on some rules, so
+matching an untouched file would mark real issues fixed. A fetch records `HEAD`
+and the files already edited at that moment; *changed* is `git diff` against
+that commit, those files, and any buffer with unsaved changes. The analysed
+commit from `api/project_analyses/search` is no use as the base: a Bitbucket PR
+pipeline analyses a merge with the target, and on PR #82 that commit differed
+from the working tree in 98 files.
+
+**"Analysed" means the batch finished, not that something was published.** The
+server analyses every open file as one batch and streams issues while it runs,
+so mid-batch publishes are partial — taking the first one as the answer marked
+73 of 74 issues fixed. `control.lua` wraps the client's `window/logMessage`:
+`Starting analysis with configuration` lists the batch's input files,
+`Analysis detected N issues` closes it, and the final publish for each file
+arrives *after* that line, so a file counts as analysed from the first publish
+that follows it (or two seconds later, if none comes). A new batch un-marks its
+files until it finishes. The saved report is never changed; the next fetch
+replaces it.
+
+Inspect → *Re-analyse the PR report's files locally* is how changed files that
+are not open get checked. Sonar analyses open buffers only, so it loads them as
+hidden, unlisted buffers with `bufload`, waits up to five minutes for their
+batch to finish, and opens the list. They **stay loaded**: unloading one discards its
+analysis, which `BufUnload` forgets. Roslyn attaches to them too, so the first
+run on a large PR is slow. Quality gate metrics are not re-evaluated; the title
+keeps CI's verdict.
+
+Paths in the report are relative to wherever the scanner ran, which for a .NET
+solution is often a subdirectory of the repository, so a path that is not under
+the root is matched against the tail of `git ls-files`. Since 2026.2 the rules
+API strips descriptions from anonymous requests, so without a token the preview
+says so rather than showing an empty pane. Everything goes through `api.lua`,
+which hands curl the token on stdin, the same as the health check.
+
+`<Leader>r` also carries Inspect → *Show the Sonar connection* and Open → *Open the
+project on the SonarQube server*. Resolving an issue on the server and
+deactivating a rule are the server's own code actions, on `gra`.
 
 ## Format on save
 
@@ -1233,6 +1386,14 @@ autocommand the paragraph above forbids: it fires for the server that answered
 too early and for nothing else. It asks `core.codelens` first, because a
 per-buffer re-enable would otherwise put lenses back in a review the tabpage
 hook had just taken them out of.
+
+**Unresolved means on screen and still unresolved 1.5 s later.** Native
+resolution is viewport-driven, so every lens scrolled out of view is unresolved
+by design; counting those made the check true in nearly every buffer, and since
+roslyn and Sonar both report progress after an edit, each `end` wiped every lens
+in every visible C# window — the rows vanished and came back, which was the
+flicker. The delay lets a resolve that is merely in flight land first. A lens
+that failed and was then scrolled away is not retried; the next edit fixes it.
 
 What the lenses are for is **counts**: references and implementations, the
 questions `grr`/`gri` answer but that a count answers without leaving the line.
@@ -1546,6 +1707,9 @@ receiver never meets its swap file; that is why a modified buffer, one shown in
 a second window, or one a git review holds is refused instead. A side calls
 `core.session.disable()`, since it would otherwise restore or overwrite the
 project's session.
+
+The work-only SonarQube connection is opted into here as well; see Code
+analysis.
 
 What belongs here: machine-specific paths, per-machine tool locations,
 GPU/font/theme preferences, work-vs-home differences. What does not: anything

@@ -97,6 +97,7 @@ local SECTIONS = {
       { "<Leader>sh / sr", "help pages / resume the last picker" },
       { "j / k  ·  <CR>", "move the selection · open it" },
       { "i  or  /", "reach the filter when the list starts focused" },
+      { "<A-w>", "move into the preview and back" },
     },
   },
   {
@@ -109,6 +110,7 @@ local SECTIONS = {
       { "K / gO", "hover documentation / symbols in this document" },
       { "ød / æd", "next / previous diagnostic" },
       { "<Leader>sd / sD", "project / buffer diagnostics, with preview" },
+      { "<Leader>si", "SonarQube's issues on this branch's PR, as last fetched" },
       { "<Leader>uv", "expand every diagnostic inline, not only the cursor line" },
       { "<Leader>ue", "errors only: hide warnings, info and hints" },
       { "]] / [[", "next / previous use of the symbol under the cursor" },
