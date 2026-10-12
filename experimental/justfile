@@ -69,6 +69,15 @@ setup-alias:
     function nv --description 'Neovim nightly with the experimental config'
         set -lx NVIM_APPNAME nvim/experimental
         set -l nvim_bin $HOME/.local/share/nvim-versions/current/bin/nvim
+        if set -q NVIM; and test (count $argv) -gt 0
+            set -l paths
+            for p in $argv
+                set -a paths "'"(string replace -a "'" "''" -- (path resolve -- $p))"'"
+            end
+            command $nvim_bin --server $NVIM --remote-expr "v:lua.require'core.terminal'.open(["(string join , -- $paths)"])" 2>/dev/null
+            or command $nvim_bin --server $NVIM --remote $argv
+            return
+        end
         if functions -q fullscreen
             fullscreen $nvim_bin $argv
         else

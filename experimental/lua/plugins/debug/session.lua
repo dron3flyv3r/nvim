@@ -93,6 +93,24 @@ function M.continue()
   require("core.actions").pick { category = "Debug" }
 end
 
+local DETACH_TIMEOUT_MS = 3000
+local DETACH_GRACE_MS = 250
+
+--- An attach session sits beside a process someone else started, so it ends
+--- with `disconnect` rather than `terminate` -- `dap.terminate` sends the latter
+--- whenever the adapter supports it and drops `disconnect_args` entirely.
+---@param session dap.Session
+local function detach(session)
+  session:request_with_timeout("disconnect", { terminateDebuggee = false }, DETACH_TIMEOUT_MS, function()
+    -- nvim-dap kills the adapter as soon as the reply lands, before vstuc has
+    -- told Unity's agent it is leaving, which strands the connection half-read.
+    vim.defer_fn(function()
+      if not session.closed then session:close() end
+      ending "detached"()
+    end, DETACH_GRACE_MS)
+  end)
+end
+
 --- The one way out, and the one that takes the panel with it.
 ---
 --- `dap.terminate` is asynchronous -- it sends a request and only closes the
@@ -103,13 +121,10 @@ function M.stop()
   local session = dap.session()
   if not session then return ending "stopped"() end
 
-  -- Detaching is not killing. An attach session sits beside a process someone
-  -- else started, and nvim-dap's disconnect fallback would otherwise ask for it
-  -- to be terminated along with the session.
-  local attached = (session.config or {}).request == "attach"
+  if (session.config or {}).request == "attach" then return detach(session) end
   dap.terminate {
-    disconnect_args = { terminateDebuggee = not attached },
-    on_done = vim.schedule_wrap(ending(attached and "detached" or "stopped")),
+    disconnect_args = { terminateDebuggee = true },
+    on_done = vim.schedule_wrap(ending "stopped"),
   }
 end
 

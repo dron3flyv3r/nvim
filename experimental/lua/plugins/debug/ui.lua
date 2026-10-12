@@ -172,6 +172,11 @@ function M.setup()
     controls = { enabled = false },
     icons = { expanded = "▾", collapsed = "▸", current_frame = "▸" },
     mappings = { expand = { "<CR>", "<Tab>" }, open = "o", remove = "d", edit = "e", repl = "r", toggle = "t" },
+    -- A frame or breakpoint line registers only "open", so <CR> as expand there just reports nothing to expand.
+    element_mappings = {
+      stacks = { expand = "<Tab>", open = { "<CR>", "o" } },
+      breakpoints = { expand = "<Tab>", open = { "<CR>", "o" } },
+    },
   }
   harden_values()
 end

@@ -84,3 +84,8 @@ end
 
 map("x", "<", "<gv", { desc = "Outdent and keep selection" })
 map("x", ">", ">gv", { desc = "Indent and keep selection" })
+
+map("n", "<A-j>", "<Cmd>execute 'move .+' . v:count1<CR>==", { desc = "Move line down" })
+map("n", "<A-k>", "<Cmd>execute 'move .-' . (v:count1 + 1)<CR>==", { desc = "Move line up" })
+map("x", "<A-j>", ":<C-u>execute \"'<,'>move '>+\" . v:count1<CR>gv=gv", { desc = "Move selection down" })
+map("x", "<A-k>", ":<C-u>execute \"'<,'>move '<-\" . (v:count1 + 1)<CR>gv=gv", { desc = "Move selection up" })

@@ -544,6 +544,16 @@ normal pane occupant: `h` hides it without stopping the shell, `q` stops it, and
 `<Esc><Esc>` leaves terminal mode. Native `:terminal` remains available when an
 ordinary unmanaged terminal window is wanted.
 
+**`nv <file>` inside any terminal of an nv opens the file in that editor**, the
+way `code <file>` does, rather than nesting a second Neovim. The fish function
+the justfile writes sees `$NVIM` and calls `core.terminal.open` through
+`--remote-expr`, not plain `--remote`: that is `:drop` in the current window,
+which is the strip, and the file would land in the bottom pane. `open` moves to
+the previous ordinary window first. The client prints the expression's result
+on stderr, which is why that is discarded. With no arguments, or outside nv,
+`nv` starts an editor as before. The bash alias cannot branch and does not do
+this.
+
 It runs `'shell'` unless `core.terminal.set_shell()` names something else, which
 the user layer does for fish. `'shell'` itself stays POSIX, because `:!`,
 `system()` and every plugin that passes a shell string run through it too.
@@ -609,8 +619,16 @@ drained yet. That is a test artefact, not a bug — do not "fix" it.
 **Stopping is one key and it knows the difference between detach and kill.**
 `dap.terminate` is asynchronous, so the panel comes down in `on_done` rather than
 on the next line — calling `close()` immediately is why stopping did not always
-stop. An `attach` session sits beside a process someone else started, so
-`terminateDebuggee` follows `config.request` rather than defaulting to true.
+stop. An `attach` session sits beside a process someone else started, so it is
+ended with a `disconnect` request sent directly, never `dap.terminate`: that
+sends `terminate` whenever the adapter advertises it and ignores
+`disconnect_args`, so `terminateDebuggee = false` never reached the adapter.
+The session is then closed **250 ms after** the reply rather than on it, because
+nvim-dap kills the adapter the moment the reply lands, and vstuc needs about
+15 ms more to close its connection to Unity. Unity leaks the connection either
+way — even a clean detach leaves it in `CLOSE-WAIT`, and after enough of them the
+editor stops accepting attaches until it is restarted — but a killed adapter
+leaves it holding unread data as well. Do not shorten the grace to nothing.
 There is no restart key: on an attach session a restart means re-attaching, which
 is `<Leader>dq` and then `<Leader>r`, and one honest pair beats one key that
 means two things.

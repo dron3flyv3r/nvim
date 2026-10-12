@@ -66,6 +66,35 @@ function M.on_close(buf)
   end)
 end
 
+---@return integer|nil
+local function editing_window()
+  local pane = require("core.pane").get_win()
+  local function usable(win) return win ~= 0 and win ~= pane and vim.api.nvim_win_get_config(win).relative == "" end
+  local previous = vim.fn.win_getid(vim.fn.winnr "#")
+  if usable(previous) then return previous end
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if usable(win) then return win end
+  end
+end
+
+---@param paths string[]
+---@return integer
+function M.open(paths)
+  vim.schedule(function()
+    local win = editing_window()
+    if win then
+      vim.api.nvim_set_current_win(win)
+    else
+      vim.cmd "topleft split"
+    end
+    for _, path in ipairs(paths) do
+      vim.cmd.drop(vim.fn.fnameescape(path))
+    end
+    vim.cmd.stopinsert()
+  end)
+  return 1
+end
+
 ---@param cmd string|string[]
 function M.set_shell(cmd) shell = cmd end
 
