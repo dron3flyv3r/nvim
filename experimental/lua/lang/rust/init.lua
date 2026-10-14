@@ -79,7 +79,6 @@ return {
       event = "BufRead Cargo.toml",
       opts = { completion = { crates = { enabled = true } } },
     },
-    { "echasnovski/mini.pairs", opts = { brace_own_line = { rust = true } } },
   },
 
   actions = require "lang.rust.actions",

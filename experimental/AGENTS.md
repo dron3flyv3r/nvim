@@ -214,11 +214,10 @@ one reason: **in a language that asks, `<CR>` between `{}` puts the opening
 brace on its own line too**, so `fn foo() {|}` becomes `fn foo()`, `{`, the
 cursor, `}`. A brace with nothing before it on the line, and `()`/`[]`, split
 as usual. A language asks through its `plugins` key with
-`{ "echasnovski/mini.pairs", opts = { brace_own_line = { rust = true } } }` —
+`{ "echasnovski/mini.pairs", opts = { brace_own_line = { cs = true } } }` —
 a map rather than a list, because lazy merges `opts` maps and replaces lists.
-Rust, C# and the C family (`lang/cpp`'s `SOURCES`) ask today. rustfmt's own style is the opposite, so a manual `gq`
-puts the brace back unless the project's `rustfmt.toml` says
-`brace_style = "AlwaysNextLine"`, which is a nightly-only option.
+Only C# asks: Allman is its convention, and every other language keeps the
+brace on the line it opened, so `{}` and `<CR>` there is plain `MiniPairs.cr()`.
 
 A prompt is not a buffer: `foo(` typed into a picker is a search term, and
 closing it turns the search into something else. `vim.b.minipairs_disable` is
