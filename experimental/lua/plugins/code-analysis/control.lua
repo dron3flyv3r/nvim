@@ -171,6 +171,7 @@ end
 
 local PUBLISH = "textDocument/publishDiagnostics"
 local LOG = "window/logMessage"
+local PROGRESS = "$/progress"
 
 ---@type table<integer, true>
 local analysed = {}
@@ -192,6 +193,33 @@ function M.analysed(bufnr) return analysed[bufnr] == true end
 ---@param bufnr integer
 ---@return boolean
 function M.handles(bufnr) return filetypes[vim.bo[bufnr].filetype] == true end
+
+---@param path string
+---@return boolean
+function M.handles_path(path)
+  local filetype = vim.filetype.match { filename = path }
+  return filetype ~= nil and filetypes[filetype] == true
+end
+
+local ANALYSIS_TIMEOUT = 300
+
+-- Must run inside a coroutine; returns the buffers still unanalysed at the deadline.
+---@param buffers integer[]
+---@return integer[] pending
+function M.await_analysis(buffers)
+  local co = coroutine.running()
+  local deadline = os.time() + ANALYSIS_TIMEOUT
+  local pending = buffers
+  while true do
+    pending = vim.tbl_filter(
+      function(bufnr) return vim.api.nvim_buf_is_valid(bufnr) and not analysed[bufnr] end,
+      pending
+    )
+    if #pending == 0 or os.time() >= deadline then return pending end
+    vim.defer_fn(function() coroutine.resume(co) end, 500)
+    coroutine.yield()
+  end
+end
 
 ---@param bufnr integer
 ---@return vim.Diagnostic[]
@@ -230,6 +258,21 @@ local function finish(batch)
   end, 2000)
 end
 
+---@type table<integer, integer|string>
+local analysis_tokens = {}
+
+-- The server's own progress for an analysis is a begin and an end with nothing
+-- between; the analyzers log "3/12 files analyzed" every ten seconds instead.
+---@param client_id integer
+---@param message string
+local function report_progress(client_id, message)
+  local token = analysis_tokens[client_id]
+  local done, total = message:match "%] (%d+)/(%d+) [%w ]-analyzed"
+  if not token or not done or tonumber(total) == 0 then return end
+  local value = { kind = "report", percentage = math.floor(100 * tonumber(done) / tonumber(total)) }
+  vim.lsp.handlers[PROGRESS](nil, { token = token, value = value }, { client_id = client_id, method = PROGRESS })
+end
+
 -- Issues are streamed while a batch runs, so a publish proves nothing until the
 -- batch's closing log line; the final publish for each file follows it.
 ---@param client_id integer
@@ -243,6 +286,8 @@ local function watch_log(client_id, message)
       "C# analysis timed out loading the solution, so C# issues are missing; edit the file to retry",
       vim.log.levels.WARN
     )
+  elseif message:find("analyzed", 1, true) then
+    report_progress(client_id, message)
   elseif message:find("] Analysis detected ", 1, true) and batches[client_id] then
     finish(batches[client_id])
     batches[client_id] = nil
@@ -262,6 +307,15 @@ local function track_analysis(client)
   client.handlers[LOG] = function(err, result, ctx)
     if result and result.message then watch_log(ctx.client_id, result.message) end
     return vim.lsp.handlers[LOG](err, result, ctx)
+  end
+  client.handlers[PROGRESS] = function(err, result, ctx)
+    local value = result and result.value or {}
+    if value.kind == "begin" and (value.title or ""):match "^Analyzing" then
+      analysis_tokens[ctx.client_id] = result.token
+    elseif value.kind == "end" and analysis_tokens[ctx.client_id] == result.token then
+      analysis_tokens[ctx.client_id] = nil
+    end
+    return vim.lsp.handlers[PROGRESS](err, result, ctx)
   end
 end
 
@@ -337,6 +391,12 @@ local provider = {
         run = function(ctx) require("plugins.code-analysis.report").open(M.root(ctx.bufnr), bound_key(ctx)) end,
       },
       {
+        id = "changes",
+        label = "Show Sonar's issues on the lines I changed",
+        category = "Inspect",
+        run = function(ctx) M.changes_report(ctx.bufnr) end,
+      },
+      {
         id = "reanalyse",
         label = "Re-analyse the PR report's files locally",
         category = "Inspect",
@@ -390,6 +450,14 @@ function M.cached_report()
   require("plugins.code-analysis.report").cached(root --[[@as string]], key)
 end
 
+---@param bufnr? integer
+function M.changes_report(bufnr)
+  if not device then return notify("SonarQube is not enabled on this device; see lua/user", vim.log.levels.WARN) end
+  local root = M.root(bufnr or vim.api.nvim_get_current_buf())
+  if not root then return notify("Not inside a git repository", vim.log.levels.WARN) end
+  require("plugins.code-analysis.changes").show(root)
+end
+
 ---@param opts plugins.analysis.Opts
 function M.setup(opts)
   M.languages = opts.languages or {}
@@ -411,6 +479,7 @@ function M.setup(opts)
     connected = { get_credentials = function() return M.token() or vim.NIL end },
   }
   watch_clients()
+  require("core.statusline").label_client(M.CLIENT, "sonar")
   require("core.actions").register(provider)
 end
 

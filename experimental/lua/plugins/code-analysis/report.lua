@@ -27,7 +27,6 @@ local SECTIONS = {
 local PAGE_SIZE = 500
 local MAX_PAGES = 20
 local NEARBY = 5
-local ANALYSIS_TIMEOUT = 300
 
 local function notify(message, level) vim.notify(message, level or vim.log.levels.INFO, { title = "Sonar" }) end
 
@@ -488,13 +487,6 @@ function M.cached(root, key)
   end, root)
 end
 
----@param ms integer
-local function sleep(ms)
-  local co = coroutine.running()
-  vim.defer_fn(function() coroutine.resume(co) end, ms)
-  coroutine.yield()
-end
-
 ---@param root string
 ---@param report plugins.analysis.Report
 ---@return integer[]? waiting
@@ -527,15 +519,7 @@ function M.reanalyse(root)
       return show(root, report)
     end
     if #waiting > 0 then notify(("Analysing %d file%s..."):format(#waiting, #waiting == 1 and "" or "s")) end
-    local deadline = os.time() + ANALYSIS_TIMEOUT
-    while os.time() < deadline do
-      waiting = vim.tbl_filter(
-        function(bufnr) return vim.api.nvim_buf_is_valid(bufnr) and not control.analysed(bufnr) end,
-        waiting
-      )
-      if #waiting == 0 then break end
-      sleep(500)
-    end
+    waiting = control.await_analysis(waiting)
     if #waiting > 0 then
       notify(
         ("%d file%s not analysed in time; left unchecked"):format(#waiting, #waiting == 1 and "" or "s"),

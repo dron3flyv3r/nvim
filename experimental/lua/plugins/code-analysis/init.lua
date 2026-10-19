@@ -9,6 +9,11 @@ return {
       function() require("plugins.code-analysis.control").cached_report() end,
       desc = "SonarQube issues on this PR",
     },
+    {
+      "<Leader>sI",
+      function() require("plugins.code-analysis.control").changes_report() end,
+      desc = "Sonar issues on my changed lines",
+    },
   },
   ---@type plugins.analysis.Opts
   opts = { languages = {} },

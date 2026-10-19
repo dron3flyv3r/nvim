@@ -16,6 +16,8 @@ local M = {}
 local components = {}
 ---@type table<integer, table<string, { title: string, percentage: integer? }>>
 local progress = {}
+---@type table<string, string>
+local client_labels = {}
 
 local mode_groups = {
   n = { "N", "CoreStatuslineNormal" },
@@ -104,6 +106,10 @@ local function diagnostics(bufnr)
   if #result > 0 then return table.concat(result, "  ") end
 end
 
+---@param client vim.lsp.Client
+---@return string
+local function client_label(client) return client_labels[client.name] or client.name end
+
 ---@param bufnr integer
 ---@return string?
 local function lsp_status(bufnr)
@@ -117,13 +123,13 @@ local function lsp_status(bufnr)
       local tokens = vim.tbl_keys(active)
       table.sort(tokens)
       local item = active[tokens[1]]
-      local text = client.name .. ": " .. item.title
+      local text = client_label(client) .. ": " .. item.title
       if item.percentage then text = text .. " " .. item.percentage .. "%" end
       return highlighted("DiagnosticInfo", " " .. text)
     end
   end
 
-  local names = vim.tbl_map(function(client) return client.name end, clients)
+  local names = vim.tbl_map(client_label, clients)
   return highlighted("DiagnosticHint", " " .. table.concat(names, ", "))
 end
 
@@ -134,6 +140,13 @@ function M.register(name, component)
   assert(component.text, ("statusline component %q has no text function"):format(name))
   assert(component.side == nil or component.side == "left" or component.side == "right", "invalid statusline side")
   components[name] = component
+  vim.cmd.redrawstatus()
+end
+
+---@param client_name string
+---@param label string
+function M.label_client(client_name, label)
+  client_labels[client_name] = label
   vim.cmd.redrawstatus()
 end
 

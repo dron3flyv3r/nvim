@@ -59,6 +59,14 @@ local function forget_hidden_uri_buffers()
   end
 end
 
+-- `localoptions` records whatever a window held at exit, including what a scroll
+-- animation had borrowed mid-flight; a restored `virtualedit=all` then stuck for good.
+local function release_borrowed_options()
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    vim.api.nvim_win_call(win, function() vim.cmd "set virtualedit< scrolloff<" end)
+  end
+end
+
 ---@return boolean
 local function holds_a_file()
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
@@ -104,6 +112,7 @@ function M.restore(opts)
     return false
   end
   drop_uri_buffers()
+  release_borrowed_options()
   attached = true
   if not opts.quiet then notify("Restored " .. root) end
   return true

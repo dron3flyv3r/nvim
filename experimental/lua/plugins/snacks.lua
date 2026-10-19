@@ -227,6 +227,8 @@ return {
     { "<Leader>n", function() Snacks.notifier.show_history() end, desc = "Notification history" },
     { "<Leader>un", function() Snacks.notifier.hide() end, desc = "Dismiss notifications" },
     { "<Leader>bd", function() Snacks.bufdelete() end, desc = "Delete buffer" },
+    { "<Leader>bD", function() Snacks.bufdelete.all() end, desc = "Delete all buffers" },
+    { "<Leader>bo", function() Snacks.bufdelete.other() end, desc = "Delete other buffers" },
     { "<Leader>uC", function() Snacks.picker.colorschemes() end, desc = "Colorschemes" },
 
     { "]]", function() Snacks.words.jump(vim.v.count1) end, desc = "Next reference", mode = { "n", "t" } },

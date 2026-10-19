@@ -1181,6 +1181,13 @@ warns, and does not count that analysis. The
 install is found at mason's package directory or `$SONARLINT_HOME`, and started
 as `java -jar` directly; Java 17 or newer, through `$JAVA_HOME` or `PATH`.
 
+**Progress comes from the log, not the server.** Sonar's own `$/progress` for
+an analysis is a begin at 0% and an end with nothing between, which read as
+stuck. The analyzers log `3/12 files analyzed` instead, about every ten seconds,
+so `control.lua` turns those lines into `report`s on the analysis token through
+Neovim's own `$/progress` handler, and the statusline needs no special case. The
+steps are coarse: a two-file analysis moves once.
+
 **What CI found is a list, not diagnostics.** Inspect → *Show the pull
 request's issues on SonarQube* finds the PR whose branch is the current git
 branch through `api/project_pull_requests/list`, and opens its open issues in a
@@ -1232,6 +1239,20 @@ arrives *after* that line, so a file counts as analysed from the first publish
 that follows it (or two seconds later, if none comes). A new batch un-marks its
 files until it finishes. The saved report is never changed; the next fetch
 replaces it.
+
+**`<Leader>sI` is the live analysis narrowed to your own lines**, for a branch
+with no PR yet or a codebase whose existing warnings would bury yours — the same
+reason the PR gate looks only at new code. *Changed* is every line that differs
+from the merge-base with `origin/HEAD`, committed or not, unsaved edits
+included: each buffer is diffed against the base with `vim.diff`, because the
+diagnostics sit on the buffer's lines and not the file's. Only an issue that
+*starts* on a changed line is listed, which is where CI attributes it too. Every
+changed file Sonar handles is loaded hidden, like the re-analyse action below,
+and the list waits for their batch, so the first press on a large branch is
+slow. Nothing is cached, and it needs no project key — it works in local mode.
+`origin/HEAD` is git's own pointer; a clone where it is unset says to run
+`git remote set-head origin --auto`. It is also Inspect → *Show Sonar's issues
+on the lines I changed*.
 
 Inspect → *Re-analyse the PR report's files locally* is how changed files that
 are not open get checked. Sonar analyses open buffers only, so it loads them as
@@ -1454,7 +1475,9 @@ The statusline is native and lives in `core/statusline.lua`. `cmdheight=0`
 lets `:`, `/`, `?`, messages and prompts temporarily cover that same final row.
 Plugin-owned information is added with `core.statusline.register`, which is how
 `plugins/git/status.lua` places the branch and `+`/`~`/`-` counts and
-`plugins/grapple.lua` the tag list without making `core` depend on a plugin.
+`plugins/grapple.lua` the tag list without making `core` depend on a plugin. A
+client whose name is a plugin's internal string is relabelled the same way:
+`core.statusline.label_client`, which is how `sonarlint.nvim` reads `sonar`.
 The statusline carries the file name only for a window the winbar does not
 dress — a terminal, a picker, a panel. A component's text is escaped
 unless it sets `raw`, which is what lets the git counts carry their own
