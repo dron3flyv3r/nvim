@@ -18,6 +18,8 @@ local components = {}
 local progress = {}
 ---@type table<string, string>
 local client_labels = {}
+---@type table<string, true>
+local hidden_clients = {}
 
 local mode_groups = {
   n = { "N", "CoreStatuslineNormal" },
@@ -113,7 +115,10 @@ local function client_label(client) return client_labels[client.name] or client.
 ---@param bufnr integer
 ---@return string?
 local function lsp_status(bufnr)
-  local clients = vim.lsp.get_clients { bufnr = bufnr }
+  local clients = vim.tbl_filter(
+    function(client) return not hidden_clients[client.name] end,
+    vim.lsp.get_clients { bufnr = bufnr }
+  )
   if #clients == 0 then return nil end
   table.sort(clients, function(a, b) return a.name < b.name end)
 
@@ -147,6 +152,12 @@ end
 ---@param label string
 function M.label_client(client_name, label)
   client_labels[client_name] = label
+  vim.cmd.redrawstatus()
+end
+
+---@param client_name string
+function M.hide_client(client_name)
+  hidden_clients[client_name] = true
   vim.cmd.redrawstatus()
 end
 

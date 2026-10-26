@@ -187,6 +187,62 @@ local function map_keys(bufnr)
   map("=", M.toggle_full, "Toggle between the traced lines and the whole file")
 end
 
+---@param file string
+---@return string? text, string? err
+local function committed_text(file)
+  local cmd = { "git", "show", "HEAD:./" .. vim.fs.basename(file) }
+  local res = vim.system(cmd, { cwd = vim.fs.dirname(file), text = true }):wait(5000)
+  if res.code ~= 0 then return nil, vim.trim(res.stderr or "") end
+  return (res.stdout:gsub("\r\n", "\n"))
+end
+
+-- A hunk with a zero count on one side reports the line it sits after.
+---@param hunks integer[][] {start_head, count_head, start_buf, count_buf}
+---@param lnum integer
+---@return integer? head_lnum nil when the line is not in HEAD
+local function to_head(hunks, lnum)
+  local offset = 0
+  for _, hunk in ipairs(hunks) do
+    local head_start, head_count, buf_start, buf_count = unpack(hunk)
+    local above = buf_count == 0 and buf_start < lnum or buf_count > 0 and buf_start + buf_count - 1 < lnum
+    if not above then
+      if buf_count == 0 or buf_start > lnum then break end
+      if head_count == 0 then return nil end
+      return head_start + math.min(lnum - buf_start, head_count - 1)
+    end
+    offset = offset + head_count - buf_count
+  end
+  return lnum + offset
+end
+
+-- `git log -L` counts lines in HEAD, so lines added or removed above the
+-- cursor since the last commit would otherwise trace a different line.
+---@param bufnr integer
+---@param first integer
+---@param last integer
+---@return integer? first, integer? last, string? reason
+function M.head_range(bufnr, first, last)
+  local committed, err = committed_text(vim.api.nvim_buf_get_name(bufnr))
+  if not committed then
+    if err and err:find("'HEAD'", 1, true) then return nil, nil, "This file is not committed yet" end
+    return nil, nil, err ~= "" and err or "git show failed"
+  end
+  local current = table.concat(api.nvim_buf_get_lines(bufnr, 0, -1, false), "\n") .. "\n"
+  local hunks = vim.diff(committed, current, { result_type = "indices" }) or {}
+  local head_first, head_last
+  for lnum = first, last do
+    local mapped = to_head(hunks, lnum)
+    if mapped then
+      head_first = head_first or mapped
+      head_last = math.max(head_last or mapped, mapped)
+    end
+  end
+  if not head_first then
+    return nil, nil, (first == last and "This line is" or "These lines are") .. " new since the last commit"
+  end
+  return head_first, head_last
+end
+
 ---@return string
 function M.foldtext() return ("  ··· %d lines ···"):format(vim.v.foldend - vim.v.foldstart + 1) end
 

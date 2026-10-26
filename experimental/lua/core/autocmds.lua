@@ -85,6 +85,11 @@ vim.api.nvim_create_autocmd("LspAttach", {
   end,
 })
 
+vim.api.nvim_create_autocmd("FileType", {
+  group = augroup "spell",
+  callback = function(args) require("core.spell").attach(args.buf) end,
+})
+
 local codelens_group = augroup "codelens"
 
 ---@param bufnr integer
@@ -100,27 +105,44 @@ end
 
 -- Only lenses on screen count: the rest are resolved when scrolled to, and a
 -- toggle wipes every lens in the buffer, which flickered on each progress end.
+---@param client_id integer
 ---@param bufnr integer
----@return boolean
-local function lens_unresolved(bufnr)
-  for _, entry in ipairs(vim.lsp.codelens.get { bufnr = bufnr }) do
-    if not entry.lens.command and row_on_screen(bufnr, entry.lens.range.start.line) then return true end
+---@return table<lsp.CodeLens, true>
+local function unresolved_lenses(client_id, bufnr)
+  local lenses = {}
+  for _, entry in ipairs(vim.lsp.codelens.get { bufnr = bufnr, client_id = client_id }) do
+    if not entry.lens.command and row_on_screen(bufnr, entry.lens.range.start.line) then lenses[entry.lens] = true end
   end
-  return false
+  return lenses
 end
 
 local LENS_RETRY_DELAY = 1500
 
+-- An edit replaces every lens with a fresh unresolved one, so "unresolved now"
+-- was true on nearly every check while typing and Sonar's per-edit progress end
+-- wiped roslyn's lenses each time; only the same lens still unresolved is stuck.
 ---@param client_id integer
-local function retry_unresolved_lenses(client_id)
+local function retry_stuck_lenses(client_id)
   local client = vim.lsp.get_client_by_id(client_id)
-  if not client or not require("core.codelens").is_enabled() then return end
+  if not client then return end
+  local before = {}
   for bufnr in pairs(client.attached_buffers) do
-    if vim.api.nvim_buf_is_loaded(bufnr) and lens_unresolved(bufnr) then
-      vim.lsp.codelens.enable(false, { bufnr = bufnr })
-      vim.lsp.codelens.enable(true, { bufnr = bufnr })
-    end
+    if vim.api.nvim_buf_is_loaded(bufnr) then before[bufnr] = unresolved_lenses(client_id, bufnr) end
   end
+  vim.defer_fn(function()
+    if not require("core.codelens").is_enabled() then return end
+    for bufnr, lenses in pairs(before) do
+      if vim.api.nvim_buf_is_loaded(bufnr) then
+        for lens in pairs(unresolved_lenses(client_id, bufnr)) do
+          if lenses[lens] then
+            vim.lsp.codelens.enable(false, { bufnr = bufnr })
+            vim.lsp.codelens.enable(true, { bufnr = bufnr })
+            break
+          end
+        end
+      end
+    end
+  end, LENS_RETRY_DELAY)
 end
 
 -- A `codeLens/resolve` answered -32801 ContentModified while the server is still
@@ -131,10 +153,7 @@ end
 vim.api.nvim_create_autocmd("LspProgress", {
   group = codelens_group,
   pattern = "end",
-  callback = function(args)
-    local client_id = args.data.client_id
-    vim.defer_fn(function() retry_unresolved_lenses(client_id) end, LENS_RETRY_DELAY)
-  end,
+  callback = function(args) retry_stuck_lenses(args.data.client_id) end,
 })
 
 local statusline_group = augroup "statusline"

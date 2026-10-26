@@ -16,6 +16,7 @@ require("core.codelens").setup()
 require "core.autocmds"
 require("core.utf8_guard").setup()
 require("core.statusline").setup()
+require("core.spell").setup()
 require("core.winbar").setup()
 require("core.rename").setup()
 require("core.session").setup()

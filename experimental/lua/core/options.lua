@@ -53,6 +53,10 @@ o.foldexpr = "v:lua.vim.treesitter.foldexpr()"
 o.foldtext = ""
 o.foldlevel = 99
 
+o.spelloptions = "camel"
+o.spellcapcheck = ""
+o.spellfile = vim.fn.stdpath "data" .. "/spell/en.utf-8.add"
+
 o.list = true
 o.listchars = "tab:> ,trail:·,nbsp:␣"
 

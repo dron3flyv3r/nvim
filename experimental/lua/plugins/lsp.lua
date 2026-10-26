@@ -16,6 +16,8 @@ local keys = {
 vim.api.nvim_create_autocmd("LspAttach", {
   group = group,
   callback = function(args)
+    local client = vim.lsp.get_client_by_id(args.data.client_id)
+    if not (client and client:supports_method "textDocument/definition") then return end
     for _, key in ipairs(keys) do
       local lhs, source, desc = key[1], key[2], key[3]
       vim.keymap.set("n", lhs, pick(source), { buffer = args.buf, desc = desc, nowait = true })

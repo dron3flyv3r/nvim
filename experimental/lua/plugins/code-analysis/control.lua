@@ -176,6 +176,9 @@ local PROGRESS = "$/progress"
 ---@type table<integer, true>
 local analysed = {}
 
+---@type table<integer, integer>
+local analysed_versions = {}
+
 ---@class plugins.analysis.Batch
 ---@field buffers integer[]
 ---@field timed_out? boolean
@@ -238,6 +241,7 @@ local function batch_buffers(message)
     if bufnr > 0 then
       buffers[#buffers + 1] = bufnr
       analysed[bufnr] = nil
+      analysed_versions[bufnr] = vim.lsp.util.buf_versions[bufnr]
     end
   end
   return buffers
@@ -302,6 +306,10 @@ local function track_analysis(client)
     if finishing[bufnr] then
       analysed[bufnr], finishing[bufnr] = true, nil
     end
+    -- Publishes carry no version, so one from an analysis the buffer has since
+    -- outrun put every issue on its old line and the window flickered per edit.
+    local version = analysed_versions[bufnr]
+    if version and version ~= vim.lsp.util.buf_versions[bufnr] then return end
     return vim.lsp.handlers[PUBLISH](err, result, ctx)
   end
   client.handlers[LOG] = function(err, result, ctx)
@@ -339,7 +347,7 @@ local function watch_clients()
   vim.api.nvim_create_autocmd("BufUnload", {
     group = group,
     callback = function(args)
-      analysed[args.buf], finishing[args.buf] = nil, nil
+      analysed[args.buf], finishing[args.buf], analysed_versions[args.buf] = nil, nil, nil
     end,
     desc = "Forget Sonar's analysis of an unloaded buffer",
   })

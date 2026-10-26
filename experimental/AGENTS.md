@@ -55,6 +55,7 @@ lua/
     winbar.lua        the per-window path and LSP symbol breadcrumb
     rename.lua        grn and :Rename, previewed as you type
     code_action.lua   resolves a code action into a previewable diff
+    spell.lua         spelling fixes for gra, as an in-process server
     workspace_edit.lua  applies an LSP WorkspaceEdit to lines, and diffs it
     session.lua       native project session persistence
     terminal.lua      an interactive shell in the shared bottom strip
@@ -201,6 +202,16 @@ and typing the closing character where one already sits **moves over it** rather
 than inserting a second — which is the whole point, since the alternative is
 reaching for an arrow key. `'` and `` ` `` are mapped to `false`: an apostrophe
 in prose and a C# char literal are the common cases, and neither wants a pair.
+
+**An opening character pairs only when the line says it should.** `pairs.lua`
+replaces `MiniPairs.open`, which `closeopen` also goes through, so one wrapper
+covers brackets and quotes. It inserts the character alone when the next one is
+a word character, a quote, `.`, `$` or `[`; when it is a quote and an odd number
+of unescaped ones already stand before the cursor, so `"some text|` then `"`
+closes the string; when it is a bracket and the rest of the line has an
+unmatched closer, which is what deleting a `(` leaves behind; and inside a
+treesitter string node, short of an interpolation. Counting is per line only.
+Command-line mode is passed straight through.
 
 It also claims `<BS>` and `<CR>` in insert mode, from its own `ensure_cr_bs` —
 backspace inside an empty pair deletes both halves, and `<CR>` between them puts
@@ -926,6 +937,13 @@ showing **only the traced lines**, with everything else folded; `+`/`-` widen
 and narrow by ten lines on both sides and `=` toggles the whole file. The
 context is per view, so it carries over as you walk to older commits.
 
+**The range is translated to HEAD first.** `git log -L` counts lines in the
+committed file, not the buffer, so with one uncommitted line above the cursor it
+traced the line below. `history.head_range` diffs `HEAD:<file>` against the
+buffer and shifts the range by what was added or removed above it. A line that
+exists only in the buffer has no history and says so; a selection that is partly
+new is narrowed to the lines that are committed.
+
 Diffview already folds a traced history down to the patch, but `hud.dress`
 sets `foldlevel` to 99 on every pane, which opened those folds and showed the
 whole file. `history.lua` lays its own manual folds instead, from the hunk
@@ -1187,6 +1205,17 @@ so `control.lua` turns those lines into `report`s on the analysis token through
 Neovim's own `$/progress` handler, and the statusline needs no special case. The
 steps are coarse: a two-file analysis moves once.
 
+**A publish from an analysis the buffer has outrun is dropped.** Sonar's
+`publishDiagnostics` carries no `version`, so Neovim applies whatever arrives,
+and an analysis started before the last edit placed every issue on its old line
+— measured at 8 of 8 on the wrong line while adding lines. Each publish moved
+every underline, sign and inline block below the edit and the next moved them
+back, which was the whole window blinking as you typed. `control.lua` records
+each buffer's version from the batch's `Starting analysis` log line and drops a
+publish when the buffer has changed since; every change starts another
+analysis, so the current issues land once typing pauses. A dropped publish
+still counts towards *analysed*, because the batch did finish.
+
 **What CI found is a list, not diagnostics.** Inspect → *Show the pull
 request's issues on SonarQube* finds the PR whose branch is the current git
 branch through `api/project_pull_requests/list`, and opens its open issues in a
@@ -1433,6 +1462,15 @@ in every visible C# window — the rows vanished and came back, which was the
 flicker. The delay lets a resolve that is merely in flight land first. A lens
 that failed and was then scrolled away is not retried; the next edit fixes it.
 
+**"Still unresolved" means the same lens, from the same server.** Checking
+whether *any* lens was unresolved 1.5 s after the `end` was not enough: every
+edit replaces a server's lenses with fresh unresolved ones, so while typing the
+answer was nearly always yes, and Sonar — which reports progress on every
+analysis and has no lenses — wiped roslyn's lenses each time, about every two
+seconds. So the `end` records which of *that client's* on-screen lens objects
+are unresolved, and the retry fires only if one of those same objects still is.
+A lens an edit replaced never matches; a resolve that was dropped always does.
+
 What the lenses are for is **counts**: references and implementations, the
 questions `grr`/`gri` answer but that a count answers without leaving the line.
 rust-analyzer's `lens.run`/`lens.debug` are therefore **off**, but only as a
@@ -1551,6 +1589,32 @@ rendered by snacks' diff previewer. An action that only runs a server command
 says so instead of showing an empty pane. Snippet markers (`$0`, `${1:name}`)
 are stripped from the previewed text, because rust-analyzer sends snippet
 edits and the preview should show what lands, not the template.
+
+## Spelling
+
+Native `'spell'`, English, switched on per window from a `core_spell` `FileType`
+autocommand for every file buffer — never a picker, a terminal or a
+`diffview://` side. In code, treesitter limits it to comments and strings, so
+identifiers are not flagged; `spelloptions=camel` checks the words inside
+`myVaraible` and `spellcapcheck` is empty because a comment starting lower case
+is not a mistake. `<Leader>us` is the per-window toggle. Words added go to
+`stdpath("data")/spell`, outside the repository.
+
+**Fixes are `gra`, from an in-process language server.** `core/spell.lua` is a
+`vim.lsp.start` client whose `cmd` is a Lua function rather than a process, and
+it answers only `textDocument/codeAction`: the spelling suggestions for the
+misspelled word under the cursor, and *Add to the dictionary*. Being a client is
+what merges them with the real server's actions in one menu, gives them
+`core.code_action`'s diff preview, and makes `gra` answer in a markdown file
+that has no server at all. It is one client shared by every buffer, hidden from
+the statusline with `core.statusline.hide_client`, and `plugins/lsp.lua` sets
+its picker keys only for a client that offers definitions, so a buffer with
+only this one keeps the native `gd`.
+
+The word is found with `[s` from one column past the cursor, never with
+`spellbadword()` on the word itself: that ignores the regions treesitter and
+syntax set and flagged code. `[s` honours them only with a UI attached, so a
+headless test finds nothing — test it under tmux.
 
 ## Find and replace
 

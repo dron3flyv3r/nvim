@@ -24,6 +24,75 @@ local function brace_own_line()
   return true
 end
 
+local BEFORE_WORD = "[%w%%%'%[%\"%.%`%$]"
+
+---@param before string
+---@param quote string
+---@return boolean
+local function closes_open_quote(before, quote)
+  local count = 0
+  for i = 1, #before do
+    if before:sub(i, i) == quote and before:sub(i - 1, i - 1) ~= "\\" then count = count + 1 end
+  end
+  return count % 2 == 1
+end
+
+---@param after string
+---@param open string
+---@param close string
+---@return boolean
+local function has_unmatched_close(after, open, close)
+  local depth = 0
+  for char in after:gmatch "." do
+    if char == open then
+      depth = depth + 1
+    elseif char == close then
+      if depth == 0 then return true end
+      depth = depth - 1
+    end
+  end
+  return false
+end
+
+---@param row integer 0-based
+---@param col integer 0-based
+---@return boolean
+local function inside_string(row, col)
+  local ok, node = pcall(vim.treesitter.get_node, { pos = { row, col }, ignore_injections = false })
+  while ok and node do
+    local kind = node:type()
+    if kind:find "interpolation" or kind:find "substitution" then return false end
+    if kind:find "string" then
+      local sr, sc, er, ec = node:range()
+      return (sr < row or sr == row and sc < col) and (row < er or row == er and col < ec)
+    end
+    node = node:parent()
+  end
+  return false
+end
+
+---@param pair string
+---@return boolean
+local function should_pair(pair)
+  local open, close = pair:sub(1, 1), pair:sub(2, 2)
+  local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+  local line = vim.api.nvim_get_current_line()
+  local before, after = line:sub(1, col), line:sub(col + 1)
+  if after:sub(1, 1):find(BEFORE_WORD) then return false end
+  if open == close and closes_open_quote(before, open) then return false end
+  if open ~= close and has_unmatched_close(after, open, close) then return false end
+  return not inside_string(row - 1, col)
+end
+
+local function look_before_pairing()
+  local mini = require "mini.pairs"
+  local open = mini.open
+  mini.open = function(pair, neigh_pattern)
+    if vim.fn.mode() == "c" or should_pair(pair) then return open(pair, neigh_pattern) end
+    return pair:sub(1, 1)
+  end
+end
+
 ---@type LazySpec
 return {
   "echasnovski/mini.pairs",
@@ -51,6 +120,7 @@ return {
     local filetypes = opts.brace_own_line
     opts.brace_own_line = nil
     require("mini.pairs").setup(opts)
+    look_before_pairing()
     vim.keymap.set("i", "<CR>", function()
       if vim.b.minipairs_disable or not filetypes[vim.bo.filetype] or not brace_own_line() then
         vim.api.nvim_feedkeys(require("mini.pairs").cr(), "in", false)

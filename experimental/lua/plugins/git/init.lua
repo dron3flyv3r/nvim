@@ -42,6 +42,9 @@ local function file_history(first, last)
   if file == "" or vim.bo.buftype ~= "" then
     return say "No file in this window -- <Leader>gH is the history of the repository"
   end
+  local head_first, head_last, reason = require("plugins.git.history").head_range(0, first, last)
+  if not head_first then return say(reason) end
+  first, last = head_first, head_last --[[@as integer]]
   vim.cmd(("DiffviewFileHistory -L%d,%d:%s"):format(first, last, vim.fn.fnameescape(file)))
 end
 
