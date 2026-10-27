@@ -92,6 +92,67 @@ local function initialization_complete(_, __, ctx)
   end
 end
 
+---@param client vim.lsp.Client
+---@param action lsp.CodeAction
+---@param ctx lsp.HandlerContext
+local function apply(client, action, ctx)
+  if action.edit then vim.lsp.util.apply_workspace_edit(action.edit, client.offset_encoding) end
+  if action.command then client:exec_cmd(action.command, ctx) end
+end
+
+-- Roslyn titles a nested action by its last step alone, so "None" or "true"
+-- means nothing without the path that leads to it.
+---@param action lsp.CodeAction
+---@return string
+local function label(action)
+  local path = action.data and action.data.CodeActionPath
+  if type(path) ~= "table" or #path < 3 then return action.title end
+  return table.concat(vim.list_slice(path, 2, #path - 1), " › ") .. " › " .. action.title
+end
+
+---@param command lsp.Command
+---@param ctx lsp.HandlerContext
+local function nested_code_action(command, ctx)
+  local client = vim.lsp.get_client_by_id(ctx.client_id)
+  local data = command.arguments and command.arguments[1]
+  if not client or not data then return end
+
+  local choices = vim.tbl_map(
+    function(action) return { action = vim.tbl_extend("force", action, { title = label(action) }), ctx = ctx } end,
+    data.NestedCodeActions or {}
+  )
+  vim.ui.select(choices, {
+    prompt = command.title,
+    kind = "codeaction",
+    format_item = function(choice) return choice.action.title end,
+  }, function(choice)
+    if not choice then return end
+    local action = choice.action
+    if action.edit or action.command then return apply(client, action, ctx) end
+    client:request("codeAction/resolve", action, function(err, resolved)
+      if err then return vim.notify(err.message, vim.log.levels.ERROR, { title = "roslyn_ls" }) end
+      apply(client, resolved, ctx)
+    end, ctx.bufnr)
+  end)
+end
+
+---@param command lsp.Command
+---@param ctx lsp.HandlerContext
+local function fix_all_code_action(command, ctx)
+  local client = vim.lsp.get_client_by_id(ctx.client_id)
+  local data = command.arguments and command.arguments[1]
+  if not client or not data then return end
+
+  vim.ui.select(data.FixAllFlavors or {}, { prompt = "Fix all occurrences in" }, function(scope)
+    if not scope then return end
+    local params = { title = command.title, data = data, scope = scope }
+    client:request("codeAction/resolveFixAll", params, function(err, resolved)
+      if err then return vim.notify(err.message, vim.log.levels.ERROR, { title = "roslyn_ls" }) end
+      if resolved and resolved.edit then vim.lsp.util.apply_workspace_edit(resolved.edit, client.offset_encoding) end
+    end, ctx.bufnr)
+  end)
+end
+
 ---@return table<string, vim.lsp.Config>|nil
 function M.config()
   local exe = M.executable()
@@ -112,6 +173,10 @@ function M.config()
       root_dir = root_dir,
       on_init = on_init,
       handlers = { ["workspace/projectInitializationComplete"] = initialization_complete },
+      commands = {
+        ["roslyn.client.nestedCodeAction"] = nested_code_action,
+        ["roslyn.client.fixAllCodeAction"] = fix_all_code_action,
+      },
       settings = {
         ["csharp|completion"] = {
           dotnet_show_completion_items_from_unimported_namespaces = true,

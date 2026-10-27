@@ -2078,6 +2078,16 @@ tells you. `workspace/projectInitializationComplete` re-requests diagnostics for
 attached buffers, because requests made while the workspace was still loading
 come back empty and nothing retries them.
 
+**Grouped code actions are answered by the client.** Roslyn sends *Suppress or
+configure issues* and every *Fix all* as a command, `roslyn.client.nestedCodeAction`
+and `roslyn.client.fixAllCodeAction`, which VS Code's extension implements and
+Neovim does not. `roslyn.lua` declares both in the client's `commands` table: the
+nested list opens as a second `kind = "codeaction"` select, so it gets the same
+diff preview as `gra`, and a fix-all asks for its scope and then
+`codeAction/resolveFixAll`. The arguments arrive PascalCase (`NestedCodeActions`,
+`FixAllFlavors`), and a nested action is titled by its last step alone — `None`,
+`true` — so the list shows its `CodeActionPath` instead.
+
 The `dotnet` build actions are **visible but unavailable** inside a Unity
 project, explaining that Unity owns the build. They are not hidden: that is the
 `available`-returns-a-string rule doing the teaching.
