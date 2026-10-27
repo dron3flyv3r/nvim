@@ -5,16 +5,18 @@ function M.check()
   health.start "assistant"
 
   if pcall(require, "claudecode") then
-    health.ok "claudecode.nvim: the agent terminal, @ mentions and diff accept/deny"
-    health.info "the CLI, the websocket server and the terminal provider are :checkhealth claudecode"
+    health.ok "claudecode.nvim: the server Claude instances share, for the selection and diff accept/deny"
+    health.info "the websocket server is :checkhealth claudecode; the terminals are plugins.assistant.agents"
   else
     health.error "claudecode.nvim is not installed -- <Leader>a does nothing"
   end
 
-  if pcall(require, "snacks") then
-    health.ok "snacks.nvim: the terminal the agent runs in"
-  else
-    health.error "snacks.nvim is not installed -- terminal.provider is set to `snacks`"
+  for _, agent in ipairs(require("plugins.assistant.agents").AGENTS) do
+    if vim.fn.executable(agent.cmd[1]) == 1 then
+      health.ok(("%s: %s"):format(agent.name, vim.fn.exepath(agent.cmd[1])))
+    else
+      health.info(("%s: %s is not on PATH, so <Leader>aa does not offer it"):format(agent.name, agent.cmd[1]))
+    end
   end
 
   -- The one reference between this layer and the git one, and a `pcall`, so it

@@ -136,6 +136,9 @@ function M.delete()
   return true
 end
 
+---@return string
+function M.root() return root end
+
 function M.mark_stdin() read_stdin = true end
 
 function M.disable()

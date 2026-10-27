@@ -20,6 +20,7 @@ require("core.spell").setup()
 require("core.winbar").setup()
 require("core.rename").setup()
 require("core.session").setup()
+require("core.workspace").setup()
 require("core.terminal").setup()
 require("core.macros").setup()
 
@@ -55,6 +56,7 @@ require("lazy").setup {
 
 require("core.actions").setup()
 require("core.task").setup()
+require("core.project_actions").setup()
 require("core.cheatsheet").setup()
 lang.setup()
 require "core.keymaps"

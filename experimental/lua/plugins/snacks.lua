@@ -1,3 +1,28 @@
+-- snacks' explorer walks one root, `ctx.filter.cwd`, so a workspace runs its
+-- finder once per folder and concatenates the trees.
+---@param opts snacks.picker.explorer.Config
+---@param ctx snacks.picker.finder.ctx
+local function workspace_explorer(opts, ctx)
+  local source = require "snacks.picker.source.explorer"
+  local folders = require("core.workspace").dirs()
+  if not folders then return source.explorer(opts, ctx) end
+  local finders = vim.tbl_map(function(folder)
+    local filter = setmetatable({ cwd = folder }, { __index = ctx.filter })
+    return source.explorer(opts, setmetatable({ filter = filter }, { __index = ctx }))
+  end, folders)
+  return function(cb)
+    for _, finder in ipairs(finders) do
+      finder(cb)
+    end
+  end
+end
+
+---@return snacks.picker.Config
+local function workspace_scope()
+  local dirs = require("core.workspace").dirs()
+  return dirs and { dirs = dirs } or {}
+end
+
 ---@param ctx snacks.picker.preview.ctx
 local function code_action_preview(ctx)
   local item, picker = ctx.item, ctx.picker
@@ -98,6 +123,7 @@ return {
     picker = {
       enabled = true,
       sources = {
+        explorer = { finder = workspace_explorer },
         select = {
           focus = "list",
           -- `<Leader>r` asks for this kind. Its menu is long, its labels are
@@ -189,7 +215,7 @@ return {
   keys = {
     { "<Leader><Space>", function() Snacks.picker.smart() end, desc = "Smart find files" },
     { "<Leader>,", function() Snacks.picker.buffers() end, desc = "Buffers" },
-    { "<Leader>/", function() Snacks.picker.grep() end, desc = "Grep" },
+    { "<Leader>/", function() Snacks.picker.grep(workspace_scope()) end, desc = "Grep" },
     { "<Leader>:", function() Snacks.picker.command_history() end, desc = "Command history" },
     { "<Leader>e", function() Snacks.explorer() end, desc = "File explorer" },
     { "<Leader>.", function() Snacks.scratch() end, desc = "Toggle scratch buffer" },
@@ -197,14 +223,19 @@ return {
 
     { "<Leader>fb", function() Snacks.picker.buffers() end, desc = "Buffers" },
     { "<Leader>fc", function() Snacks.picker.files { cwd = vim.fn.stdpath "config" } end, desc = "Find config file" },
-    { "<Leader>ff", function() Snacks.picker.files() end, desc = "Find files" },
+    { "<Leader>ff", function() Snacks.picker.files(workspace_scope()) end, desc = "Find files" },
     { "<Leader>fp", function() Snacks.picker.projects() end, desc = "Projects" },
     { "<Leader>fr", function() Snacks.picker.recent() end, desc = "Recent" },
 
     { "<Leader>sb", function() Snacks.picker.lines() end, desc = "Buffer lines" },
     { "<Leader>sB", function() Snacks.picker.grep_buffers() end, desc = "Grep open buffers" },
-    { "<Leader>sg", function() Snacks.picker.grep() end, desc = "Grep" },
-    { "<Leader>sw", function() Snacks.picker.grep_word() end, desc = "Selection or word", mode = { "n", "x" } },
+    { "<Leader>sg", function() Snacks.picker.grep(workspace_scope()) end, desc = "Grep" },
+    {
+      "<Leader>sw",
+      function() Snacks.picker.grep_word(workspace_scope()) end,
+      desc = "Selection or word",
+      mode = { "n", "x" },
+    },
     { '<Leader>s"', function() Snacks.picker.registers() end, desc = "Registers" },
     { "<Leader>sa", function() Snacks.picker.autocmds() end, desc = "Autocmds" },
     { "<Leader>sc", function() Snacks.picker.command_history() end, desc = "Command history" },

@@ -28,12 +28,14 @@ local function warn_about_review()
   )
 end
 
----@param command string
+---@param name string
+---@param ... any
 ---@return fun()
-local function guarded(command)
+local function guarded(name, ...)
+  local args = { ... }
   return function()
     warn_about_review()
-    vim.cmd(command)
+    require("plugins.assistant.agents")[name](unpack(args))
   end
 end
 
@@ -58,20 +60,18 @@ return {
     "ClaudeCodeTreeAdd",
   },
   keys = {
-    { "<Leader>aa", guarded "ClaudeCode", desc = "Toggle Claude" },
-    { "<Leader>af", guarded "ClaudeCodeFocus", desc = "Focus Claude" },
-    { "<Leader>ac", guarded "ClaudeCode --continue", desc = "Continue the last Claude session" },
-    { "<Leader>ar", guarded "ClaudeCode --resume", desc = "Resume a Claude session" },
-    { "<Leader>ab", guarded "ClaudeCodeAdd %", desc = "Add this buffer to Claude" },
-    -- `ClaudeCodeSend` dispatches on filetype itself, so one key covers the
-    -- picker and the selection both. The old config bound a second, needless one.
-    { "<Leader>as", guarded "ClaudeCodeSend", mode = { "n", "x" }, desc = "Send the selection, or the file here" },
+    { "<Leader>aa", guarded "pick", desc = "Agents: switch to one, or start one" },
+    { "<Leader>af", guarded "focus", desc = "Focus the current agent, or hide it" },
+    { "<Leader>ac", guarded("start_like_current", "continue"), desc = "Continue the last agent session" },
+    { "<Leader>ar", guarded("start_like_current", "resume"), desc = "Resume an agent session" },
+    { "<Leader>ab", guarded "add_buffer", desc = "Add this buffer to the current agent" },
+    { "<Leader>as", guarded "send", mode = { "n", "x" }, desc = "Send the selection, or the files here" },
     { "<Leader>ay", "<Cmd>ClaudeCodeDiffAccept<CR>", desc = "Accept Claude's diff" },
     { "<Leader>ad", "<Cmd>ClaudeCodeDiffDeny<CR>", desc = "Reject Claude's diff" },
   },
   opts = {
-    -- Stated rather than left to `auto`, which probes with `require`.
-    terminal = { provider = "snacks", split_side = "right", split_width_percentage = 0.30 },
+    -- The terminals are `agents.lua`'s; claudecode is only the server they share.
+    terminal = { provider = "none" },
     diff_opts = { layout = "vertical", open_in_new_tab = false },
   },
 }

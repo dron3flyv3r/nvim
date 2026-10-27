@@ -51,6 +51,7 @@ lua/
     keymaps.lua       keymaps that do not belong to a plugin
     autocmds.lua      autocommands
     actions.lua       the <Leader>r provider/action registry
+    project_actions/  a project's own actions from .nvim/actions.json, and its server
     statusline.lua    the global statusline and its component registry
     winbar.lua        the per-window path and LSP symbol breadcrumb
     rename.lua        grn and :Rename, previewed as you type
@@ -58,6 +59,7 @@ lua/
     spell.lua         spelling fixes for gra, as an in-process server
     workspace_edit.lua  applies an LSP WorkspaceEdit to lines, and diffs it
     session.lua       native project session persistence
+    workspace.lua     extra folders beside the project, kept with its session
     terminal.lua      an interactive shell in the shared bottom strip
     macros.lua        the recording indicator and the macro list
     replace.lua       find and replace in a file or the project, previewed
@@ -361,6 +363,7 @@ The registry in `lua/core/actions.lua` owns two types:
 ---@class core.Action
 ---@field id string           unique within the provider
 ---@field label string        imperative, sentence case: "Run the test under the cursor"
+---@field detail? string      shown after the label, and searched with it
 ---@field category? string    groups within a provider: Build, Test, Debug, Inspect
 ---@field priority? integer
 ---@field available? boolean|string|fun(ctx): boolean|string
@@ -404,6 +407,54 @@ Three commands mirror the keys: `:Actions`, `:ActionsRepeat`, `:ActionsStatus`.
 The last one explains what was detected and why any unavailable action is
 unavailable, and is the first thing to reach for when `<Leader>r` is emptier
 than expected.
+
+### A project's own actions
+
+`.nvim/actions.json`, found by walking up from the buffer, adds the actions that
+belong to one checkout rather than to a language — a script that syncs the tree
+to a Mac and builds there. `core/project_actions/` is the `Project` provider, at
+priority 100 so these sort first under their heading. In a git repository with
+no file, the provider offers Maintenance → *Create this project's actions file*,
+which writes a template and adds `/<prefix>.nvim/` to `info/exclude`: the file is
+**the user's, never the repository's**.
+
+In a workspace the menu also lists every other folder's file, each action
+labelled with its folder's name, so the iOS app's *Sync and build* is one
+`<Leader>r` away from a front-end buffer. Each one still runs in its own
+folder.
+
+```json
+{ "actions": [ { "label": "Sync to the Mac and build", "category": "Build",
+                 "description": "rsync, then xcodebuild", "cmd": ["./scripts/sync-build.sh"] } ] }
+```
+
+Keys are `label`, `category`, `cmd` (required) and `description`, `cwd`,
+`env`, `errorformat`, `queue`. A `cmd` list is argv; a string is a shell line and
+runs through `sh -c` — the argv rule is about language modules quoting paths, and
+a hand-written line with `&&` and `ssh` in it is honestly a shell line. Every run
+goes through `core.task` after `core.autosave.flush()`, because a script that
+copies the tree elsewhere reads the disk, not the buffers. `available` and `run`
+re-read the file by label, so `<Leader>R` runs what the file says now.
+
+**It is trusted the way exrc is.** A cloned repository can commit a
+`.nvim/actions.json`, and a label says nothing about the command behind it, so an
+untrusted or changed file shows one unavailable entry saying so. Writing the file
+from this editor trusts it (`vim.secure.trust` on `BufWritePost`); a change made
+outside needs `:trust`. `vim.secure.read` cannot be used to ask: it prompts, and
+for a file it offers no allow, so the trust database is read directly in its own
+`<sha256> <path>` format.
+
+**The file has a server.** `server.lua` is an in-process client on the
+`core/spell.lua` pattern, attached by `core_project_actions` to any
+`*/.nvim/actions.json`. It publishes syntax errors, unknown keys, missing
+required keys, wrong types, categories outside the vocabulary, duplicate labels,
+a missing or non-executable program, a missing `cwd`, and a hint on a Run action
+that still queues; plus a warning when the file is not hidden from git, whose
+`gra` fix adds the exclude, and a note when it is untrusted. Completion offers the
+keys not yet set in the object, as snippets, and the categories; hover documents
+each key. 0.13 ships no JSON parser, so `json.lua` is a small one that keeps byte
+offsets; completion and hover scan the text up to the cursor instead of parsing
+it, because the text being typed is usually not valid JSON yet.
 
 ## Autosave
 
@@ -528,6 +579,34 @@ showing; a window still on one belongs to something live, so the exit records it
 and the next restore is what throws it away. This is core's business rather than
 the git layer's — the rule is about URIs, not about Diffview, and `core` may not
 name a plugin.
+
+**A workspace is the project plus folders you add, and it is kept with the
+session.** `core/workspace.lua` stores the added folders in
+`stdpath("state")/workspaces/`, keyed by the session's root, so restoring a
+project restores its workspace and there are no workspace names to manage. A
+folder is added at its git root: `:WorkspaceAdd [dir]`, or with no argument a
+picker over every repository `fd` finds under home (plus *Type a path…*).
+`<Leader>fw` and `:Workspace` list the folders, jump to one, add or remove.
+
+**The working directory follows the buffer** — `core_workspace` `cd`s on
+`BufEnter` into the workspace folder that holds the file, but only while there
+are added folders. That one rule is what makes scattered repositories cheap:
+everything here that reads the cwd, `ctx.cwd` and `.nvim/actions.json` for
+`<Leader>r`, Neogit, grapple, a Python venv, a new agent, then means the repository
+you are in, unchanged. The session's root is fixed at startup, so moving the cwd
+never re-keys the session. `<Leader>ff`, `<Leader>sg`, `<Leader>/` and
+`<Leader>sw` pass every folder as `dirs`, and the statusline shows the current
+folder's name. `<Leader>sp` replace still sees one folder.
+
+**The explorer shows every folder as its own tree.** snacks' explorer walks one
+root, `ctx.filter.cwd`, so `plugins/snacks.lua` replaces the explorer source's
+finder with one that runs snacks' own finder once per folder, each with a
+`ctx` whose `filter.cwd` is that folder, and concatenates the results. Search
+inside the explorer works the same way, so it searches every folder. Each folder
+keeps its own git status. Everything else is still keyed by `picker:cwd()`,
+which the explorer moves on `DirChanged` and the workspace moves with the
+buffer: following the file, the file watcher and `]g` act on the folder you are
+in, and another folder's tree refreshes when you write a file in it or enter it.
 
 **A single directory argument means the project, not a directory to browse.**
 `nv .` and `nv ~/code/thing` `cd` there, drop the argument and restore that
@@ -1014,25 +1093,40 @@ buffer never fires, so every old line lands `(difference × depth)` columns off.
 
 ## The assistant
 
-`lua/plugins/assistant/` is Claude Code, on the `<Leader>a` prefix the keys table
-has always reserved. It is `coder/claudecode.nvim` and nothing else: the plugin
-speaks Anthropic's IDE websocket protocol, so the `claude` CLI running in a
-snacks terminal knows which buffer and selection you are on, `@`-mentions resolve
-to real paths, and its edits arrive as a diff with accept and deny. There is no
-Node runtime, no bridge process and no stored token — it rides the CLI's own
-login. A directory rather than a file for the same reason as `plugins/debug/` and
-`plugins/git/`: lazy's `lsmod` is non-recursive, so `health.lua` beside it is
-never mistaken for a spec.
+`lua/plugins/assistant/` is the coding agents, on the `<Leader>a` prefix the keys
+table has always reserved: Claude Code and Codex, whichever of `claude` and
+`codex` is on `PATH`. `agents.lua` owns their terminals; `coder/claudecode.nvim`
+is kept only as the IDE websocket server, so a Claude knows which buffer and
+selection you are on and its edits arrive as a diff with accept and deny. Its
+`terminal.provider` is `none`: claudecode manages one terminal, and this layer
+needs several. A Claude is started with the server's port in
+`CLAUDE_CODE_SSE_PORT` and loopback in `no_proxy`, the same environment
+claudecode would give its own terminal, so every Claude instance shares the one
+server. Codex has no IDE protocol and gets text only. A directory rather than a
+file for the same reason as `plugins/debug/` and `plugins/git/`: lazy's `lsmod`
+is non-recursive, so `agents.lua` and `health.lua` are never mistaken for specs.
 
-**Eight keys, and two of them are the same key.** `<Leader>as` sends the visual
-selection in an ordinary buffer and adds the files under the cursor in a
-`snacks_picker_list` one, because `ClaudeCodeSend` dispatches on filetype itself.
-The old config bound a second, buffer-local key from a `FileType` autocommand for
-that; it is not needed, and a plugin spec writing global keymaps into other
-people's buffers is what this rewrite removes. `<Leader>am` (select model) and
-`<Leader>aS` (connection status) were dropped: `/model` is one word typed in the
-terminal that is already in front of you, and the status is
-`:checkhealth claudecode`.
+**Several instances, one panel.** Each agent is a terminal buffer named
+`agent://<id>/<n>`; one right split per tab shows the *current* one, found again
+by its `assistant_panel` window variable. `<Leader>aa` lists the open instances,
+newest first, then New, Continue and Resume for each installed agent. `<Leader>af`
+shows and focuses the current instance, and hides the panel when it is already
+focused. Entering an agent's buffer makes it current. An instance that exits 0 is
+forgotten; one that fails stays listed with its exit code, so the error can be
+read, until the panel switches away from it.
+
+**`<Leader>ab` and `<Leader>as` type into the current instance, never all of
+them.** claudecode's `at_mentioned` is a broadcast to every connected client, so
+with two Claudes open it would reach both. The mention is a bracketed paste —
+`@path`, and `#L10-20` for a Claude selection — relative to the instance's cwd,
+so it does not open the agent's own `@` file search. `<Leader>as` in a
+`snacks_picker_list` sends the picker's selection.
+
+**A workspace reaches the agent as `--add-dir`.** An instance starts in the
+current directory, which the workspace follows, and every other workspace folder
+is passed as `--add-dir <folder>` — both CLIs spell it the same, and Codex's
+`resume` subcommand accepts it too, so the flags go last. Folders added after an
+instance starts reach the next one only.
 
 **Claude writes to disk; a review holds its buffers in memory.** This is the
 hazard the Git section warns about under a different name — *"whoever adds a
@@ -1058,10 +1152,8 @@ held buffers, a diff and a `readonly` file are still left alone and
 
 **The terminal is a right split, not `core.pane`.** The strip is last-writer-wins
 by design, so a chat you keep open all day would be evicted by every failing
-build. A side panel claims nothing `core.pane` owns. `provider` is stated as
-`snacks` rather than left at `auto`, which probes with `require` and would pick
-up whatever else happens to be installed — the same rule as Neogit's
-`integrations`.
+build. A side panel claims nothing `core.pane` owns, and `mksession` leaves
+terminal windows out of the layout, so the panel never comes back empty.
 
 Deliberately not here yet: the **explain and discuss** half — a read-only
 `claude -p` into a float, with `--restricted` on the deep variant so it can chase
@@ -1667,7 +1759,7 @@ It is `vim.ui.select` rather than a picker of its own, which snacks owns, so
 
 ## Keys
 
-Prefixes in use: `<Leader>a` assistants, `<Leader>f` find, `<Leader>s` search (and `sf`/`sp` replace), `<Leader>u` toggles,
+Prefixes in use: `<Leader>a` agents, `<Leader>f` find, `<Leader>s` search (and `sf`/`sp` replace), `<Leader>u` toggles,
 `<Leader>w` write, `<Leader>b` buffers, `<Leader>r`/`<Leader>R` actions,
 `<Leader>d` the debugger, `<Leader>t` the terminal, `<Leader>q` the macro list,
 `<Leader>z` zen.

@@ -3,6 +3,7 @@ local map = vim.keymap.set
 
 map("n", "<Leader>r", actions.pick, { desc = "Actions available here" })
 map("n", "<Leader>R", actions.repeat_last, { desc = "Repeat the last action" })
+map("n", "<Leader>fw", function() require("core.workspace").pick() end, { desc = "Workspace folders" })
 
 local motions = {
   ["æ"] = { "[", "`[` prefix (Danish)", true },

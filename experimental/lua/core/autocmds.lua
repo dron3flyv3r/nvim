@@ -90,6 +90,23 @@ vim.api.nvim_create_autocmd("FileType", {
   callback = function(args) require("core.spell").attach(args.buf) end,
 })
 
+vim.api.nvim_create_autocmd("BufEnter", {
+  group = augroup "workspace",
+  callback = function(args) require("core.workspace").follow(args.buf) end,
+})
+
+local project_actions_group = augroup "project_actions"
+vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile" }, {
+  group = project_actions_group,
+  pattern = "*/.nvim/actions.json",
+  callback = function(args) require("core.project_actions").attach(args.buf) end,
+})
+vim.api.nvim_create_autocmd("BufWritePost", {
+  group = project_actions_group,
+  pattern = "*/.nvim/actions.json",
+  callback = function(args) require("core.project_actions").on_write(args.buf) end,
+})
+
 local codelens_group = augroup "codelens"
 
 ---@param bufnr integer

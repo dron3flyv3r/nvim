@@ -19,6 +19,7 @@ local M = {}
 ---@class core.Action
 ---@field id string
 ---@field label string
+---@field detail? string
 ---@field category? core.ActionCategory
 ---@field priority? integer
 ---@field available? boolean|string|fun(ctx: core.Context): boolean|string
@@ -189,6 +190,7 @@ end
 local function format_item(action, ctx)
   local ok, reason = availability(action.available, ctx)
   local line = ("%-13s %s"):format(M.CATEGORIES[action._rank], action.label)
+  if action.detail then line = line .. "  — " .. action.detail end
   if ok then return line end
   return line .. ("  [%s]"):format(reason or "unavailable")
 end
