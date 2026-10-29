@@ -278,9 +278,21 @@ vim.api.nvim_create_autocmd({ "RecordingEnter", "RecordingLeave" }, {
   end,
 })
 
+vim.api.nvim_create_autocmd("WinNew", {
+  group = augroup "pane",
+  callback = function() require("core.pane").on_new_window() end,
+})
+
+local terminal_group = augroup "terminal"
 vim.api.nvim_create_autocmd("TermClose", {
-  group = augroup "terminal",
+  group = terminal_group,
   callback = function(args)
     if vim.b[args.buf].core_terminal then require("core.terminal").on_close(args.buf) end
+  end,
+})
+vim.api.nvim_create_autocmd("BufEnter", {
+  group = terminal_group,
+  callback = function(args)
+    if vim.b[args.buf].core_terminal then require("core.terminal").on_enter(args.buf) end
   end,
 })

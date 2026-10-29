@@ -87,11 +87,17 @@ local function enter(folder)
   vim.cmd.cd(vim.fn.fnameescape(folder))
 end
 
+---@type integer?
+local followed
+
+-- Only a different buffer moves the cwd: returning from a picker or the agent
+-- panel to the same file would otherwise undo a folder chosen on <Leader>fw.
 ---@param bufnr integer
 function M.follow(bufnr)
-  if vim.bo[bufnr].buftype ~= "" or not M.active() then return end
+  if vim.bo[bufnr].buftype ~= "" or not M.active() or bufnr == followed then return end
   local name = vim.api.nvim_buf_get_name(bufnr)
   if name == "" or name:find("://", 1, true) then return end
+  followed = bufnr
   local folder = M.folder_of(name)
   if folder then enter(folder) end
 end
@@ -199,8 +205,9 @@ function M.pick()
     if choice == ADD then return M.pick_add() end
     if choice == REMOVE then return M.pick_remove() end
     if not choice then return end
+    followed = vim.api.nvim_get_current_buf()
     vim.cmd.cd(vim.fn.fnameescape(choice))
-    vim.cmd.edit(vim.fn.fnameescape(choice))
+    notify("Working directory: " .. vim.fn.fnamemodify(choice, ":~"))
   end)
 end
 
@@ -208,11 +215,21 @@ end
 ---@return string?
 local function component(ctx)
   if not M.active() then return nil end
-  local folder = M.folder_of(vim.api.nvim_buf_get_name(ctx.bufnr)) or normalize(vim.fn.getcwd())
-  return "󰉋 " .. vim.fs.basename(folder)
+  local cwd = normalize(vim.fn.getcwd())
+  return "󰉋 " .. vim.fs.basename(M.folder_of(cwd) or cwd)
+end
+
+-- The session records the cwd, but the restored buffer's BufEnter follows it
+-- straight back to the file's folder, losing a folder chosen on <Leader>fw.
+---@param cwd string
+local function restore_cwd(cwd)
+  if type(cwd) ~= "string" or vim.fn.isdirectory(cwd) ~= 1 then return end
+  followed = vim.api.nvim_get_current_buf()
+  vim.cmd.cd(vim.fn.fnameescape(cwd))
 end
 
 function M.setup()
+  require("core.session").register("cwd", { save = function() return normalize(vim.fn.getcwd()) end, restore = restore_cwd })
   require("core.statusline").register("workspace", { side = "left", order = 5, min_width = 60, text = component })
   vim.api.nvim_create_user_command("Workspace", M.pick, { desc = "Jump to, add or remove a workspace folder" })
   vim.api.nvim_create_user_command("WorkspaceAdd", function(args)

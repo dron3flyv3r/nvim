@@ -540,11 +540,20 @@ require("core.pane").show({
 ```
 
 `h` hides the strip from any occupant, `q` runs that occupant's `close`, and
-`<Tab>`/`<S-Tab>` cycle between them. Occupants today are `terminal`, `task`,
+`<Tab>`/`<S-Tab>` cycle between them. Occupants today are each `terminal <n>`, `task`,
 and the debugger's `repl` and `program`. This is why dap-ui is configured with a left panel and no
 bottom dock: a second full-width strip would compete with this one, and during a
 session you still rebuild — the contract that a failing task opens the pane has
 to keep holding while the debugger is up.
+
+**The strip can be split.** `<C-w>v` or `<C-w>s` in a strip window makes
+another strip window: `WinNew` marks it `core_pane` (`w:` variables are not
+copied by a split), and an occupant that sets `split` decides what it shows,
+so splitting a shell starts a new shell beside it rather than showing the same
+one twice. `h` closes every strip window, `<Tab>` skips occupants already on
+screen in another one, and closing the occupant of one of several windows
+closes that window. An occupant with a `title` gets a winbar, which is how two
+shells side by side are told apart.
 
 Claiming the slot is the *last* writer's privilege, which is deliberate: a
 failing build is what you want to be looking at the moment it fails.
@@ -590,7 +599,9 @@ picker over every repository `fd` finds under home (plus *Type a path…*).
 
 **The working directory follows the buffer** — `core_workspace` `cd`s on
 `BufEnter` into the workspace folder that holds the file, but only while there
-are added folders. That one rule is what makes scattered repositories cheap:
+are added folders, and only when the buffer differs from the last one it
+followed — so a folder chosen on `<Leader>fw`, which just `cd`s, holds until a
+file in another folder is entered rather than until the next picker closes. That one rule is what makes scattered repositories cheap:
 everything here that reads the cwd, `ctx.cwd` and `.nvim/actions.json` for
 `<Leader>r`, Neogit, grapple, a Python venv, a new agent, then means the repository
 you are in, unchanged. The session's root is fixed at startup, so moving the cwd
@@ -628,10 +639,27 @@ suppresses the save for that exit.
 save on exit — for an editor that is a satellite of another one rather than the
 project's own; the user layer calls it for a detach side instance.
 
-`<Leader>t` and `:Terminal` toggle one interactive shell in `core.pane`. It is a
-normal pane occupant: `h` hides it without stopping the shell, `q` stops it, and
-`<Esc><Esc>` leaves terminal mode. Native `:terminal` remains available when an
-ordinary unmanaged terminal window is wanted.
+`<Leader>t` and `:Terminal` toggle an interactive shell in `core.pane`;
+`<Leader>T` and `:TerminalNew` start another. Each shell is its own occupant,
+`terminal 1`, `terminal 2` and so on, so `<Tab>`/`<S-Tab>` in the strip cycle
+through them beside the tasks. `<Leader>t` brings back the shell entered last
+and starts the first one when none is running. `h` hides the strip without
+stopping anything, `q` stops the shell on screen, and `<Esc><Esc>` leaves
+terminal mode. Numbering restarts once every shell is closed. Each shell's
+winbar is `Terminal <n>  ·  <its cwd>`, read live from `/proc/<pid>/cwd`. Hiding
+the strip with `<Leader>t` remembers which shells were side by side, and the
+next `<Leader>t` brings them all back. Native `:terminal` remains available
+when an ordinary unmanaged terminal window is wanted.
+
+**Shells, agents and the cwd are kept with the session**, beside it rather than
+in it: `mksession` cannot restore a process, and leaves terminal windows out of
+the layout. `core.session.register(name, { save, restore })` adds a part to
+`<slug>.json` next to the session file; parts restore after the session is
+sourced, in registration order — the cwd, then the shells, then the agents,
+which is what puts the strip under the editor and the agent panel full height
+beside both. A restored shell is a new process in the directory the old one
+was in. The cwd is a part of its own because the restored buffer's `BufEnter`
+would otherwise follow straight back to the file's folder.
 
 **`nv <file>` inside any terminal of an nv opens the file in that editor**, the
 way `code <file>` does, rather than nesting a second Neovim. The fish function
@@ -1106,6 +1134,15 @@ server. Codex has no IDE protocol and gets text only. A directory rather than a
 file for the same reason as `plugins/debug/` and `plugins/git/`: lazy's `lsmod`
 is non-recursive, so `agents.lua` and `health.lua` are never mistaken for specs.
 
+**The instances come back with the session**, each resuming its own
+conversation. A new Claude is started with `--session-id`, so its id is known;
+*Continue* takes the newest conversation in the cwd, which is the one the CLI
+picks; anything else — *Resume*, or Codex, which takes no id — is found at
+exit as the newest conversation in its cwd modified since it started and not
+claimed by another instance. Two Claudes resuming in the same directory can
+therefore swap conversations, and a `/clear` is not followed. A conversation
+whose file is gone starts fresh.
+
 **Several instances, one panel.** Each agent is a terminal buffer named
 `agent://<id>/<n>`; one right split per tab shows the *current* one, found again
 by its `assistant_panel` window variable. `<Leader>aa` lists the open instances,
@@ -1113,7 +1150,8 @@ newest first, then New, Continue and Resume for each installed agent. `<Leader>a
 shows and focuses the current instance, and hides the panel when it is already
 focused. Entering an agent's buffer makes it current. An instance that exits 0 is
 forgotten; one that fails stays listed with its exit code, so the error can be
-read, until the panel switches away from it.
+read, until the panel switches away from it or its buffer is deleted — a key
+pressed in an exited terminal does that, and the instance leaves the list with it.
 
 **`<Leader>ab` and `<Leader>as` type into the current instance, never all of
 them.** claudecode's `at_mentioned` is a broadcast to every connected client, so
@@ -1761,7 +1799,7 @@ It is `vim.ui.select` rather than a picker of its own, which snacks owns, so
 
 Prefixes in use: `<Leader>a` agents, `<Leader>f` find, `<Leader>s` search (and `sf`/`sp` replace), `<Leader>u` toggles,
 `<Leader>w` write, `<Leader>b` buffers, `<Leader>r`/`<Leader>R` actions,
-`<Leader>d` the debugger, `<Leader>t` the terminal, `<Leader>q` the macro list,
+`<Leader>d` the debugger, `<Leader>t`/`<Leader>T` the terminals, `<Leader>q` the macro list,
 `<Leader>z` zen.
 `<Leader>m`/`<Leader>M` and
 `<Leader>1`–`<Leader>4`

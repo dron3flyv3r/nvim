@@ -129,6 +129,17 @@ local function finish(task, code)
   vim.schedule(pump)
 end
 
+-- jobstart resolves a relative program against Neovim's cwd, not the job's.
+---@param task core.Task
+---@return string[]
+local function argv(task)
+  local program = task.cmd[1]
+  if not program:find("/", 1, true) or program:sub(1, 1) == "/" then return task.cmd end
+  local cmd = vim.list_extend({}, task.cmd)
+  cmd[1] = vim.fs.normalize(vim.fs.joinpath(task.cwd, program))
+  return cmd
+end
+
 ---@param task core.Task
 function M.start(task)
   if task.status == "running" then return task end
@@ -137,7 +148,7 @@ function M.start(task)
   task.started_at = vim.uv.hrtime()
 
   vim.api.nvim_buf_call(task.bufnr, function()
-    task.job = vim.fn.jobstart(task.cmd, {
+    task.job = vim.fn.jobstart(argv(task), {
       term = true,
       cwd = task.cwd,
       env = task.spec.env,

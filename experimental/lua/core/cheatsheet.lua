@@ -168,6 +168,8 @@ local SECTIONS = {
       { "<Leader>bD", "delete every buffer, keeping the windows" },
       { "<Leader>bo", "delete every buffer but this one" },
       { "<Leader>t", "toggle a shell in the bottom pane" },
+      { "<Leader>T", "start another shell; <Tab> in the pane cycles them" },
+      { "<C-w>v  (in a shell)", "a second shell beside it in the bottom pane" },
       { "nv <file>  (in it)", "open the file in this editor, not a nested one" },
       { "<Leader>.", "scratch note, kept per project and branch" },
       { "<Leader>z", "zen: a reading view, markdown rendered, nothing else on screen" },

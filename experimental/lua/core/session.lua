@@ -6,6 +6,13 @@ local attached = false
 local started_from_directory = false
 local disabled = false
 
+---@class core.session.Part
+---@field save fun(): any
+---@field restore fun(data: any)
+
+---@type { name: string, part: core.session.Part }[]
+local parts = {}
+
 local function project_root()
   -- `vim.uv.cwd()` fails outright when the directory has been deleted underneath
   -- the shell, and `vim.fs.root` asserts on the nil. Neovim's own idea of the
@@ -18,6 +25,12 @@ end
 local function session_path()
   local directory = vim.fs.joinpath(vim.fn.stdpath "state" --[[@as string]], "sessions")
   return directory, vim.fs.joinpath(directory, vim.fs.slug(root) .. ".vim")
+end
+
+---@return string
+local function parts_path()
+  local directory = session_path()
+  return vim.fs.joinpath(directory, vim.fs.slug(root) .. ".json")
 end
 
 local function notify(message, level)
@@ -75,6 +88,41 @@ local function holds_a_file()
   return false
 end
 
+---@param name string
+---@param part core.session.Part
+function M.register(name, part) parts[#parts + 1] = { name = name, part = part } end
+
+local function save_parts()
+  local data = {}
+  for _, entry in ipairs(parts) do
+    local ok, value = pcall(entry.part.save)
+    if not ok then
+      notify(("%s: %s"):format(entry.name, value), vim.log.levels.ERROR)
+    elseif value ~= nil then
+      data[entry.name] = value
+    end
+  end
+  if vim.tbl_isempty(data) then
+    vim.uv.fs_unlink(parts_path())
+    return
+  end
+  vim.fn.writefile({ vim.json.encode(data) }, parts_path())
+end
+
+local function restore_parts()
+  local file = io.open(parts_path(), "r")
+  if not file then return end
+  local ok, data = pcall(vim.json.decode, file:read "*a")
+  file:close()
+  if not ok or type(data) ~= "table" then return end
+  for _, entry in ipairs(parts) do
+    if data[entry.name] ~= nil then
+      local restored, err = pcall(entry.part.restore, data[entry.name])
+      if not restored then notify(("%s: %s"):format(entry.name, err), vim.log.levels.ERROR) end
+    end
+  end
+end
+
 ---@param opts? { quiet?: boolean }
 ---@return boolean
 function M.save(opts)
@@ -92,6 +140,7 @@ function M.save(opts)
     notify(err, vim.log.levels.ERROR)
     return false
   end
+  save_parts()
   if not opts.quiet then notify("Saved " .. root) end
   return true
 end
@@ -113,6 +162,7 @@ function M.restore(opts)
   end
   drop_uri_buffers()
   release_borrowed_options()
+  restore_parts()
   attached = true
   if not opts.quiet then notify("Restored " .. root) end
   return true
@@ -131,6 +181,7 @@ function M.delete()
     notify(err, vim.log.levels.ERROR)
     return false
   end
+  vim.uv.fs_unlink(parts_path())
   attached = false
   notify("Deleted " .. root)
   return true

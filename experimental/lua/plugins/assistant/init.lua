@@ -39,6 +39,14 @@ local function guarded(name, ...)
   end
 end
 
+require("core.session").register("agents", {
+  save = function()
+    local agents = package.loaded["plugins.assistant.agents"]
+    return agents and agents.snapshot()
+  end,
+  restore = function(data) require("plugins.assistant.agents").restore(data) end,
+})
+
 ---@type LazySpec
 return {
   "coder/claudecode.nvim",
