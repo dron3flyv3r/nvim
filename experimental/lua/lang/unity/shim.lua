@@ -25,11 +25,8 @@ local function open(payload)
   if not path or path == "" then return 0 end
 
   vim.schedule(function()
-    vim.cmd.edit(vim.fn.fnameescape(path))
     local row = math.max(1, tonumber(line) or 1)
-    local col = math.max(0, (tonumber(column) or 1) - 1)
-    vim.api.nvim_win_set_cursor(0, { math.min(row, vim.api.nvim_buf_line_count(0)), col })
-    vim.cmd "normal! zz"
+    require("core.open").file(path, { line = row, col = (tonumber(column) or 1) - 1 })
     -- Unity is the foreground window when you double-click a script, so say
     -- something: the file changed under a terminal you were not looking at.
     vim.notify(("Opened %s:%d from Unity"):format(vim.fs.basename(path), row), vim.log.levels.INFO, { title = "Unity" })

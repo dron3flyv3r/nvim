@@ -39,6 +39,24 @@ local function guarded(name, ...)
   end
 end
 
+local function noop() end
+
+-- claudecode stops tracking the selection only in the buffer its provider names;
+-- `provider = "none"` names none, so entering an agent sent `agent://claude/1` as the file.
+local terminal_provider = {
+  setup = noop,
+  open = noop,
+  close = noop,
+  simple_toggle = noop,
+  focus_toggle = noop,
+  ensure_visible = noop,
+  is_available = function() return true end,
+  get_active_bufnr = function()
+    local agents = package.loaded["plugins.assistant.agents"]
+    return agents and agents.current_bufnr()
+  end,
+}
+
 require("core.session").register("agents", {
   save = function()
     local agents = package.loaded["plugins.assistant.agents"]
@@ -79,7 +97,7 @@ return {
   },
   opts = {
     -- The terminals are `agents.lua`'s; claudecode is only the server they share.
-    terminal = { provider = "none" },
+    terminal = { provider = terminal_provider },
     diff_opts = { layout = "vertical", open_in_new_tab = false },
   },
 }

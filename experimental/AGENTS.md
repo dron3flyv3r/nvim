@@ -61,6 +61,7 @@ lua/
     session.lua       native project session persistence
     workspace.lua     extra folders beside the project, kept with its session
     terminal.lua      an interactive shell in the shared bottom strip
+    open.lua          opens a file from outside in a window that shows files
     macros.lua        the recording indicator and the macro list
     replace.lua       find and replace in a file or the project, previewed
     lang.lua          loader for lua/lang
@@ -665,11 +666,20 @@ would otherwise follow straight back to the file's folder.
 way `code <file>` does, rather than nesting a second Neovim. The fish function
 the justfile writes sees `$NVIM` and calls `core.terminal.open` through
 `--remote-expr`, not plain `--remote`: that is `:drop` in the current window,
-which is the strip, and the file would land in the bottom pane. `open` moves to
-the previous ordinary window first. The client prints the expression's result
+which is the strip, and the file would land in the bottom pane. `open` goes
+through `core.open`, which the Unity shim uses too. The client prints the expression's result
 on stderr, which is why that is discarded. With no arguments, or outside nv,
 `nv` starts an editor as before. The bash alias cannot branch and does not do
 this.
+
+**A file opened from outside lands in a window that shows files.** `core.open`
+is the one place that picks it: the current window, the previous one, then any in
+the tab, as long as it is not a float or the strip and its buffer has an empty
+`buftype` — so an agent panel, dap-ui or the explorer is never replaced, with no
+plugin named. With none, it splits above the strip, or left of everything when
+there is no strip, which keeps a full-height agent panel where it was. It uses
+`:drop`, so a file already on screen is jumped to rather than opened twice. Unity
+once opened a double-clicked script over the Claude panel with a plain `:edit`.
 
 It runs `'shell'` unless `core.terminal.set_shell()` names something else, which
 the user layer does for fish. `'shell'` itself stays POSIX, because `:!`,
@@ -1126,8 +1136,12 @@ table has always reserved: Claude Code and Codex, whichever of `claude` and
 `codex` is on `PATH`. `agents.lua` owns their terminals; `coder/claudecode.nvim`
 is kept only as the IDE websocket server, so a Claude knows which buffer and
 selection you are on and its edits arrive as a diff with accept and deny. Its
-`terminal.provider` is `none`: claudecode manages one terminal, and this layer
-needs several. A Claude is started with the server's port in
+`terminal.provider` is a table that opens nothing: claudecode manages one
+terminal, and this layer needs several. It is not `none`, because the provider's
+`get_active_bufnr` is the only buffer claudecode keeps out of selection tracking,
+and with `none` entering an agent told Claude it was *In 1* — the basename of
+`agent://claude/1`. The table answers with the current instance's buffer, which
+entering any agent makes current. A Claude is started with the server's port in
 `CLAUDE_CODE_SSE_PORT` and loopback in `no_proxy`, the same environment
 claudecode would give its own terminal, so every Claude instance shares the one
 server. Codex has no IDE protocol and gets text only. A directory rather than a

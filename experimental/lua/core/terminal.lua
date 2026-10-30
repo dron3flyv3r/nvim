@@ -226,30 +226,12 @@ local function restore(data)
   if vim.api.nvim_win_is_valid(return_to) then vim.api.nvim_set_current_win(return_to) end
 end
 
----@return integer|nil
-local function editing_window()
-  local function usable(win)
-    return win ~= 0 and not vim.w[win].core_pane and vim.api.nvim_win_get_config(win).relative == ""
-  end
-  local previous = vim.fn.win_getid(vim.fn.winnr "#")
-  if usable(previous) then return previous end
-  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-    if usable(win) then return win end
-  end
-end
-
 ---@param paths string[]
 ---@return integer
 function M.open(paths)
   vim.schedule(function()
-    local win = editing_window()
-    if win then
-      vim.api.nvim_set_current_win(win)
-    else
-      vim.cmd "topleft split"
-    end
     for _, path in ipairs(paths) do
-      vim.cmd.drop(vim.fn.fnameescape(path))
+      require("core.open").file(path)
     end
     vim.cmd.stopinsert()
   end)

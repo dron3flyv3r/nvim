@@ -189,8 +189,22 @@ local function panel_win()
   end
 end
 
+-- Neovim's own TermOpen sets these on whichever window is current, which for an
+-- instance restored hidden is a throwaway one and never the panel.
+local WIN_OPTS = {
+  number = false,
+  relativenumber = false,
+  signcolumn = "no",
+  foldcolumn = "0",
+  wrap = false,
+  list = false,
+}
+
 ---@param win integer
 local function dress(win)
+  for name, value in pairs(WIN_OPTS) do
+    vim.wo[win][name] = value
+  end
   local others = #instances - 1
   local label = current and title(current) or ""
   if others > 0 then label = ("%s  ·  %d more on <Leader>aa"):format(label, others) end
@@ -400,6 +414,11 @@ local function target()
   for i = #instances, 1, -1 do
     if not instances[i].exited then return instances[i] end
   end
+end
+
+---@return integer?
+function M.current_bufnr()
+  if current and vim.api.nvim_buf_is_valid(current.bufnr) then return current.bufnr end
 end
 
 function M.focus()
