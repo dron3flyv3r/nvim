@@ -211,9 +211,9 @@ function M.pick()
   end)
 end
 
----@param ctx core.statusline.Context
+---@param _ctx core.statusline.Context
 ---@return string?
-local function component(ctx)
+local function component(_ctx)
   if not M.active() then return nil end
   local cwd = normalize(vim.fn.getcwd())
   return "󰉋 " .. vim.fs.basename(M.folder_of(cwd) or cwd)

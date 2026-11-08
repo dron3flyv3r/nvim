@@ -188,7 +188,8 @@ end
 ---@param winid integer
 ---@return boolean
 local function wants(winid)
-  if vim.api.nvim_win_get_config(winid).relative ~= "" or vim.wo[winid].diff then return false end
+  if vim.wo[winid].diff then return false end
+  if vim.api.nvim_win_get_config(winid).relative ~= "" and not vim.w[winid].core_winbar_float then return false end
   local bufnr = vim.api.nvim_win_get_buf(winid)
   return vim.bo[bufnr].buftype == "" and vim.api.nvim_buf_get_name(bufnr) ~= ""
 end
@@ -208,6 +209,15 @@ function M.update(winid)
   if current ~= "" and current ~= EXPR then return end
   local value = wants(winid) and EXPR or ""
   if value ~= current then vim.api.nvim_set_option_value("winbar", value, { win = winid, scope = "local" }) end
+end
+
+-- A zoomed window is a float showing an ordinary file, and the crumbs are the one
+-- thing a float would otherwise drop.
+---@param winid integer
+function M.force(winid)
+  if not vim.api.nvim_win_is_valid(winid) then return end
+  vim.w[winid].core_winbar_float = true
+  M.update(winid)
 end
 
 function M.update_tab()

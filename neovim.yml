@@ -4,3 +4,9 @@ base: lua51
 globals:
   vim:
     any: true
+  # snacks.nvim installs itself as a global, and bit is LuaJIT's, which the
+  # lua51 base does not declare.
+  Snacks:
+    any: true
+  bit:
+    any: true

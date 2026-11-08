@@ -67,8 +67,8 @@ function M.to_markdown(html, lang)
     elseif fenced then
       lines[#lines + 1] = line
     else
-      line = vim.trim(line):gsub("^%- +", "- ")
-      if line ~= "" or (lines[#lines] and lines[#lines] ~= "") then lines[#lines + 1] = line end
+      local trimmed = vim.trim(line):gsub("^%- +", "- ")
+      if trimmed ~= "" or (lines[#lines] and lines[#lines] ~= "") then lines[#lines + 1] = trimmed end
     end
   end
   if lines[#lines] == "" then lines[#lines] = nil end

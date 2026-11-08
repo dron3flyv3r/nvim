@@ -22,6 +22,7 @@ require("core.rename").setup()
 require("core.session").setup()
 require("core.workspace").setup()
 require("core.terminal").setup()
+require("core.remote").setup()
 require("core.macros").setup()
 
 local lazypath = vim.fn.stdpath "data" .. "/lazy/lazy.nvim"

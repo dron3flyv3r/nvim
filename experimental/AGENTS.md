@@ -61,6 +61,7 @@ lua/
     session.lua       native project session persistence
     workspace.lua     extra folders beside the project, kept with its session
     terminal.lua      an interactive shell in the shared bottom strip
+    remote/           a server, its projects, and this config installed on it
     open.lua          opens a file from outside in a window that shows files
     macros.lua        the recording indicator and the macro list
     replace.lua       find and replace in a file or the project, previewed
@@ -239,7 +240,7 @@ set for `snacks_picker_input` and `snacks_input` from the spec's `init`, not its
 `config`, because the picker has already set its filetype by the time the first
 `InsertEnter` loads the plugin.
 
-**Zen, `<Leader>z`, is for reading, not writing.** It is `Snacks.zen` at the
+**Zen, `<Leader>Z`, is for reading, not writing.** It is `Snacks.zen` at the
 default 120 columns with everything that is not the text turned off: dim, indent
 guides, diagnostics, inlay hints, word highlights, the whole gutter and the
 winbar. A small fix in insert mode works; a debugging session does not belong
@@ -248,6 +249,29 @@ behind the window shows. Code lens is hidden with `core.codelens.suspend("zen")`
 rather than a snacks toggle, because the toggle's `set` clears every suspension,
 a review's included. `lang/markdown.lua` adds its own toggle to the list, so a
 markdown file is rendered for as long as zen is open.
+
+**`<Leader>z` is the other half of that window: zoom, for working.** It is
+`Snacks.zen.zoom()` — the same float, full width and height, with the statusline
+and tabline kept, no backdrop, no toggles touched and the full gutter. Diagnostics,
+code lens, Copilot and inlay hints all stay on, which is the whole difference
+from zen; press it again and the splits are back exactly as they were, because
+nothing underneath was resized. snacks keeps **one** window for both, so zoom
+closes zen and zen closes zoom.
+
+Two things had to be arranged for it, and both will quietly undo themselves if
+moved:
+
+- Zen's bare gutter is applied from its `on_open` rather than through
+  `win.wo`. `snacks.win` re-applies `opts.wo` on every update, and zoom inherits
+  that table through `Snacks.config.get("zen", …)` — so a `wo`-declared gutter
+  could not be undone for zoom by any later assignment. Zoom's own `on_open` and
+  `on_close` are stubs for the same reason: without them it would inherit zen's
+  and suspend code lens and Copilot for a window meant for working.
+- A float gets no winbar, and `core/winbar.lua` is the single writer of that
+  row. `core.winbar.force(win)` marks the window with `core_winbar_float` so
+  `wants()` stops refusing it for being a float; zoom's `on_open` calls it, which
+  is what keeps the crumbs on a zoomed buffer. The diff refusal is untouched —
+  the git hud is still the only writer in a review.
 
 `key-hints/` is which-key, disabled by default and toggled with `<Leader>uH`.
 Disabling it removes its triggers rather than merely hiding the window, so key
@@ -684,6 +708,254 @@ once opened a double-clicked script over the Claude panel with a plain `:edit`.
 It runs `'shell'` unless `core.terminal.set_shell()` names something else, which
 the user layer does for fish. `'shell'` itself stays POSIX, because `:!`,
 `system()` and every plugin that passes a shell string run through it too.
+
+## Servers
+
+`core/remote/` is `<Leader>o`: a list of servers, and **two ways onto one**,
+because the two cost very different things and only one of them is free.
+
+- **Quick edit** (`<Leader>of`) opens a single file over `scp://` and needs
+  **nothing installed on the server** — sshd's sftp subsystem is the whole
+  requirement. You get a buffer, `:w` writes it back, and that is all: no LSP,
+  no treesitter beyond the one file, no `<Leader>ff`, no grapple.
+- **Full mode** (`<Leader>op`) runs the real thing *on* the server and renders
+  it here. That needs nvim and this config there, which `<Leader>oi` installs.
+
+The split is not a limitation of this layer, it is the shape of the problem: a
+language server has to run where the code and its toolchain are, and `rg` and
+`fd` have no remote mode. Anything that claims otherwise is installing a server
+component, which is what full mode does honestly.
+
+It is `core` because it names no plugin and no language. The pickers are
+`vim.ui.select`, which snacks owns, exactly as `core.actions` and `core.macros`
+use it.
+
+```
+core/remote/
+  init.lua      the menus, the keys' entry points, the commands, the provider
+  hosts.lua     the server list, its projects, and ~/.ssh/config as a source
+  ssh.lua       one authenticated connection, shared by everything below
+  browse.lua    walking a server for a file or a folder, and searching under one
+  files.lua     quick edit: the scp:// buffer
+  connect.lua   full mode: the remote editor, the tunnel, --remote-ui
+  install.lua   the installer that puts nvim and this config on a server
+  health.lua    :checkhealth core.remote
+```
+
+**Nothing here is reached by typing a path.** `browse.lua` is the one browser and
+both ways in use it: `ls -1Ap` a directory at a time — one entry per line,
+directories marked, dotfiles included — with `../`, *Search for a … below here*
+and *Type a path…* as the last resort. Its `kind` is the whole difference between
+the two callers: `"file"` lists files and folders and ends on a file, `"dir"`
+lists only folders and carries *Use this folder* as its first entry, so one
+keypress takes the directory you are standing in. Search is `fd`, or `find` where
+there is none, six levels deep with `.git`, `node_modules` and `.cache` pruned,
+and it lists whichever of the two the `kind` asks for — so a deep file is one
+filter away rather than five menus.
+
+**A server's projects are registered, and the Servers list shows them.**
+`<Leader>oo` lists each host with its projects indented underneath, so opening
+one is a single choice rather than three. A project is registered by opening it,
+or without opening it from the host menu's *Register a project…* — the same
+browse / find-a-repository / type triple that `<Leader>op` offers. Quick edit
+remembers where it was browsing in `host.browsed` rather than in `projects`: the
+folder a file happens to sit in is not a project, and registering it filled the
+list with noise.
+
+**A tilde is resolved by the server, not by `shellescape`.** `ssh.quote` is the
+one quoter for a remote path, and it exists because `shellescape` wraps the whole
+string in single quotes, where `~` is a literal directory named `~` — so a typed
+`~/code` looked for one of those and reported that the project did not exist.
+`"$HOME"/'code'` is what reaches the shell instead.
+
+**One request is one shell script, single-quoted, and the reply is framed.**
+`ssh.script` is the only way anything here asks a server a question, and three
+properties of it were each paid for:
+
+- The script is `sh -c '<script>'`. ssh joins the command it is given with spaces
+  and hands the result to the remote *login* shell, so one round of splitting has
+  to be survived, and a single-quoted blob survives it in sh, bash, zsh and fish.
+  It was `echo <base64> | base64 -d | sh` before. That needed a decoder the server
+  may not have — and when it is missing, `sh` reads an empty pipe, which **exits 0
+  with no output**. Every caller read that silence as success: the installer
+  reported a config it had never written, the probe reported a server with no
+  Neovim and offered to install it again, and the browser crashed on a listing
+  that was not there. Nothing but a login shell is needed now.
+- The reply is preceded by a printed mark, and only what follows it is the
+  answer. A login shell that prints a banner or a motd on stdout otherwise hands
+  its first line over as the answer — *Use this folder (Welcome to Ubuntu)*.
+- A missing mark is the failure, not the exit status. A script whose last command
+  fails still answered (`[ -d x ] && echo DIR || echo FILE` is the common case),
+  and a shell that ran nothing still exits 0. So `ssh.script` hands its caller
+  `lines` or a `failure` string and never both, and every caller reports the
+  failure rather than indexing into an empty list.
+
+The installer is the one caller that does not go through it: its output is watched
+in the strip rather than parsed, so it keeps `script_argv` and verifies itself by
+the `REMOTE SETUP OK` line its own script ends with. `:checkhealth core.remote`
+runs a script on every connected server and reports what came back, which is the
+first thing to reach for when a server is quiet.
+
+**One authentication per server, and `ssh.lua` is why.** Every ssh, every scp
+and the tunnel ride a single OpenSSH ControlMaster, so browsing a tree is not a
+handshake per directory. The socket is `$XDG_RUNTIME_DIR/nvim-remote/%C` —
+`%C` hashes the connection parameters, which keeps the path inside the 108-byte
+limit a unix socket has and lets one pattern serve every host. `g:netrw_ssh_cmd`
+and `g:netrw_scp_cmd` are pointed at the same pattern from `setup()`, so netrw's
+own processes join the connection rather than opening their own.
+
+**The master is started in a terminal, and shown only if it stalls.** A
+background `vim.system` ssh has no tty, so a password or a 2FA prompt fails
+instead of asking. So the master runs in a hidden `core.pane` occupant and is
+polled; key auth lands in well under a second and the buffer is released
+unseen, and anything slower than 1.5 s is revealed on the assumption that
+something is waiting to be answered. That is the whole reason it is a terminal
+and not a `vim.system` call — do not simplify it back.
+
+### Quick edit
+
+`<Leader>of` picks a server, browses it in `"file"` mode, and opens the chosen
+file as `scp://<dest>//abs/path`. The second slash is load-bearing: netrw reads
+one slash after the host as "relative to the remote home" and two as the root.
+
+Two existing core rules already do the right thing here and neither needed a
+case for `scp://`:
+
+- `core.autosave` skips a buffer whose name holds a URI, so a remote file is
+  **never** written behind your back. You write it, and each write is an scp.
+- `core.session` drops URI-named buffers, so a remote file never comes back with
+  a restored session as an empty local file of the same name.
+
+That is the trade stated plainly: the convenience this config is built on is
+exactly what is switched off out there.
+
+### Full mode
+
+```
+server:  setsid nvim --headless --listen $XDG_RUNTIME_DIR/nvim-remote/<slug>.sock
+tunnel:  ssh -N -L <local sock>:<remote sock>
+local:   nvim --remote-ui --server <local sock>   (a terminal buffer, own tabpage)
+```
+
+The remote socket is named from a hash of the project directory, so it is
+**deterministic** — and that is a feature, not an implementation detail:
+reopening a project finds the editor that is already there and reattaches to it,
+rather than starting a second one. Locally the same question is asked of the
+*client*: a live UI client for that project means jumping to the tab it is
+already in, and a dead one is cleaned up before a new tunnel is built, because it
+is the client and not the tunnel that owns a window here. Liveness is `nvim --server … --remote-expr 1`
+run on the server, which answers for real where a socket file on disk does not.
+
+**The hash is of the path the server resolved, not the one you named.** The probe
+answers with `pwd -P` after it has `cd`ed, and the socket, the session and the
+remembered project all use that — otherwise `~/code`, `/home/me/code` and a
+symlink to it were three editors for one directory, and the second spelling never
+found the first. The probe also reports the server's own
+`${XDG_RUNTIME_DIR:-/tmp}`, because that directory is the server's to choose.
+
+**An unanswered probe is not a server without Neovim.** It said `NVIM none` or it
+said nothing, and only the first offers the installer; the second reports what the
+connection actually said. Treating them alike meant a broken login shell, an ssh
+that dropped, or any error on the far side all surfaced as *Neovim is not
+installed* and sent you to install it again. For the same reason the offer takes
+the thing it is in the way of and retries it: installing in order to open a
+project and then being handed nothing is the other half of that bug.
+
+Unix sockets both ends rather than a TCP port: no port to allocate, no race
+between picking one and binding it, and nothing listening on a number someone
+else may want. The cost is OpenSSH 6.7 (2014) on both sides, which
+`:checkhealth core.remote` reports.
+
+**The remote editor outlives this one; the tunnel does not.** It is started with
+`setsid nohup … </dev/null &`, so it is not a child of the ssh that asked for
+it. `VimLeavePre` kills the tunnels and the control connections and leaves the
+servers' editors running, which is what makes a reattach mean something: quitting
+here takes the UI client's tab with it and leaves the work on the server to be
+reattached to. That is recoverable, where an orphaned remote process with no way
+back to it is not. `<Leader>od` is the other end of it and asks which
+you meant: *detach, and leave it running there*, or *stop the editor on the
+server*.
+
+**It opens in this instance, not a new window.** The UI client runs in a
+terminal buffer of its own tabpage. `--remote-ui` sources no config and draws the
+remote session whole, so a full tab is the window it wants, and the editor you
+are already in is the one it appears in — there is no terminal emulator to
+launch, no device seam for naming one, and nothing to place. It replaces a
+`vim.uv.spawn` of kitty or `$TERMINAL`, which is why `set_launcher` is gone.
+
+Three things make a nested editor usable, and all three are buffer-local to the
+client so nothing outside it changes:
+
+- **The terminal-mode mappings this config installs are sent back through.**
+  `<C-h>`/`<C-j>`/`<C-k>`/`<C-l>` are window navigation here and the remote
+  editor wants them for its own windows; `j`/`k` are the double-tap escape and
+  would leave terminal mode on any `jj` typed out there. They are re-mapped to
+  themselves on this buffer alone.
+- **`<Esc>` is one of them, and it needs `nowait`.** The global `<Esc><Esc>`
+  makes a single press wait out `timeoutlen` — a second of nothing on the key a
+  nested editor is driven by — and a buffer-local mapping does not beat a longer
+  global one without it. Measured: normal mode within 400 ms with `nowait`, and
+  not at all without.
+- **`<C-q>` is the way back out**, to the tabpage the client was opened from.
+  `<C-\><C-n>` is the native way and still works, but a Danish layout needs AltGr
+  for it; nothing in this config claims `<C-q>`, in either instance.
+
+The client's buffer is named `remote://<host><dir>`, the same shape as the
+assistant's `agent://`, so the tab label and the statusline say which server and
+project it is rather than `term://…//4/…/bin/nvim`.
+
+**The statusline row is given to the remote editor.** `laststatus` is 3, so the
+one statusline this editor draws sat directly under a window that already had a
+whole editor's own statusline in it — two bottom bars. It goes to 0 while the
+client is the current window. Two things that look like over-engineering are
+not: it is **re-asserted** rather than set once, because the dashboard hides the
+same row and puts it back when it closes, which happens with no window event of
+ours; and on the way out only a `laststatus` still reading 0 is restored, since
+anything else means another writer moved it while the client was up. Leaving a
+client for the dashboard correctly keeps it hidden, and for a file restores 3.
+The tabline is deliberately left alone — the git review owns when that row shows.
+
+**`:wqa` inside the remote editor does what it says**: it writes on the server
+and ends the session there, so the client exits and its tab closes here.
+Locally, `:wqa` with a client open is refused with `E948: Job still running`,
+exactly as it is with a `<Leader>t` shell — that is how every terminal in this
+config behaves, not something this layer adds. `:wqa!` quits and leaves the
+editor on the server running, which is the same detach `<Leader>od` offers.
+
+A remote editor restores **its own** session for that project, like any other
+instance of this config, so a cwd stored there is the cwd it comes back in.
+
+**The tab goes when the client does.** A remote editor that quits, a detach, and
+a stop all close the client's window — deleting the buffer alone would leave its
+tabpage behind showing something else — unless it is the last window of the last
+tabpage, which would end the session. A client that exits non-zero is **left on
+screen** with its tab, because whatever it printed is the only account of why.
+
+### The installer
+
+`<Leader>oi` runs one script on the server through `core.task`, so its output is
+watched in the strip like any other build. The script mirrors the justfile's
+`install-nightly`: it checks for `curl`, `tar` and `git`, downloads the nightly
+for the server's architecture into `~/.local/share/nvim-versions/<version>` with
+a `current` symlink, clones this repository into `~/.config/nvim`, runs
+`Lazy! sync` headless, and writes an `nv` helper into `~/.local/bin`.
+
+**The script is single-quoted onto the remote shell**, the same transport as
+every other request — see the rule above for why it is not base64'd any more.
+**Exit 0 is not success here**: the task checks the output for the
+`REMOTE SETUP OK` line the script ends with, because a remote shell that ran
+nothing at all still exits 0, and that is exactly how a setup that installed
+nothing once reported itself installed.
+
+**`lua/user` is deliberately not cloned.** It is the per-device submodule, a
+server is a different device, and the architecture already requires that
+deleting it leaves a working config. An existing `~/.config/nvim` that is a
+checkout of this repository is pulled; one that is anything else stops the
+script rather than being clobbered.
+
+`<Leader>op` on a server with no nvim offers the installer instead of failing,
+and a server installed during a session is usable immediately — unlike mason
+locally, nothing here probes at startup.
 
 ## Debugging
 
@@ -1814,7 +2086,7 @@ It is `vim.ui.select` rather than a picker of its own, which snacks owns, so
 Prefixes in use: `<Leader>a` agents, `<Leader>f` find, `<Leader>s` search (and `sf`/`sp` replace), `<Leader>u` toggles,
 `<Leader>w` write, `<Leader>b` buffers, `<Leader>r`/`<Leader>R` actions,
 `<Leader>d` the debugger, `<Leader>t`/`<Leader>T` the terminals, `<Leader>q` the macro list,
-`<Leader>z` zen.
+`<Leader>o` servers, `<Leader>z` fullscreen zoom and `<Leader>Z` zen.
 `<Leader>m`/`<Leader>M` and
 `<Leader>1`–`<Leader>4`
 are grapple. `<Leader>g` is git.

@@ -1,3 +1,15 @@
+local ZEN_WO = {
+  number = false,
+  relativenumber = false,
+  signcolumn = "no",
+  statuscolumn = "",
+  foldcolumn = "0",
+  colorcolumn = "",
+  winbar = "",
+  list = false,
+  linebreak = true,
+}
+
 -- snacks' explorer walks one root, `ctx.filter.cwd`, so a workspace runs its
 -- finder once per folder and concatenates the trees.
 ---@param opts snacks.picker.explorer.Config
@@ -189,20 +201,14 @@ return {
           blend = 0,
           win = { wo = { winhighlight = "Normal:Normal,NormalFloat:Normal" } },
         },
-        wo = {
-          number = false,
-          relativenumber = false,
-          signcolumn = "no",
-          statuscolumn = "",
-          foldcolumn = "0",
-          colorcolumn = "",
-          winbar = "",
-          list = false,
-          linebreak = true,
-        },
       },
+      -- Not `win.wo`: zoom inherits that table, and `snacks.win` re-applies it on
+      -- every update, so a bare gutter there could not be undone afterwards.
       -- A snacks toggle for code lens would call `set`, which clears the review's suspension too.
-      on_open = function()
+      on_open = function(win)
+        for option, value in pairs(ZEN_WO) do
+          vim.api.nvim_set_option_value(option, value, { scope = "local", win = win.win })
+        end
         require("core.codelens").suspend "zen"
         require("core.copilot").suspend "zen"
       end,
@@ -210,6 +216,14 @@ return {
         require("core.codelens").resume "zen"
         require("core.copilot").resume "zen"
       end,
+      zoom = {
+        toggles = {},
+        center = false,
+        show = { statusline = true, tabline = true },
+        win = { backdrop = false, width = 0 },
+        on_open = function(win) require("core.winbar").force(win.win) end,
+        on_close = function() end,
+      },
     },
   },
   keys = {
@@ -219,7 +233,8 @@ return {
     { "<Leader>:", function() Snacks.picker.command_history() end, desc = "Command history" },
     { "<Leader>e", function() Snacks.explorer() end, desc = "File explorer" },
     { "<Leader>.", function() Snacks.scratch() end, desc = "Toggle scratch buffer" },
-    { "<Leader>z", function() Snacks.zen() end, desc = "Toggle zen mode" },
+    { "<Leader>z", function() Snacks.zen.zoom() end, desc = "Toggle fullscreen zoom" },
+    { "<Leader>Z", function() Snacks.zen() end, desc = "Toggle zen mode" },
 
     { "<Leader>fb", function() Snacks.picker.buffers() end, desc = "Buffers" },
     { "<Leader>fc", function() Snacks.picker.files { cwd = vim.fn.stdpath "config" } end, desc = "Find config file" },

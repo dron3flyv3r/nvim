@@ -34,9 +34,26 @@ map("n", "<Leader>uv", function() require("core.diagnostics").toggle_all() end, 
 map("n", "<Leader>ue", function() require("core.diagnostics").toggle_errors_only() end, { desc = "Errors only" })
 
 map("i", "<M-]>", function() vim.lsp.inline_completion.select { count = 1 } end, { desc = "Next inline suggestion" })
-map("i", "<M-[>", function() vim.lsp.inline_completion.select { count = -1 } end, { desc = "Previous inline suggestion" })
+map(
+  "i",
+  "<M-[>",
+  function() vim.lsp.inline_completion.select { count = -1 } end,
+  { desc = "Previous inline suggestion" }
+)
 
 map("n", "<Leader>q", function() require("core.macros").pick() end, { desc = "Macros" })
+
+map("n", "<Leader>oo", function() require("core.remote").pick() end, { desc = "Servers" })
+map("n", "<Leader>op", function() require("core.remote").pick_open() end, { desc = "Open a project on a server" })
+map("n", "<Leader>of", function() require("core.remote.files").pick() end, { desc = "Open a remote file over scp" })
+map("n", "<Leader>oa", function() require("core.remote.hosts").pick_add() end, { desc = "Add a server" })
+map(
+  "n",
+  "<Leader>oi",
+  function() require("core.remote.install").pick() end,
+  { desc = "Install the config on a server" }
+)
+map("n", "<Leader>od", function() require("core.remote").pick_disconnect() end, { desc = "Disconnect from a server" })
 
 map({ "n", "x" }, "<Leader>sf", function() require("core.replace").open "file" end, { desc = "Replace in file" })
 map({ "n", "x" }, "<Leader>sp", function() require("core.replace").open "project" end, { desc = "Replace in project" })

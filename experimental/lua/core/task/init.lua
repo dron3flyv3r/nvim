@@ -52,7 +52,6 @@ end
 
 ---@param task core.Task
 ---@return boolean
-local function busy(task) return task ~= nil and (task.status == "running" or task.status == "pending") end
 
 ---@return core.Task|nil
 local function active()

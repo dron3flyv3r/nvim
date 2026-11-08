@@ -44,21 +44,30 @@ else
   say FAIL "comments exceed 10% of code ($comments / $code)"
 fi
 
+# Both configs live at the repository root, one level above this config, and
+# neither tool looks there on its own: stylua stops at the directory it is run
+# from, and selene only reads its cwd. Without these two the gates run on
+# default settings and report every file.
+stylua_args=(--search-parent-directories)
+selene_config=$(cd .. && pwd)/selene.toml
+
 if command -v stylua >/dev/null; then
-  if stylua --check "${files[@]}" >/dev/null 2>&1; then
+  if stylua "${stylua_args[@]}" --check "${files[@]}" >/dev/null 2>&1; then
     say PASS "stylua"
   else
-    say FAIL "stylua (run: stylua ${files[*]})"
+    say FAIL "stylua (run: stylua ${stylua_args[*]} ${files[*]})"
   fi
 else
   say SKIP "stylua not installed"
 fi
 
 if command -v selene >/dev/null; then
-  if selene "${files[@]}" >/dev/null 2>&1; then
+  if [[ ! -f $selene_config ]]; then
+    say FAIL "selene: $selene_config is missing"
+  elif selene --config "$selene_config" "${files[@]}" >/dev/null 2>&1; then
     say PASS "selene"
   else
-    say FAIL "selene (run: selene lua init.lua)"
+    say FAIL "selene (run: selene --config $selene_config lua init.lua)"
   fi
 else
   say SKIP "selene not installed"
