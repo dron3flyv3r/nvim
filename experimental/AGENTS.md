@@ -145,6 +145,9 @@ picker does. `core` names no scheme -- the plugin layer passes the default in.
 The record is debounced by 300 ms, because the picker previews by *applying*
 the scheme under the cursor and so fires one event per keypress; only the last
 of them is a choice, and cancelling restores the original as one more event.
+Only a name with a `colors/` file on the runtimepath is recorded: teamtype-nvim
+fires a bare `ColorScheme` as it loads, whose match is the buffer's file name,
+and that once replaced the choice with a path.
 A stored scheme that no longer loads falls back to the default and is **left on
 disk**, so reinstalling the plugin restores the choice rather than needing it
 picked again.
@@ -1487,6 +1490,55 @@ resume that exact conversation in the terminal. The treesitter context in the ol
 most of why it can wait. Inline completion is not here either: it is Copilot,
 native, and lives in `core/copilot/` — see Completion and inlay hints.
 
+## Collaboration
+
+`lua/plugins/collaboration/` is Teamtype: live co-editing of a folder with other
+Neovim and VS Code users, through teamtype-nvim and the `teamtype` daemon. It is
+deliberately minimal — no keys, no panel, no peer colours. `<Leader>r` carries
+Run → *Share this folder*, *Join a session into this folder* (asks for the code)
+and *Stop sharing*, and Inspect → *Follow a teammate*. The daemon is a
+`core.task` with `queue = false` and focus, because the first run asks y/N in
+the pty and the join code is printed there.
+
+**The plugin loads only where a daemon is running**: on `BufReadPre`/`BufNewFile`
+under a `.teamtype/` that holds a `socket`, or when a share starts. `.teamtype/`
+outlives the daemon, so the directory alone is not the test, and loading costs
+something everywhere: the plugin installs a global no-op `FileChangedShell`. Its
+`root_dir` is ours and answers only under a live socket. Buffers already open
+when a share starts are attached by replaying `BufRead` inside each of them.
+
+Four things are patched around the plugin, each measured:
+
+- 0.13 removed `vim.lsp.util._get_line_byte_from_position`. Without it no
+  teammate's edit was applied and no cursor drawn; `restore_line_byte` puts it
+  back only if it is missing.
+- Its `open` callback disables writing in **whichever buffer is current** when
+  the daemon answers, so a buffer loaded in the background made `:w` a silent
+  no-op in an unrelated file. `wrap_connection` runs that callback inside the
+  buffer it is about.
+- A write is a no-op that leaves the buffer modified, so quitting asked to save
+  a file the daemon had already written. A buffer-local `BufWritePre` clears
+  `'modified'`; autosave and the quit path then behave as for any file.
+- A lost connection leaves the buffers unmodifiable with writes still a no-op.
+  The connection's `on_exit` is wrapped to undo both and restore `'autoread'`, so
+  after *Stop sharing* the files are ordinary again without a restart.
+
+**Follow is a float, not your cursor.** The plugin's `:TeamtypeFollow` moves your
+own cursor and stops at the first key, which is useless while reading. *Follow a
+teammate* opens a non-focused float top-right that shows the teammate's file and
+moves with their cursor, across files; your windows are untouched. It is a float
+because a split inside a review's tab is one Diffview folds into its layout.
+Peers are learned by wrapping `teamtype.cursor.set_cursor`, so only a teammate
+who has moved since the plugin loaded can be followed.
+
+A review or an agent in a shared folder **warns once per editor session**, from
+`User DiffviewViewOpened` and `BufEnter agent://*` — the layer names those events
+rather than requiring either plugin. A review holds files in memory while
+teammates keep writing them, and an agent's disk writes reach every teammate.
+
+`:checkhealth plugins.collaboration` reports the binary, and any other
+`teamtype` it shadows on `PATH`.
+
 ## Diagnostics
 
 `core/diagnostics.lua` is the one `vim.diagnostic.config` call, made from
@@ -2397,6 +2449,10 @@ exception, justified per module.
   `python-lsp.lua` only the decision that ruff owns the unused-symbol reports
   came across; pyrefly as a completion-only second server was dropped, since
   one type checker answering completion is enough.
+- **Done, minimal**: Teamtype, as `lua/plugins/collaboration/`. Rebuilt rather
+  than ported; the old `user/teamtype/peers.lua` (per-peer colours) and
+  `panel.lua` (peer sidebar, mirrors) are left behind, and follow came back as
+  one float.
 - **Port on demand**: notebooks, inlay hints, hover, and the two
   deferred Rust modules. Port one when it is first missed, rewritten to the
   contracts above rather than copied.
