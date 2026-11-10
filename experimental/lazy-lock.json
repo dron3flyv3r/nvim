@@ -18,6 +18,7 @@
   "rustaceanvim": { "branch": "main", "commit": "9c5c1aa055b33aa17d4f113724b1e5c4f1f77a1e" },
   "snacks.nvim": { "branch": "main", "commit": "882c996cf28183f4d63640de0b4c02ec886d01f2" },
   "sonarlint.nvim": { "branch": "main", "commit": "acd09b78969ddc965a7ddf59abb9d9eec5ecd94f" },
+  "teamtype-nvim": { "branch": "main", "commit": "711eade8cd5d7d3efa9ec25ea0a390a954030222" },
   "tokyonight.nvim": { "branch": "main", "commit": "cdc07ac78467a233fd62c493de29a17e0cf2b2b6" },
   "vim-atom-dark": { "branch": "master", "commit": "44feadcbeb2a8b2a21e373261a6293679f79da94" },
   "which-key.nvim": { "branch": "main", "commit": "3aab2147e74890957785941f0c1ad87d0a44c15a" }

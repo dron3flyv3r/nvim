@@ -26,7 +26,17 @@ local function flush()
 end
 
 ---@param name string
+---@return boolean
+local function is_scheme(name)
+  return #vim.api.nvim_get_runtime_file(("colors/%s.vim"):format(name), false) > 0
+    or #vim.api.nvim_get_runtime_file(("colors/%s.lua"):format(name), false) > 0
+end
+
+---@param name string
 local function remember(name)
+  -- A bare `ColorScheme` event, which teamtype-nvim fires as it loads, carries
+  -- the current buffer's name instead of a scheme.
+  if not is_scheme(name) then return end
   pending = name
   if timer then timer:stop() end
   -- The picker previews by applying the scheme under the cursor, so these arrive
