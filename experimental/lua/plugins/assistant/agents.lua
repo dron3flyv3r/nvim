@@ -429,6 +429,21 @@ function M.focus()
   show(instance, true)
 end
 
+function M.toggle()
+  local win = panel_win()
+  if win then
+    local back = win == vim.api.nvim_get_current_win() and vim.fn.win_getid(vim.fn.winnr "#") or 0
+    hide()
+    if back ~= 0 and vim.api.nvim_win_is_valid(back) then vim.api.nvim_set_current_win(back) end
+    return
+  end
+  local instance = target() or current
+  if instance then return show(instance, true) end
+  local agent = installed()[1]
+  if not agent then return notify("Neither claude nor codex is on PATH", vim.log.levels.WARN) end
+  M.start(agent)
+end
+
 ---@param instance assistant.Instance
 ---@param path string
 ---@return string

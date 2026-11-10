@@ -72,6 +72,7 @@ local SECTIONS = {
   {
     "AGENTS  (<Leader>a…)",
     {
+      { "A", "show · hide the agent panel, from anywhere" },
       { "aa", "every open Claude / Codex, and start a new one" },
       { "af", "focus the current agent · hide it when already there" },
       { "ac / ar", "continue the last session · pick one to resume" },

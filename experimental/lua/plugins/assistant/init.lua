@@ -86,6 +86,7 @@ return {
     "ClaudeCodeTreeAdd",
   },
   keys = {
+    { "<Leader>A", guarded "toggle", desc = "Show or hide the agent panel" },
     { "<Leader>aa", guarded "pick", desc = "Agents: switch to one, or start one" },
     { "<Leader>af", guarded "focus", desc = "Focus the current agent, or hide it" },
     { "<Leader>ac", guarded("start_like_current", "continue"), desc = "Continue the last agent session" },

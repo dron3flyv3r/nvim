@@ -1434,7 +1434,11 @@ whose file is gone starts fresh.
 by its `assistant_panel` window variable. `<Leader>aa` lists the open instances,
 newest first, then New, Continue and Resume for each installed agent. `<Leader>af`
 shows and focuses the current instance, and hides the panel when it is already
-focused. Entering an agent's buffer makes it current. An instance that exits 0 is
+focused. `<Leader>A` is the toggle, the agent's `<Leader>t`: it hides a visible
+panel from any window, returning to the window it came from, and otherwise shows
+the current instance, starting the first installed agent when none is open. It
+is outside the `<Leader>a` prefix because binding the prefix itself would make
+every agent key wait out `timeoutlen`. Entering an agent's buffer makes it current. An instance that exits 0 is
 forgotten; one that fails stays listed with its exit code, so the error can be
 read, until the panel switches away from it or its buffer is deleted — a key
 pressed in an exited terminal does that, and the instance leaves the list with it.
@@ -2083,7 +2087,7 @@ It is `vim.ui.select` rather than a picker of its own, which snacks owns, so
 
 ## Keys
 
-Prefixes in use: `<Leader>a` agents, `<Leader>f` find, `<Leader>s` search (and `sf`/`sp` replace), `<Leader>u` toggles,
+Prefixes in use: `<Leader>a` agents (and `<Leader>A` the panel toggle), `<Leader>f` find, `<Leader>s` search (and `sf`/`sp` replace), `<Leader>u` toggles,
 `<Leader>w` write, `<Leader>b` buffers, `<Leader>r`/`<Leader>R` actions,
 `<Leader>d` the debugger, `<Leader>t`/`<Leader>T` the terminals, `<Leader>q` the macro list,
 `<Leader>o` servers, `<Leader>z` fullscreen zoom and `<Leader>Z` zen.
