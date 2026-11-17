@@ -160,6 +160,16 @@ writes the modified ones and re-reads the rest, because a renamed buffer refuses
 `:write` with E13 until it has done one or the other. The explorer, its move and
 Unity's asset rename all go through it.
 
+**A picker never opens a file in a panel's window.** With no file window left —
+the explorer and the agent panel alone on screen — snacks' `Main:find` falls back
+to *any* split, and the file replaced the agent in its own window. That window
+kept the panel's `winfixwidth`, so from then on the explorer took its columns
+from the agent rather than from the editor, and the session carried the pin
+forward. `snacks.lua` wraps `actions.jump` (and `confirm`/`edit`, which alias
+it): when the main window's buffer is not a file it asks `core.open.window()` for
+one, then puts the explorer back at its configured width so the new window gets
+the space.
+
 snacks' picker owns `vim.ui.select` (`ui_select` defaults to true), so every
 `vim.ui.select` call in this config — `<Leader>r`, any language module's prompt
 — renders through it for free.
@@ -617,6 +627,12 @@ and the next restore is what throws it away. This is core's business rather than
 the git layer's — the rule is about URIs, not about Diffview, and `core` may not
 name a plugin.
 
+**A restored window is never pinned.** `localoptions` saves `winfixwidth` and
+`winfixheight` with the window, and the panels that own those pins are terminals
+and floats the session leaves out — so a pin in the file is one a file window
+picked up by accident, and it came back on every start. `release_borrowed_options`
+clears both after a restore; each panel sets its own pin when it is created.
+
 **A workspace is the project plus folders you add, and it is kept with the
 session.** `core/workspace.lua` stores the added folders in
 `stdpath("state")/workspaces/`, keyed by the session's root, so restoring a
@@ -703,8 +719,11 @@ this.
 is the one place that picks it: the current window, the previous one, then any in
 the tab, as long as it is not a float or the strip and its buffer has an empty
 `buftype` — so an agent panel, dap-ui or the explorer is never replaced, with no
-plugin named. With none, it splits above the strip, or left of everything when
-there is no strip, which keeps a full-height agent panel where it was. It uses
+plugin named. With none, it splits above the strip, or right of a fixed-width
+panel at the left edge (the explorer), or left of everything, which keeps a
+full-height agent panel where it was. The left panel's pin is lifted for that one
+split, because a split beside a pinned window takes its columns from the panel on
+the far side. It uses
 `:drop`, so a file already on screen is jumped to rather than opened twice. Unity
 once opened a double-clicked script over the Claude panel with a plain `:edit`.
 

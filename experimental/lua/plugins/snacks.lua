@@ -29,6 +29,26 @@ local function workspace_explorer(opts, ctx)
   end
 end
 
+-- With no file window left, snacks falls back to any split and opened the file in the agent panel's window,
+-- which kept that panel's fixed width from then on.
+---@param jump snacks.picker.Action.fn
+---@return snacks.picker.Action.fn
+local function into_a_file_window(jump)
+  return function(picker, item, action)
+    local main = picker.main
+    local wants_file = (picker.opts.main or {}).file ~= false and not (picker.opts.main or {}).current
+    if wants_file and vim.api.nvim_win_is_valid(main) and vim.bo[vim.api.nvim_win_get_buf(main)].buftype ~= "" then
+      picker._main:set(require("core.open").window())
+      local root = picker.layout.root
+      local width = root.opts.width
+      if root:win_valid() and type(width) == "number" and width >= 1 then
+        vim.api.nvim_win_set_width(root.win, width)
+      end
+    end
+    return jump(picker, item, action)
+  end
+end
+
 ---@return snacks.picker.Config
 local function workspace_scope()
   local dirs = require("core.workspace").dirs()
@@ -285,6 +305,9 @@ return {
       pattern = "VeryLazy",
       callback = function()
         Snacks.rename._rename = follow_directory_rename(Snacks.rename._rename)
+        local actions = Snacks.picker.actions
+        local jump = into_a_file_window(actions.jump)
+        actions.jump, actions.confirm, actions.edit = jump, jump, jump
         Snacks.toggle.option("spell", { name = "Spelling" }):map "<Leader>us"
         Snacks.toggle.option("wrap", { name = "Wrap" }):map "<Leader>uw"
         Snacks.toggle.option("relativenumber", { name = "Relative Number" }):map "<Leader>uL"

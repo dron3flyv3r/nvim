@@ -74,9 +74,12 @@ end
 
 -- `localoptions` records whatever a window held at exit, including what a scroll
 -- animation had borrowed mid-flight; a restored `virtualedit=all` then stuck for good.
+-- A pinned width belongs to a panel, and a file window restored pinned pushed the agent aside for good.
 local function release_borrowed_options()
   for _, win in ipairs(vim.api.nvim_list_wins()) do
     vim.api.nvim_win_call(win, function() vim.cmd "set virtualedit< scrolloff<" end)
+    vim.wo[win].winfixwidth = false
+    vim.wo[win].winfixheight = false
   end
 end
 

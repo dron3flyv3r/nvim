@@ -8,6 +8,14 @@ local function shows_file(win)
   return vim.bo[vim.api.nvim_win_get_buf(win)].buftype == ""
 end
 
+---@return integer?
+local function left_panel()
+  local layout = vim.fn.winlayout()
+  if layout[1] ~= "row" then return nil end
+  local first = layout[2][1]
+  if first[1] == "leaf" and vim.wo[first[2]].winfixwidth then return first[2] end
+end
+
 ---@return integer
 function M.window()
   local previous = vim.fn.win_getid(vim.fn.winnr "#")
@@ -20,6 +28,14 @@ function M.window()
   vim.bo[scratch].bufhidden = "wipe"
   local strip = require("core.pane").wins()[1]
   if strip then return vim.api.nvim_open_win(scratch, false, { split = "above", win = strip }) end
+  local panel = left_panel()
+  if panel then
+    -- Split pinned, the new window's columns came from the panel on the far side instead.
+    vim.wo[panel].winfixwidth = false
+    local win = vim.api.nvim_open_win(scratch, false, { split = "right", win = panel })
+    vim.wo[panel].winfixwidth = true
+    return win
+  end
   return vim.api.nvim_open_win(scratch, false, { split = "left", win = -1 })
 end
 
