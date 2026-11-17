@@ -137,6 +137,43 @@ install-codelldb:
     "$target/extension/adapter/codelldb" --help >/dev/null
     echo "==> installed to $target"
 
+# The grammar revision and the queries come from one pinned nvim-treesitter commit, so they match.
+# Build a treesitter parser and its queries into this config's site dir, e.g. `just install-parser c_sharp`.
+install-parser lang nvim_treesitter="b706d642dd20d0922e7e92365dc73617f0fdb4ea":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    site="$HOME/.local/share/{{appname}}/site"
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' EXIT
+
+    echo "==> reading {{lang}} from nvim-treesitter {{nvim_treesitter}}"
+    git clone -q --filter=blob:none --no-checkout https://github.com/nvim-treesitter/nvim-treesitter "$tmp/nts"
+    git -C "$tmp/nts" sparse-checkout set lua/nvim-treesitter "runtime/queries/{{lang}}"
+    git -C "$tmp/nts" -c advice.detachedHead=false checkout -q {{nvim_treesitter}}
+
+    block=$(awk '/^  {{lang}} = \{/,/^  \},/' "$tmp/nts/lua/nvim-treesitter/parsers.lua")
+    field() { sed -n "s/.*$1 = '\([^']*\)'.*/\1/p" <<<"$block" | head -1; }
+    url=$(field url); revision=$(field revision); location=$(field location)
+    if [ -z "$url" ] || [ -z "$revision" ]; then echo "no parser named {{lang}}" >&2; exit 1; fi
+    if grep -q 'generate = true' <<<"$block"; then echo "{{lang}} needs tree-sitter generate, not supported" >&2; exit 1; fi
+    if grep -rq '^; inherits' "$tmp/nts/runtime/queries/{{lang}}"; then
+      echo "warning: its queries inherit from another language, which has to be installed too" >&2
+    fi
+
+    echo "==> building $url at $revision"
+    git clone -q --depth 1 --branch "$revision" "$url" "$tmp/grammar" 2>/dev/null \
+      || { git clone -q "$url" "$tmp/grammar" && git -C "$tmp/grammar" -c advice.detachedHead=false checkout -q "$revision"; }
+    src="$tmp/grammar/${location:+$location/}src"
+    sources=("$src/parser.c")
+    [ -f "$src/scanner.c" ] && sources+=("$src/scanner.c")
+    mkdir -p "$site/parser" "$site/queries"
+    cc -shared -fPIC -O2 -I"$src" "${sources[@]}" -o "$site/parser/{{lang}}.so"
+
+    rm -rf "$site/queries/{{lang}}"
+    cp -r "$tmp/nts/runtime/queries/{{lang}}" "$site/queries/"
+    echo "==> installed to $site, picked up on the next start"
+
 # Show which nightly versions are installed and which one is linked.
 versions:
     #!/usr/bin/env bash

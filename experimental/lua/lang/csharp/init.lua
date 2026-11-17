@@ -1,3 +1,6 @@
+-- Roslyn's hover fences its signatures as ```csharp, which resolves to a parser only through this alias.
+vim.treesitter.language.register("c_sharp", { "cs", "csharp" })
+
 ---@type lang.Module
 return {
   ft = { "cs" },

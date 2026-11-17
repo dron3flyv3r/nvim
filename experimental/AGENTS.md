@@ -28,6 +28,15 @@ rather than degrading. The nightly is managed by the justfile and installed to
 follows. The system `/usr/bin/nvim` is left alone and still serves the old
 config.
 
+**Treesitter parsers beyond the bundled ones are built, not managed.** There is
+no nvim-treesitter: `just install-parser <lang>` compiles one grammar with `cc`
+into `stdpath("data")/site`, with its queries, both taken from one pinned
+nvim-treesitter commit so they agree. lazy's rtp reset keeps `site`, but
+Neovim leaves it off `'rtp'` until the directory exists. A parser only
+highlights what injects it — today the ```` ```csharp ```` fence in Roslyn's
+hover, which resolves because `lang/csharp` registers `c_sharp` for `cs` and
+`csharp`. C# buffers themselves stay on Vim syntax and semantic tokens.
+
 Because 0.13 is a hard floor, **prefer built-ins to plugins**. Use
 `vim.lsp.config`/`vim.lsp.enable` rather than `nvim-lspconfig` glue, native
 treesitter and native LSP folding, `vim.o` rather than `vim.opt` where the
@@ -2463,7 +2472,10 @@ exception, justified per module.
   **off by default** and is switched on by zen, which makes zen the reading mode;
   Inspect → *Render the markdown* turns it on outside zen. The cursor line stays
   rendered too — `anti_conceal` off and `concealcursor` at `nc` — because the raw
-  text is what turning rendering off is for; insert mode still shows it raw. It uses the
+  text is what turning rendering off is for; insert mode still shows it raw.
+  The spec sets `patterns.markdown.disable = false`: the plugin's default strips
+  `conceal_lines` from the markdown query for **every** buffer at setup, rendering
+  on or off, and every LSP hover then showed its ```` ```csharp ```` fences. It uses the
   `markdown` parsers that ship with 0.13 and the devicons that are already
   installed. The zen toggle is a `snacks.nvim` `opts` fragment in the module's
   `plugins`, because the plugin layer must not name a language.

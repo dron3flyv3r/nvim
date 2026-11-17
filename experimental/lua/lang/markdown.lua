@@ -11,6 +11,9 @@ return {
       dependencies = { "nvim-tree/nvim-web-devicons" },
       opts = {
         enabled = false,
+        -- Its default disables the fence-hiding patterns of the markdown query for every buffer, even with
+        -- rendering off, and every LSP hover then showed its ```csharp fences.
+        patterns = { markdown = { disable = false } },
         anti_conceal = { enabled = false },
         win_options = { concealcursor = { rendered = "nc" } },
       },
