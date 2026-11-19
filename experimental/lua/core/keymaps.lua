@@ -1,5 +1,6 @@
 local actions = require "core.actions"
 local map = vim.keymap.set
+local M = {}
 
 map("n", "<Leader>r", actions.pick, { desc = "Actions available here" })
 map("n", "<Leader>R", actions.repeat_last, { desc = "Repeat the last action" })
@@ -84,6 +85,7 @@ end
 map("t", "<Esc><Esc>", "<C-\\><C-n>", { desc = "Leave terminal mode" })
 map("n", "<Leader>t", function() require("core.terminal").toggle() end, { desc = "Toggle terminal" })
 map("n", "<Leader>T", function() require("core.terminal").new() end, { desc = "New terminal" })
+map("n", "<Leader>uT", function() require("core.tui_panel").toggle() end, { desc = "Toggle TUI panel" })
 
 for key, direction in pairs { h = "h", j = "j", k = "k", l = "l" } do
   map("n", "<C-" .. key .. ">", "<C-w>" .. direction, { desc = "Window " .. direction })
@@ -101,6 +103,41 @@ for key, cmd in pairs {
   map({ "n", "t" }, "<C-" .. key .. ">", "<Cmd>" .. cmd .. "<CR>", { desc = "Resize window " .. key:lower() })
 end
 
+local TERMINAL_KEYS = {
+  "<Esc>",
+  "<C-h>",
+  "<C-j>",
+  "<C-k>",
+  "<C-l>",
+  "<C-Up>",
+  "<C-Down>",
+  "<C-Left>",
+  "<C-Right>",
+  "j",
+  "k",
+  "[",
+  "]",
+}
+
+---@param buf integer
+---@param leave fun()
+---@param forward_escape? boolean
+function M.forward_terminal(buf, leave, forward_escape)
+  for _, key in ipairs(TERMINAL_KEYS) do
+    -- A lone Escape must reach the program without waiting for the global double tap.
+    map("t", key, key, { buffer = buf, nowait = true, desc = "Send " .. key .. " to the terminal" })
+  end
+  if forward_escape then
+    -- Send the native terminal escapes directly so an inner terminal can use them.
+    for key, bytes in pairs { n = "\028\014", o = "\028\015" } do
+      map("t", "<C-\\><C-" .. key .. ">", function()
+        vim.api.nvim_chan_send(vim.b[buf].terminal_job_id, bytes)
+      end, { buffer = buf, desc = "Send terminal escape to the program" })
+    end
+  end
+  map("t", "<C-q>", leave, { buffer = buf, desc = "Return to the outer editor" })
+end
+
 map("x", "<", "<gv", { desc = "Outdent and keep selection" })
 map("x", ">", ">gv", { desc = "Indent and keep selection" })
 
@@ -108,3 +145,5 @@ map("n", "<A-j>", "<Cmd>execute 'move .+' . v:count1<CR>==", { desc = "Move line
 map("n", "<A-k>", "<Cmd>execute 'move .-' . (v:count1 + 1)<CR>==", { desc = "Move line up" })
 map("x", "<A-j>", ":<C-u>execute \"'<,'>move '>+\" . v:count1<CR>gv=gv", { desc = "Move selection down" })
 map("x", "<A-k>", ":<C-u>execute \"'<,'>move '<-\" . (v:count1 + 1)<CR>gv=gv", { desc = "Move selection up" })
+
+return M

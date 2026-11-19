@@ -313,7 +313,7 @@ return {
         Snacks.toggle.option("relativenumber", { name = "Relative Number" }):map "<Leader>uL"
         Snacks.toggle.diagnostics():map "<Leader>ud"
         Snacks.toggle.line_number():map "<Leader>ul"
-        Snacks.toggle.treesitter():map "<Leader>uT"
+        Snacks.toggle.treesitter():map "<Leader>ut"
         Snacks.toggle.inlay_hints():map "<Leader>uh"
         Snacks.toggle
           .new({

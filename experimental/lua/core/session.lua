@@ -5,6 +5,7 @@ local read_stdin = false
 local attached = false
 local started_from_directory = false
 local disabled = false
+local storage = "sessions"
 
 ---@class core.session.Part
 ---@field save fun(): any
@@ -23,7 +24,7 @@ local function project_root()
 end
 
 local function session_path()
-  local directory = vim.fs.joinpath(vim.fn.stdpath "state" --[[@as string]], "sessions")
+  local directory = vim.fs.joinpath(vim.fn.stdpath "state" --[[@as string]], storage)
   return directory, vim.fs.joinpath(directory, vim.fs.slug(root) .. ".vim")
 end
 
@@ -37,9 +38,12 @@ local function notify(message, level)
   vim.notify(message, level or vim.log.levels.INFO, { title = "session" })
 end
 
----@param name string
+---@param buf integer
 ---@return boolean
-local function is_uri(name) return name:match "^%a[%w+.%-]*://" ~= nil end
+local function discardable_uri(buf)
+  -- The panel's shell stays live across session commands, even while hidden.
+  return not vim.b[buf].core_tui_panel and vim.api.nvim_buf_get_name(buf):match "^%a[%w+.%-]*://" ~= nil
+end
 
 -- A URI-named buffer belongs to whatever invented the scheme. Neovim restores it
 -- as an ordinary empty file buffer, and the plugin then finds the name already
@@ -49,12 +53,12 @@ local function is_uri(name) return name:match "^%a[%w+.%-]*://" ~= nil end
 local function drop_uri_buffers()
   for _, win in ipairs(vim.api.nvim_list_wins()) do
     local buf = vim.api.nvim_win_get_buf(win)
-    if is_uri(vim.api.nvim_buf_get_name(buf)) and #vim.api.nvim_list_wins() > 1 then
+    if discardable_uri(buf) and #vim.api.nvim_list_wins() > 1 then
       pcall(vim.api.nvim_win_close, win, true)
     end
   end
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-    if is_uri(vim.api.nvim_buf_get_name(buf)) then pcall(vim.api.nvim_buf_delete, buf, { force = true }) end
+    if discardable_uri(buf) then pcall(vim.api.nvim_buf_delete, buf, { force = true }) end
   end
 end
 
@@ -66,7 +70,7 @@ local function forget_hidden_uri_buffers()
     shown[vim.api.nvim_win_get_buf(win)] = true
   end
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-    if not shown[buf] and is_uri(vim.api.nvim_buf_get_name(buf)) then
+    if not shown[buf] and discardable_uri(buf) then
       pcall(vim.api.nvim_buf_delete, buf, { force = true })
     end
   end
@@ -236,7 +240,9 @@ function M.restore_on_start()
   M.restore { quiet = true }
 end
 
-function M.setup()
+---@param nested? boolean
+function M.setup(nested)
+  storage = nested and "nested-sessions" or "sessions"
   adopt_directory_argument()
   root = project_root()
   vim.api.nvim_create_user_command("SessionSave", M.save, {})

@@ -47,6 +47,9 @@ local function show(task, opts)
       M.stop(task)
       pane.release(OCCUPANT)
     end,
+    close_prompt = function()
+      if task.status == "running" then return ("Stop %s and close its output?"):format(task.name) end
+    end,
   }, opts)
 end
 

@@ -21,6 +21,7 @@ local WIN_OPTS = {
 ---@field name string
 ---@field bufnr integer
 ---@field close? fun()
+---@field close_prompt? fun(): string|nil asks before closing when it returns a question
 ---@field split? fun(win: integer) what a split of this occupant's window shows instead of a second copy
 ---@field title? fun(): string the window's winbar
 
@@ -156,8 +157,14 @@ function bind(occupant)
   -- interactive process.
   vim.keymap.set("n", "h", M.hide, { buffer = buf, desc = "Hide the pane" })
   vim.keymap.set("n", "q", function()
-    if occupant.close then return occupant.close() end
-    M.hide()
+    if not occupant.close then return M.hide() end
+    if occupant.close_prompt then
+      local question = occupant.close_prompt()
+      if question and vim.fn.confirm(question, "&Keep running\n&Stop and close", 1, "Warning") ~= 2 then return end
+      local current = occupants[occupant.name]
+      if not current or current.bufnr ~= buf then return end
+    end
+    occupant.close()
   end, { buffer = buf, desc = "Close this pane occupant" })
   vim.keymap.set("n", "<Tab>", function() cycle(1) end, { buffer = buf, desc = "Next pane occupant" })
   vim.keymap.set("n", "<S-Tab>", function() cycle(-1) end, { buffer = buf, desc = "Previous pane occupant" })

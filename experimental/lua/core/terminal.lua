@@ -6,6 +6,7 @@ local M = {}
 ---@field name string
 ---@field cwd string
 ---@field occupant core.pane.Occupant
+---@field at_prompt? boolean
 
 ---@class core.terminal.Slot
 ---@field shell core.terminal.Shell
@@ -22,6 +23,8 @@ local next_id = 1
 local closing = false
 ---@type string|string[]|nil
 local shell
+---@type string|string[]|nil
+local panel_shell
 
 ---@param bufnr integer
 ---@return core.terminal.Shell|nil, integer|nil
@@ -36,6 +39,23 @@ local function running(entry)
   if not vim.api.nvim_buf_is_valid(entry.bufnr) then return false end
   local job = vim.b[entry.bufnr].terminal_job_id
   return job and vim.fn.jobwait({ job }, 0)[1] == -1
+end
+
+---@param entry core.terminal.Shell
+local function idle(entry)
+  if not entry.at_prompt then return false end
+  local ok, pid = pcall(vim.fn.jobpid, vim.b[entry.bufnr].terminal_job_id)
+  if not ok then return false end
+
+  local proc = "/proc/" .. pid
+  local stat_ok, stat = pcall(vim.fn.readfile, proc .. "/stat", "", 1)
+  if not stat_ok or not stat[1] then return false end
+  -- Compare the shell's process group to the terminal's foreground group.
+  local group, tty, foreground = stat[1]:match("^%d+ %(.*%) %S+ %d+ (%d+) %d+ (%-?%d+) (%-?%d+) ")
+  if not group or tty == "0" or group ~= foreground then return false end
+
+  local children_ok, children = pcall(vim.fn.readfile, proc .. "/task/" .. pid .. "/children", "", 1)
+  return children_ok and not children[1]
 end
 
 ---@param entry core.terminal.Shell
@@ -87,6 +107,11 @@ function start(opts)
     name = entry.name,
     bufnr = bufnr,
     close = function() close(entry) end,
+    close_prompt = function()
+      if running(entry) and not idle(entry) then
+        return ("Close terminal %d? This may interrupt running commands."):format(entry.id)
+      end
+    end,
     split = function(win) start { win = win, enter = true } end,
     title = function() return ("Terminal %d  ·  %s"):format(id, vim.fn.fnamemodify(cwd_of(entry), ":~")) end,
   }
@@ -106,7 +131,7 @@ function start(opts)
     return
   end
 
-  local cmd = shell or vim.o.shell
+  local cmd = M.shell_command()
   local job
   vim.api.nvim_buf_call(bufnr, function() job = vim.fn.jobstart(cmd, { term = true, cwd = cwd }) end)
   if job <= 0 then
@@ -184,6 +209,23 @@ function M.on_enter(buf)
 end
 
 ---@param buf integer
+---@param sequence string
+function M.on_request(buf, sequence)
+  local marker = sequence:match("^\027%]133;([BCD])%f[;%z]")
+  if not marker then return end
+  local entry = find(buf)
+  if not entry then return end
+  if marker == "C" then
+    entry.at_prompt = false
+  elseif marker == "D" then
+    entry.at_prompt = nil
+  elseif entry.at_prompt ~= false then
+    -- Wait for the end of a prompt. A command such as fish's read can print one too.
+    entry.at_prompt = true
+  end
+end
+
+---@param buf integer
 function M.on_close(buf)
   if closing then return end
   local entry = find(buf)
@@ -239,11 +281,21 @@ function M.open(paths)
 end
 
 ---@param cmd string|string[]
-function M.set_shell(cmd) shell = cmd end
+---@param panel_cmd? string|string[]
+function M.set_shell(cmd, panel_cmd)
+  shell, panel_shell = cmd, panel_cmd
+end
+
+---@param for_panel? boolean
+---@return string|string[]
+function M.shell_command(for_panel) return (for_panel and panel_shell) or shell or vim.o.shell end
 
 function M.setup()
   vim.api.nvim_create_user_command("Terminal", M.toggle, {})
   vim.api.nvim_create_user_command("TerminalNew", M.new, {})
+  vim.api.nvim_create_user_command("TuiPanel", function() require("core.tui_panel").toggle() end, {
+    desc = "Toggle the TUI panel",
+  })
   require("core.session").register("terminal", { save = snapshot, restore = restore })
 end
 

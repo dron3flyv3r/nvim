@@ -70,6 +70,7 @@ lua/
     session.lua       native project session persistence
     workspace.lua     extra folders beside the project, kept with its session
     terminal.lua      an interactive shell in the shared bottom strip
+    tui_panel.lua     an interactive shell in a right split for full-screen apps
     remote/           a server, its projects, and this config installed on it
     open.lua          opens a file from outside in a window that shows files
     macros.lua        the recording indicator and the macro list
@@ -567,8 +568,9 @@ not leave every later build waiting behind it.
 **Output is a real pty** (`jobstart` with `term = true`), so colours, progress
 bars and interactive prompts work. It lands in `core.pane`, the strip described
 below, as the occupant named `task`. There, normal-mode `h` hides it and leaves
-the task running; `q` stops the task and hides it. Both are normal-mode only,
-because in terminal mode those letters are input to the process.
+the task running. `q` closes the task output and asks before stopping a running
+task, with *Keep running* selected by default. Both are normal-mode only, because
+in terminal mode those letters are input to the process.
 
 ### `core.pane` — the one bottom strip
 
@@ -696,11 +698,13 @@ project's own; the user layer calls it for a detach side instance.
 `<Leader>T` and `:TerminalNew` start another. Each shell is its own occupant,
 `terminal 1`, `terminal 2` and so on, so `<Tab>`/`<S-Tab>` in the strip cycle
 through them beside the tasks. `<Leader>t` brings back the shell entered last
-and starts the first one when none is running. `h` hides the strip without
-stopping anything, `q` stops the shell on screen, and `<Esc><Esc>` leaves
-terminal mode. Numbering restarts once every shell is closed. Each shell's
-winbar is `Terminal <n>  ·  <its cwd>`, read live from `/proc/<pid>/cwd`. Hiding
-the strip with `<Leader>t` remembers which shells were side by side, and the
+and starts the first one when none is running. `h` hides the strip and keeps
+the shell running. `q` closes the shell on screen and asks first if it is busy
+or its activity is unclear. Shell prompt markers and Linux process information
+identify an idle shell. `<Esc><Esc>` leaves terminal mode. Numbering restarts
+once every shell is closed. Each shell's winbar is `Terminal <n>  ·  <its cwd>`,
+read live from `/proc/<pid>/cwd`. Hiding the strip with `<Leader>t` remembers
+which shells were side by side, and the
 next `<Leader>t` brings them all back. Native `:terminal` remains available
 when an ordinary unmanaged terminal window is wanted.
 
@@ -714,7 +718,7 @@ beside both. A restored shell is a new process in the directory the old one
 was in. The cwd is a part of its own because the restored buffer's `BufEnter`
 would otherwise follow straight back to the file's folder.
 
-**`nv <file>` inside any terminal of an nv opens the file in that editor**, the
+**`nv <file>` in the bottom terminal opens the file in that editor**, the
 way `code <file>` does, rather than nesting a second Neovim. The fish function
 the justfile writes sees `$NVIM` and calls `core.terminal.open` through
 `--remote-expr`, not plain `--remote`: that is `:drop` in the current window,
@@ -739,6 +743,25 @@ once opened a double-clicked script over the Claude panel with a plain `:edit`.
 It runs `'shell'` unless `core.terminal.set_shell()` names something else, which
 the user layer does for fish. `'shell'` itself stays POSIX, because `:!`,
 `system()` and every plugin that passes a shell string run through it too.
+
+### TUI panel
+
+`<Leader>uT` and `:TuiPanel` toggle a shell in a right split. Start any app
+from its prompt. Quitting the app returns to the same shell. Hiding the split
+keeps its shell and app running, and opening it again restores its width. A
+visible panel in another tab is focused there. Exiting the shell closes the
+panel.
+
+The panel uses the same buffer-local key forwarding as the remote editor.
+`<C-q>` returns to an outer file window. Focusing the split resumes terminal
+input. The panel also passes `<C-\><C-n>` and `<C-\><C-o>` through for
+terminals inside a nested Neovim.
+
+The fish override supplies a panel-local `nv [file]` function that runs the
+same Neovim binary as the outer editor. It also accepts `nv --nested [file]`.
+Other shells can launch that binary with `"$NVIM_PANEL_NVIM"`. This environment
+variable selects the `nested-sessions` directory for the inner editor's project
+sessions and is cleared by that editor at startup.
 
 ## Servers
 

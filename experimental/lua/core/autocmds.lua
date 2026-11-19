@@ -290,9 +290,21 @@ vim.api.nvim_create_autocmd("TermClose", {
     if vim.b[args.buf].core_terminal then require("core.terminal").on_close(args.buf) end
   end,
 })
+vim.api.nvim_create_autocmd("TermRequest", {
+  group = terminal_group,
+  callback = function(args)
+    if vim.b[args.buf].core_terminal then require("core.terminal").on_request(args.buf, args.data.sequence) end
+  end,
+})
 vim.api.nvim_create_autocmd("BufEnter", {
   group = terminal_group,
   callback = function(args)
     if vim.b[args.buf].core_terminal then require("core.terminal").on_enter(args.buf) end
+  end,
+})
+vim.api.nvim_create_autocmd("WinEnter", {
+  group = terminal_group,
+  callback = function()
+    if vim.b.core_tui_panel and vim.bo.buftype == "terminal" then vim.cmd.startinsert() end
   end,
 })

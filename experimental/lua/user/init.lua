@@ -26,7 +26,18 @@ local explorer_exclude = { "*.meta", "*.uid", "*.prefab", "*.imports" }
 local sources = require("snacks").config.picker.sources
 sources.explorer = vim.tbl_extend("force", sources.explorer or {}, { exclude = explorer_exclude })
 
-if vim.fn.executable "fish" == 1 then require("core.terminal").set_shell { "fish" } end
+if vim.fn.executable "fish" == 1 then
+  require("core.terminal").set_shell({ "fish" }, {
+    "fish",
+    "--init-command",
+    [[function nv --description 'Open a nested Neovim in the TUI panel'
+      if set -q argv[1]; and test "$argv[1]" = --nested
+        set -e argv[1]
+      end
+      command "$NVIM_PANEL_NVIM" $argv
+    end]],
+  })
+end
 
 local detach_path = vim.fs.normalize "~/code/detach.nvim"
 if vim.uv.fs_stat(detach_path) then

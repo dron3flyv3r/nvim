@@ -10,6 +10,9 @@ end
 vim.g.mapleader = " "
 vim.g.maplocalleader = ","
 
+local nested = vim.env.NVIM_PANEL_NVIM ~= nil
+if nested then vim.env.NVIM_PANEL_NVIM = nil end
+
 require "core.options"
 require("core.diagnostics").setup()
 require("core.codelens").setup()
@@ -19,7 +22,7 @@ require("core.statusline").setup()
 require("core.spell").setup()
 require("core.winbar").setup()
 require("core.rename").setup()
-require("core.session").setup()
+require("core.session").setup(nested)
 require("core.workspace").setup()
 require("core.terminal").setup()
 require("core.remote").setup()

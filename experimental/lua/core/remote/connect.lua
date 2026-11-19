@@ -90,30 +90,14 @@ local function reachable(socket)
   return vim.system(cmd, { text = true }):wait(3000).code == 0
 end
 
--- Every key belongs to the editor on the server, so the terminal-mode mappings
--- this config installs are sent through on this buffer alone. <Esc> is the one
--- that matters: the global <Esc><Esc> would hold every single press for
--- timeoutlen, and a nested editor needs Escape on the first press.
-local PASSED_THROUGH =
-  { "<Esc>", "<C-h>", "<C-j>", "<C-k>", "<C-l>", "<C-Up>", "<C-Down>", "<C-Left>", "<C-Right>", "j", "k" }
-
 ---@param session core.remote.Session
 local function claim_keys(session)
-  local bufnr = assert(session.bufnr)
-  for _, lhs in ipairs(PASSED_THROUGH) do
-    -- nowait, or <Esc> still waits out timeoutlen for the global <Esc><Esc>
-    -- before it is sent, which is a second of nothing on the key a nested editor
-    -- is driven by. It applies to buffer-local mappings only, which these are.
-    vim.keymap.set("t", lhs, lhs, { buffer = bufnr, nowait = true, desc = "Send " .. lhs .. " to the remote editor" })
-  end
-  -- <C-\><C-n> is the native way out and still works, but a Danish layout needs
-  -- AltGr for it, and nothing in this config or the remote's claims <C-q>.
-  vim.keymap.set("t", "<C-q>", function()
+  require("core.keymaps").forward_terminal(assert(session.bufnr), function()
     vim.cmd.stopinsert()
     if session.from_tab and vim.api.nvim_tabpage_is_valid(session.from_tab) then
       vim.api.nvim_set_current_tabpage(session.from_tab)
     end
-  end, { buffer = bufnr, desc = "Leave the remote editor" })
+  end)
 end
 
 ---@param session core.remote.Session
