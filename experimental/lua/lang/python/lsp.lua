@@ -2,7 +2,10 @@ local venv = require "lang.python.venv"
 
 local M = {}
 
-local ROOT_MARKERS = { "pyproject.toml", "setup.py", "setup.cfg", "requirements.txt", "pyrightconfig.json", ".git" }
+-- Nested = equal priority, so the nearest project wins: a plugin folder with a
+-- pyrightconfig.json inside a repo whose parent has a requirements.txt is its
+-- own root. A flat list is a priority order on 0.13 and would pick the parent.
+local ROOT_MARKERS = { { "pyproject.toml", "setup.py", "setup.cfg", "requirements.txt", "pyrightconfig.json" }, ".git" }
 
 local RUFF_OWNS = {
   reportUnusedImport = "none",

@@ -318,6 +318,20 @@ local function actions(ctx)
       end,
     },
     {
+      id = "setup_tooling",
+      label = "Set up Python tooling",
+      category = "Maintenance",
+      repeatable = false,
+      run = function()
+        require("plugins.tools.setup").open("Python", {
+          { label = "Type checking and hover", package = lsp.checker() or "basedpyright", ready = function() return lsp.checker() ~= nil end },
+          { label = "Buffer and hover highlighting", parser = "python" },
+          { label = "Linting and import sorting", package = "ruff", ready = lsp.has_ruff },
+          { label = "Debugging (optional)", package = "debugpy", ready = function() return debugpy.adapter(venv.python(ctx.file)) ~= nil end },
+        })
+      end,
+    },
+    {
       id = "restart_lsp",
       label = "Restart the Python language servers",
       category = "Maintenance",

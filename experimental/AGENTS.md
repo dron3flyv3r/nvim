@@ -2749,6 +2749,16 @@ module gets and a second one would be the fragmentation this rewrite removed.
 
 ## Python
 
+In Python buffers, normal-mode `K` shows LSP hover documentation. The buffer-local
+keyword lookup also uses hover so an early keypress reports server availability.
+
+From a Python buffer, Maintenance → *Set up Python tooling* opens the feature
+list. Selecting a missing tool installs it through the existing Mason command
+or pinned parser recipe. Restart after installation. Other languages can expose
+the same workflow through their own action and `plugins.tools.setup.open`.
+Python starts Treesitter on FileType when its parser and highlights are present.
+The same parser supplies highlighting for Python fences in Markdown hover text.
+
 `lua/lang/python/` declares **one type checker and ruff**. basedpyright is
 preferred and pyright is the fallback; whichever `*-langserver` is on `PATH` at
 startup is the one declared, and with neither the `lsp` key holds only ruff, or
@@ -2781,6 +2791,14 @@ the environment, so the first Python buffer of a session would start its
 checker with the system interpreter. `before_init` sets
 `settings.python.pythonPath` from the client's own `root_dir` instead; the
 config is deep-copied per client, so two projects keep two interpreters.
+
+**The nearest project is the root.** The project markers (`pyproject.toml`,
+`setup.py`, `setup.cfg`, `requirements.txt`, `pyrightconfig.json`) are one
+equal-priority group, with `.git` as the fallback. On 0.13 a flat
+`root_markers` list is a priority order, so a sub-project with a
+`pyrightconfig.json` under a folder with a `requirements.txt` got the parent as
+root and the system interpreter; nested, the nearest marker wins and the root
+agrees with the `.venv` that is followed.
 
 uv is assumed but not required. A project with a `pyproject.toml` and uv on
 `PATH` is a uv project: with no `.venv` yet, its commands go through `uv run`,

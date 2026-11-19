@@ -42,7 +42,8 @@ function M.root(path)
   local dir = start_dir(path)
   if not dir then return nil end
   local venv = M.find(dir)
-  return vim.fs.root(dir, ROOT_MARKERS) or (venv and vim.fs.dirname(venv)) or vim.fs.root(dir, ".git")
+  -- `{ ROOT_MARKERS }`: one equal-priority group, so the nearest project wins.
+  return vim.fs.root(dir, { ROOT_MARKERS }) or (venv and vim.fs.dirname(venv)) or vim.fs.root(dir, ".git")
 end
 
 ---@param root string|nil
